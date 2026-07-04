@@ -44,7 +44,7 @@ if (trimmed.endsWith(".")) {
 }
 
 if (!PATTERN.test(trimmed)) {
-  console.error(`ERROR: "${firstLine}" is not a valid conventional commit message.`);
+  console.error(`ERROR: "${trimmed}" is not a valid conventional commit message.`);
   console.error("");
   console.error("Expected format: type[(scope)]: description");
   console.error("");
@@ -52,5 +52,5 @@ if (!PATTERN.test(trimmed)) {
   process.exit(1);
 }
 
-console.log(`OK: ${firstLine}`);
+console.log(`OK: ${trimmed}`);
 process.exit(0);
