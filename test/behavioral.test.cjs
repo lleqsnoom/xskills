@@ -3,25 +3,13 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const os = require("os");
 const fsp = require("node:fs/promises");
 
 // Import the module under test
 const lib = require("../lib/install");
 
-/**
- * Run an async test in a temporary directory with automatic cleanup.
- */
-async function withTmpDir(prefix, fn) {
-  const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), `xskills-${prefix}-`));
-  try {
-    process.chdir(tmpDir);
-    await fn();
-  } finally {
-    process.chdir(__dirname + "/..");
-    await fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
-  }
-}
+// Import shared test helpers
+const { withTmpDir, withGlobalTmpDir, dirExists, spyOn } = require("./helpers.cjs");
 
 // ── resolveSkillSource — tested behaviorally via install/globalInstall ──
 
@@ -177,32 +165,21 @@ describe("listSkills — readSkills behavior", () => {
 
 describe("globalInstall — additional edge cases", () => {
   it("creates ~/.agents/skills/ if HOME is set to temp dir", async () => {
-    const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), "xskills-glob-"));
-    const origHome = process.env.HOME;
-    process.env.HOME = tmpDir;
-
-    try {
+    await withGlobalTmpDir(async () => {
       await lib.globalInstall("x-review");
 
-      const installedPath = path.join(tmpDir, ".agents", "skills", "x-review");
+      const installedPath = path.join(process.env.HOME, ".agents", "skills", "x-review");
       assert.ok(await dirExists(installedPath));
 
       // Verify full structure copied
       assert.ok(
         await fsp.stat(path.join(installedPath, "scripts")).then((s) => s.isDirectory())
       );
-    } finally {
-      process.env.HOME = origHome;
-      await fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
-    }
+    });
   });
 
   it("prints already-installed message and returns without error", async () => {
-    const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), "xskills-glob-"));
-    const origHome = process.env.HOME;
-    process.env.HOME = tmpDir;
-
-    try {
+    await withGlobalTmpDir(async () => {
       // Install once (creates directory)
       await lib.globalInstall("x-commit");
 
@@ -218,31 +195,10 @@ describe("globalInstall — additional edge cases", () => {
       assert.match(printedMessage, /already installed globally/);
 
       console.log = origLog;
-    } finally {
-      process.env.HOME = origHome;
-      await fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
-    }
+    });
   });
 });
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
-async function dirExists(p) {
-  try {
-    const stat = await fsp.stat(p);
-    return stat.isDirectory();
-  } catch {
-    return false;
-  }
-}
-
-function spyOn(obj, method) {
-  const original = obj[method];
-  const calls = [];
-  obj[method] = function (...args) {
-    calls.push(args);
-    return original.apply(this, args);
-  };
-  obj[method].mock = { calls };
-  return obj[method];
-}
+// Shared helpers are imported from ./helpers at the top of this file.

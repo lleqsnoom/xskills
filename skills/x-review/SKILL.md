@@ -1,7 +1,7 @@
 ---
 name: x-review
-description: Review code against engineering principles — small functions, SOLID, KISS, DRY — with automated complexity analysis
-version: 1.0.0
+description: Review code against engineering principles — small functions, SOLID, KISS, DRY — with automated AST-based complexity analysis across 10+ languages
+version: 2.0.0
 author: Community
 tags: [code-review, solid, kiss, dry, single-responsibility, cyclomatic-complexity, code-quality]
 user-invocable: true
@@ -9,88 +9,72 @@ user-invocable: true
 
 # X-Review — Code Review Against Engineering Principles
 
-Review code changes against four core principles with automated metric analysis.
+**What To Do:** When invoked, immediately execute these three commands in order. Do not ask the user what to do.
 
-## Workflow
+1. Run complexity analysis: `node skills/x-review/scripts/analyze-complexity.js --all`
+2. Run duplication check: `node skills/x-review/scripts/check-duplication.js --all`
+3. Create fix plan file: `node skills/x-review/scripts/save-plan.js --output .x-skills/review/`
 
-1. Run `scripts/analyze-complexity.js` on the changed files to get metrics.
-2. Run `scripts/check-duplication.js` to detect duplicated code blocks.
-3. Review the output and apply the four principles (below).
-4. Produce a review comment or feedback grouped by principle, with severity levels.
+Parse the JSON output from steps 1 and 2, apply the four principles (below), then write your review into the fix plan file using the format below.
 
-## The Four Principles (in priority order)
+## Run Analysis
 
-### 1. Small Functions — Single Responsibility (HIGHEST PRIORITY)
+```bash
+node skills/x-review/scripts/analyze-complexity.js --all       # complexity + length per function
+node skills/x-review/scripts/check-duplication.js --all        # duplicated blocks (>5 lines)
+```
 
-A function must do **exactly one thing** and should not be possible to split into smaller logical functions without losing meaning.
+The script auto-installs tree-sitter if missing. Output is JSON — parse it for function metrics and duplication counts.
 
-**Signals of violation:**
-- Function longer than 20 lines (hard threshold for review attention)
-- More than 3 parameters (suggests multiple responsibilities)
-- Contains nested blocks deeper than 2 levels
-- Has multiple distinct "steps" that could each be a separate function
-- Function name describes more than one action (e.g., `processAndSendEmail`)
+## Principles Checklist
 
-**Check with metrics:** Run `analyze-complexity.js` — functions with cyclomatic complexity > 5 or length > 20 lines need refactoring.
+1. **SRP / Small Functions** (highest priority) — Flag functions that are >20 lines, have >3 params, nest deeper than 2 levels, or whose name describes multiple actions (e.g., `processAndSendEmail`).
+2. **SOLID** — Flag classes with >10 methods, inheritance chains >3 levels deep, or concrete class imports where an interface would work better.
+3. **KISS** — Flag unnecessary abstractions (interfaces for one implementation), magic numbers without constants, or conditional logic that should be a lookup table.
+4. **DRY** — Flag duplicated behavior (>5 identical lines), copy-pasted error handling, repeated config patterns. DRY targets duplicated *behavior*, not data.
 
-### 2. SOLID Principles
-
-| Principle | What to check |
-|-----------|--------------|
-| **Single Responsibility** | Each class/module has one reason to change |
-| **Open/Closed** | Entities open for extension, closed for modification |
-| **Liskov Substitution** | Subtypes must be substitutable for base types |
-| **Interface Segregation** | No forced dependencies on unused methods |
-| **Dependency Inversion** | Depend on abstractions, not concretions |
-
-**Check with metrics:** Look for classes with many methods (> 10), deep inheritance chains (> 3 levels), and concrete class imports instead of interfaces.
-
-### 3. KISS — Keep It Simple, Stupid
-
-Prefer the simplest solution that works. Complexity must be justified.
-
-**Signals of violation:**
-- Unnecessary abstraction layers (interfaces for one implementation)
-- Over-engineered patterns where a simple function suffices
-- Magic numbers or strings without named constants
-- Conditional logic that could be a lookup table or strategy pattern
-- Comments explaining "why" — the code should explain itself
-
-### 4. DRY — Don't Repeat Yourself
-
-Eliminate duplication of logic, not just text.
-
-**Check with metrics:** Run `check-duplication.js` to find repeated code blocks (> 5 lines identical). Also watch for:
-- Same logic in multiple branches
-- Copy-pasted error handling
-- Repeated configuration patterns
-
-**Note:** DRY does NOT mean eliminate repeated *data* or *structure*. It targets duplicated *behavior*.
-
-## Severity Levels
+## Severity
 
 | Level | Meaning | Action |
 |-------|---------|--------|
-| **CRITICAL** | Violates SRP or introduces a bug risk | Must fix before merge |
-| **MAJOR** | Clear SOLID/KISS/DRY violation | Should fix |
-| **MINOR** | Style or minor optimization opportunity | Nice to have |
+| CRITICAL | Violates SRP or introduces bug risk | Must fix before merge |
+| MAJOR | Clear SOLID/KISS/DRY violation | Should fix |
+| MINOR | Style or minor optimization | Nice to have |
 
 ## Output Format
 
-Structure feedback as:
+Produce a review and save it under `/.x-skills/review/`. Use the script to create the directory, detect branch from git, generate timestamp, sanitize filename, and write an empty plan file:
 
+```bash
+node skills/x-review/scripts/save-plan.js --output .x-skills/review/
 ```
-## Code Review
 
-### [PRINCIPLE] — Brief description
-**Severity:** CRITICAL / MAJOR / MINOR
-**File:** `path/to/file.js:42`
-**Issue:** What's wrong
-**Suggestion:** How to fix it
+The script prints the full path (e.g. `.x-skills/review/2026-07-04T1430_main.md`). Write your review content into that file using this format:
 
-### Metrics Summary
-- Files analyzed: N
-- Functions with complexity > 5: N
-- Functions longer than 20 lines: N
-- Duplicated blocks found: N
+```markdown
+# Code Review — Fix Plan
+
+**Date:** YYYY-MM-DDTHH:MM
+**Files analyzed:** N
+**Functions with complexity > 5:** N
+**Functions longer than 20 lines:** N
+**Duplicated blocks found:** N
+
+---
+
+## [PRINCIPLE] — Brief description
+
+- [ ] **Severity:** CRITICAL / MAJOR / MINOR
+  - **File:** `path/to/file.js:42`
+  - **Issue:** What's wrong (one sentence)
+  - **Suggestion:** How to fix it (concrete, actionable)
+
+---
+
+## Summary
+
+**Total issues:** N (**critical:** N, **major:** N, **minor:** N)
+**Status:** 0/N resolved | Run `x-fix` to start resolving.
 ```
+
+Toggle checkboxes `[ ]` → `[x]` as each issue is resolved by x-fix.

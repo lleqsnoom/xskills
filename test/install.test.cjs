@@ -9,6 +9,9 @@ const fsp = require("node:fs/promises");
 // Import the module under test
 const lib = require("../lib/install");
 
+// Import shared test helpers
+const { withTmpDir, withGlobalTmpDir, dirExists, fileExists, spyOn } = require("./helpers.cjs");
+
 // ── extractDescription tests ────────────────────────────────────────
 
 describe("extractDescription", () => {
@@ -131,27 +134,16 @@ describe("install", () => {
 
 describe("globalInstall", () => {
   it("installs skill into ~/.agents/skills/", async () => {
-    const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), "xskills-global-"));
-    const originalHome = process.env.HOME;
-    process.env.HOME = tmpDir;
-
-    try {
+    await withGlobalTmpDir(async () => {
       await lib.globalInstall("x-commit");
 
-      const installedPath = path.join(tmpDir, ".agents", "skills", "x-commit");
+      const installedPath = path.join(process.env.HOME, ".agents", "skills", "x-commit");
       assert.ok(await dirExists(installedPath));
-    } finally {
-      process.env.HOME = originalHome;
-      await fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
-    }
+    });
   });
 
   it("skips if already installed globally", async () => {
-    const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), "xskills-global-"));
-    const originalHome = process.env.HOME;
-    process.env.HOME = tmpDir;
-
-    try {
+    await withGlobalTmpDir(async () => {
       const logSpy = spyOn(console, "log");
       await lib.globalInstall("x-commit");
       assert.ok(logSpy.mock.calls.length > 0);
@@ -160,10 +152,7 @@ describe("globalInstall", () => {
       await lib.globalInstall("x-commit");
       const printed = logSpy.mock.calls.map((c) => c[0]).join("\n");
       assert.match(printed, /already installed globally/);
-    } finally {
-      process.env.HOME = originalHome;
-      await fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
-    }
+    });
   });
 });
 
@@ -194,27 +183,4 @@ describe("listSkills", () => {
 
 // ── Helper functions for tests ─────────────────────────────────────
 
-async function fileExists(p) {
-  try {
-    const stat = await fsp.stat(p);
-    return stat.isFile() || stat.isDirectory();
-  } catch {
-    return false;
-  }
-}
-
-async function dirExists(p) {
-  return fileExists(p);
-}
-
-// Simple spy utility since node:test doesn't include one by default.
-function spyOn(obj, method) {
-  const original = obj[method];
-  const calls = [];
-  obj[method] = function (...args) {
-    calls.push(args);
-    return original.apply(this, args);
-  };
-  obj[method].mock = { calls };
-  return obj[method];
-}
+// Shared helpers (withTmpDir, withGlobalTmpDir, dirExists, spyOn) are imported from ./helpers at the top of this file.

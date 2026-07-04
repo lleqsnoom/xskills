@@ -12,6 +12,8 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { findSourceFiles } = require("./utils/file-discovery");
+const { normalizeLines } = require("./utils/text-normalization");
 
 // ── Config ─────────────────────────────────────────────────────────
 
@@ -27,14 +29,6 @@ function loadConfig() {
 const CONFIG = { minDupLines: 5, ...loadConfig() };
 
 // ── Deduplication checker ──────────────────────────────────────────
-
-function normalizeLines(source) {
-  return source
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith("//") && !line.startsWith("/*") && !line.startsWith("*"))
-    .map((line) => line.replace(/\s+/g, " ")); // collapse whitespace
-}
 
 function findDuplicates(source, filePath) {
   const lines = normalizeLines(source);
@@ -67,54 +61,6 @@ function findDuplicates(source, filePath) {
   }
 
   return duplicates;
-}
-
-// ── File discovery ─────────────────────────────────────────────────
-
-function findSourceFiles(fileArgs, rootDir) {
-  const files = [];
-  const extensions = /\.(js|ts|jsx|tsx|mjs|cjs)$/;
-
-  const useAll = fileArgs.includes("--all");
-
-  for (const arg of fileArgs) {
-    if (arg.startsWith("--")) continue;
-    const resolved = path.resolve(arg);
-    try {
-      if (fs.statSync(resolved).isDirectory()) {
-        walkDir(resolved, extensions, files);
-      } else if (extensions.test(resolved)) {
-        files.push(resolved);
-      }
-    } catch {
-      // skip inaccessible
-    }
-  }
-
-  // If --all flag was passed without specific file args, scan rootDir
-  if (useAll && !fileArgs.some((a) => !a.startsWith("--"))) {
-    const root = rootDir || process.cwd();
-    walkDir(root, extensions, files);
-  }
-
-  return [...new Set(files)];
-}
-
-function walkDir(dir, extPattern, out) {
-  try {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if ([".git", "node_modules", "dist", "build", ".agents"].includes(entry.name)) continue;
-        walkDir(full, extPattern, out);
-      } else if (extPattern.test(entry.name)) {
-        out.push(full);
-      }
-    }
-  } catch {
-    // skip
-  }
 }
 
 // ── Main ───────────────────────────────────────────────────────────

@@ -48,7 +48,8 @@ Run `npx xskills list` to see all available skills. Each skill may include:
 | Skill | Description |
 |-------|-------------|
 | `x-commit` | Write single-line conventional commit messages with automated type suggestion and validation |
-| `x-review` | Review code against SRP, SOLID, KISS, DRY with cyclomatic complexity and duplication analysis |
+| `x-review` | Review code against SRP, SOLID, KISS, DRY with cyclomatic complexity and duplication analysis — saves fix plan to markdown |
+| `x-fix`    | Resolve code review issues one-by-one from a fix plan file until complete |
 
 ## How It Works
 

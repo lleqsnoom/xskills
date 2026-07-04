@@ -39,6 +39,8 @@ xskills/
         ├── scripts/
         ├── references/
         └── assets/
+    └── x-fix/                # Resolve code review issues from fix plan files
+        └── SKILL.md
 ```
 
 ---
