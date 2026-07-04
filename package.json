@@ -1,0 +1,43 @@
+{
+  "name": "xskills",
+  "version": "1.0.0",
+  "description": "Cross-CLI agentic skills — install once, use with 45+ compatible AI coding tools",
+  "main": "lib/install.js",
+  "bin": {
+    "xskills": "./bin/install.js"
+  },
+  "scripts": {
+    "test": "node --test 'test/*.test.cjs'"
+  },
+  "keywords": [
+    "agentic",
+    "ai",
+    "coding",
+    "skills",
+    "claude-code",
+    "gemini-cli",
+    "crush",
+    "aider",
+    "cursor",
+    "opencode",
+    "agent-skills"
+  ],
+  "author": "lleqsnoom",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "skills/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lleqsnoom/xskills.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lleqsnoom/xskills/issues"
+  },
+  "homepage": "https://github.com/lleqsnoom/xskills#readme"
+}

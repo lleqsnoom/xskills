@@ -1,0 +1,13 @@
+{
+  "maxComplexity": 5,
+  "maxLength": 20,
+  "maxParams": 3,
+  "minDupLines": 5,
+  "severity": {
+    "complexity_critical": 10,
+    "complexity_major": 5,
+    "length_critical": 50,
+    "length_major": 30,
+    "params_major": 4
+  }
+}

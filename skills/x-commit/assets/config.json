@@ -1,0 +1,33 @@
+{
+  "default_types": [
+    "feat",
+    "fix",
+    "docs",
+    "style",
+    "refactor",
+    "perf",
+    "test",
+    "build",
+    "ci",
+    "chore",
+    "revert"
+  ],
+  "common_scopes": [
+    "src",
+    "lib",
+    "app",
+    "api",
+    "ui",
+    "auth",
+    "db",
+    "test",
+    "docs",
+    "config"
+  ],
+  "breaking_change_footer": "BREAKING CHANGE:",
+  "enforce_single_line": true,
+  "imperative_mood": true,
+  "no_period": true,
+  "no_ai_attribution": true,
+  "no_coauthors": true
+}
