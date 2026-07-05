@@ -31,6 +31,12 @@ if (!msg) {
 
 const trimmed = msg.trim();
 
+// No AI attribution
+if (/\bassisted-by:\s*\S+/i.test(trimmed)) {
+  console.error("ERROR: Commit message must not contain AI attribution (e.g. 'Assisted-by: ...').");
+  process.exit(1);
+}
+
 // Must be single line (no newlines)
 if (trimmed.includes("\n")) {
   console.error("ERROR: Commit message must be a single line.");
