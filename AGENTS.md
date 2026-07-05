@@ -100,6 +100,16 @@ The `description` field is auto-extracted by `listSkills()`. The frontmatter par
 - Use `node:child_process` for shell commands (e.g., `git diff`).
 - Output JSON to stdout for structured data; errors go to stderr with `process.exit(1)`.
 
+#### x-commit Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/suggest-type.mjs` | Analyzes staged changes and suggests a conventional commit type + scope. |
+| `scripts/validate-commit.js` | Validates a commit message against the spec (CLI arg or stdin). Exit 0 = valid, exit 1 = invalid. |
+| `scripts/commit.mjs` | Atomically validates AND commits — never bypass this script. Exit 0 = committed, exit 1 = rejected. |
+
+**Critical**: Always use `commit.mjs` for committing. It combines validation + commit in one atomic step. Never run `git commit` directly — doing so bypasses the validator and allows invalid messages through.
+
 ### Skill Discovery
 
 `listSkills()` iterates `skills/`, checks each subdirectory for a `SKILL.md`, and extracts its description. Skills without `SKILL.md` are silently skipped.
