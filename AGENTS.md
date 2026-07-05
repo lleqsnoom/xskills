@@ -34,13 +34,19 @@ xskills/
     │   ├── scripts/          # Optional: executable scripts (ES modules)
     │   ├── references/       # Optional: docs, type maps
     │   └── assets/           # Optional: configs, templates
-    └── x-review/             # Code review against engineering principles
+    ├── x-review/             # Code review against engineering principles
+    │   ├── SKILL.md
+    │   ├── scripts/
+    │   ├── references/
+    │   └── assets/
+    ├── x-fix/                # Resolve code review issues from fix plan files
+    │   └── SKILL.md
+    ├── x-design/             # Spec-driven design — clarify goals, write specs as declarations
+    │   ├── SKILL.md
+    │   └── scripts/
+    └── x-plan/               # Milestone planning with executable acceptance
         ├── SKILL.md
-        ├── scripts/
-        ├── references/
-        └── assets/
-    └── x-fix/                # Resolve code review issues from fix plan files
-        └── SKILL.md
+        └── scripts/
 ```
 
 ---
