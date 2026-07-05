@@ -15,9 +15,10 @@ Make a conventional commit with info on what current Changes does. One sentence.
 
 1. Run `scripts/suggest-type.mjs` to analyze staged changes and suggest a type + scope.
 2. Pick the best suggestion, or override if context demands it.
-3. Draft a single-line message in imperative mood: `type[(scope)]: description`.
-4. Run `scripts/validate-commit.js` to verify the message conforms to Conventional Commits.
-5. Commit with the validated message.
+3. Draft the **complete** commit message in imperative mood: `type[(scope)]: description`.
+4. Run `scripts/commit.mjs "<message>"` — this script validates AND commits atomically.
+   - If it prints `OK: ...` and commits → done.
+   - If it prints `ERROR:` and exits non-zero → **do not commit manually**. Show the error to the user and ask for a corrected message. Repeat from step 3.
 
 ## Rules
 
