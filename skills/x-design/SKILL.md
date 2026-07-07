@@ -52,15 +52,24 @@ deferred:     <decided later>
 
 Append an `## Working notes` section for scratch, open questions, hypotheses. Strip it at ship.
 
+## Script Location
+
+Scripts live inside the **installed skill directory**, not in your project:
+
+- Global install (`~/.agents/skills/x-design/scripts/save-spec.js`)
+- Local install (`.agents/skills/x-design/scripts/save-spec.js`)
+
+Run from any working directory — the path above is absolute or project-local.
+
 ## Spec Location
 
-Run the script to create the staging directory and file:
+Create the staging directory and file:
 
 ```bash
-node skills/x-design/scripts/save-spec.js --topic <slug>
+node <skill-install-dir>/scripts/save-spec.js --topic <slug>
 ```
 
-Output: `docs/staging/specs/YYYY-MM-DD-<topic>.md`
+Output: `.x-skills/design/YYYY-MM-DD-<topic>.md`
 
 Write your spec content into the file printed by the script using this structure:
 
@@ -88,9 +97,9 @@ deferred:     <decided later>
 
 ## Roadmap
 
-**`docs/ROADMAP.md` exists?** Does this work add new milestones? Append them. Otherwise skip.
+**`.x-skills/roadmap.md` exists?** Does this work add new milestones? Append them. Otherwise skip.
 
-**Does not exist?** This work spans ≥ 3 milestones → create `docs/ROADMAP.md`:
+**Does not exist?** This work spans ≥ 3 milestones → create `.x-skills/roadmap.md`:
 
 ```markdown
 - [ ] M1: <one-line goal>
@@ -98,17 +107,39 @@ deferred:     <decided later>
 - [ ] M3: <one-line goal>
 ```
 
-If roadmap exists or was created, add `milestone: M1 (see docs/ROADMAP.md)` to the spec header.
+If roadmap exists or was created, add `milestone: M1 (see .x-skills/roadmap.md)` to the spec header.
 
 ## Abandon
 
 If the user decides not to proceed after clarification, stop. No spec, no plan. Record reason in working notes.
 
-## Gates
+## Handoff Flow
 
-`<gate>`
+`<gate>` The handoff sequence must follow this order — never skip or reorder:
 
-1. `docs/staging/specs/YYYY-MM-DD-<topic>.md` must exist on disk before handing off to `x-plan`.
-2. Confirm with the user that the spec is complete and correct.
+1. **x-design** writes spec → `.x-skills/design/YYYY-MM-DD-<topic>.md`
+2. User approves the spec ✅
+3. Transition to `x-plan` — ask user: *"Spec approved. Shall I proceed with x-plan?"*
+4. `x-plan` writes plan → `.x-skills/plans/YYYY-MM-DD-<topic>.md`
+5. User approves the plan ✅
+6. Transition to `x-implement` — ask user: *"Plan approved. Shall I proceed with x-implement?"*
+7. `x-implement` executes tasks from the plan
+
+After each phase completes, log the artifact path for verification:
+
+```log
+[x-design] spec written → .x-skills/design/YYYY-MM-DD-<topic>.md
+[x-plan]   plan written  → .x-skills/plans/YYYY-MM-DD-<topic>.md
+[x-implement] tasks completed → all - [ ] flipped to - [x]
+```
 
 `</gate>`
+
+## Verification Checklist
+
+Before declaring a phase complete, confirm:
+
+1. Artifact file exists on disk at the expected path
+2. File is non-empty (> 0 bytes)
+3. Spec/plan contains required sections (contract, invariant, or acceptance criteria)
+4. Next-phase script can read this artifact as input

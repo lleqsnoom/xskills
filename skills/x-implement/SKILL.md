@@ -13,12 +13,12 @@ user-invocable: true
 
 ## Workflow
 
-For each task in `docs/staging/plans/YYYY-MM-DD-<topic>.md`:
+For each task in `.x-skills/plans/YYYY-MM-DD-<topic>.md`:
 
 1. **RED** — Write the minimal failing test for the task's acceptance criterion. It must fail for the *right reason*.
 2. **GREEN** — Write the minimum implementation to pass that test. Nothing more.
 3. **REFACTOR** — Evaluate against SOLID/clean code. State what you assessed and what (if anything) improved — or why no changes were needed.
-4. **SYNC DOCS** — Update staging spec (`docs/staging/specs/*.md`) if it exists; otherwise update living docs (README, comments) directly.
+4. **SYNC DOCS** — Update spec (`.x-skills/design/*.md`) if it exists; otherwise update living docs (README, comments) directly.
 5. **COMMIT** — Use `x-commit` for the message.
 6. **UPDATE PLAN** — Change `- [ ]` to `- [x]` for this task. Do not start the next task without this edit.
 
