@@ -24,8 +24,8 @@ function parseArgs(argv) {
 }
 
 function sanitizeBranch(branch) {
-  // Replace chars problematic in filenames. Slashes first to avoid double-underscore artifacts.
-  return branch.replace(/[/\\.*-]/g, "_");
+  // Only replace characters that are invalid in filenames (not - or . which are common in branches).
+  return branch.replace(/[/\\:*?"<>|\0]/g, "_");
 }
 
 function getBranch() {
@@ -41,6 +41,22 @@ function getTimestamp() {
   const now = new Date();
   const pad = (n) => String(n).padStart(2, "0");
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}${pad(now.getMinutes())}`;
+}
+
+// ── Self-discovery ────────────────────────────────────────────────────
+// __dirname resolves to wherever the script actually lives, whether invoked
+// from a global install ( ~/.agents/skills/x-review/scripts/ ) or a local one
+// (.agents/skills/<project>/x-review/scripts/). This lets us find sibling
+// scripts and resources without the agent needing to know <skill-install-dir>.
+
+const SKILL_DIR = path.resolve(__dirname, ".."); // parent of scripts/
+
+function skillScript(relPath) {
+  return path.join(SKILL_DIR, "scripts", relPath);
+}
+
+function skillResource(relPath) {
+  return path.join(SKILL_DIR, relPath);
 }
 
 function main() {

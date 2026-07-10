@@ -51,7 +51,8 @@ Run `npx xskills list` to see all available skills. Each skill may include:
 | `x-review` | Review code against SRP, SOLID, KISS, DRY with cyclomatic complexity and duplication analysis — saves fix plan to markdown |
 | `x-fix`    | Resolve code review issues one-by-one from a fix plan file until complete |
 | `x-design` | Spec-driven design — clarify vague goals, propose approaches with trade-offs, write testable specs, gate on approval |
-| `x-plan`   | Rolling-wave milestone planning from spec — executable acceptance criteria, parallel task detection |
+| `x-epic`   | Convert approved spec into outcome-focused epics — user stories (INVEST), scope boundaries, epic-level DOD checklist |
+| `x-decompose` | Decompose epic into atomic tasks — each ≤8h with Definition of Done, test plan, effort estimate, dependency tracking |
 | `x-implement` | Test-driven implementation — red/green/refactor per plan task, docs sync, commit via x-commit |
 
 ## Skill Flow
@@ -60,17 +61,19 @@ The skills compose into a production workflow:
 
 ```mermaid
 flowchart LR
-    A[x-design] -->|writes spec| B[x-plan]
-    B -->|writes plan| C[x-implement]
-    C -->|after each task| D[x-commit]
-    C -->|all tasks green| E[x-review]
-    E -->|writes fix plan| F[x-fix]
-    F -->|issues resolved| C
+    A[x-design] -->|writes spec| B[x-epic]
+    B -->|writes epic| C[x-decompose]
+    C -->|writes tasks| D[x-implement]
+    D -->|after each task| E[x-commit]
+    D -->|all tasks green| F[x-review]
+    F -->|writes fix plan| G[x-fix]
+    G -->|issues resolved| D
 ```
 
 - **x-design**: Clarify vague goals, propose approaches with trade-offs, write specs (contract, invariant, test), gate on approval.
-- **x-plan**: Read spec → rolling-wave milestone tasks with executable acceptance, detect parallelism.
-- **x-implement**: TDD (red→green→refactor) per task, sync docs, flip checkboxes on plan.
+- **x-epic**: Read spec → derive user stories following INVEST criteria, define scope boundaries and epic-level Definition of Done, gate on approval.
+- **x-decompose**: Read epic → decompose into atomic tasks (≤8h each) with DOD checklist, explicit test plan (happy + error paths), effort estimate in hours, dependency DAG. Enforced size gates prevent oversized tasks.
+- **x-implement**: TDD (red→green→refactor) per task, sync docs, flip checkboxes on task file.
 - **x-commit**: Conventional commit messages — analyze staged changes, validate format, commit atomically. Used at each task boundary.
 - **x-review**: AST complexity + duplication analysis, apply SOLID/KISS/DRY/SRP principles, save fix plan.
 - **x-fix**: Resolve review issues one-by-one by priority (CRITICAL → MAJOR → MINOR), test after each.

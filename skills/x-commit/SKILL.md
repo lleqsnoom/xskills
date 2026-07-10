@@ -11,13 +11,24 @@ user-invocable: true
 
 Make a conventional commit with info on what current Changes does. One sentence. Authoritative tone. Do not add co-authors or info that it was made with AI.
 
+## Script Location
+
+All scripts live inside the **installed skill directory**, not in your project. Resolve `scripts/` relative to `<skill-install-dir>/`:
+
+- Global install (`~/.agents/skills/x-commit/scripts/<script>`)
+- Local install (`.agents/skills/x-commit/scripts/<script>`)
+
+**Auto-discovery**: these scripts only use git commands and stdin/stdout — no skill directory resolution needed. Just pass any path to the script and it works from anywhere.
+
+Run each command from any working directory — the paths above are absolute or project-local, never cwd-relative.
+
 ## Workflow
 
-1. Run `scripts/suggest-type.mjs` to analyze staged changes and suggest a type + scope.
+1. Run `node ~/.agents/skills/x-commit/scripts/suggest-type.mjs` (global) or `node ./.agents/skills/x-commit/scripts/suggest-type.mjs` (local) to analyze staged changes and suggest a type + scope.
 2. Pick the best suggestion, or override if context demands it.
 3. Draft the **complete** commit message in imperative mood: `type[(scope)]: description`.
-4. Run `scripts/commit.mjs "<message>"` — this script validates AND commits atomically.
-   - If it prints `OK: ...` and commits → done.
+4. Run `node ~/.agents/skills/x-commit/scripts/commit.mjs "<message>"` (global) — this script validates AND commits atomically. If local, use `.agents/skills/x-commit/scripts/commit.mjs` instead.
+   - If it prints the commit confirmation and commits → done.
    - If it prints `ERROR:` and exits non-zero → **do not commit manually**. Show the error to the user and ask for a corrected message. Repeat from step 3.
 
 ## Rules

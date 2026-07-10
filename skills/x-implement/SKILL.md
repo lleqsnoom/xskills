@@ -11,14 +11,22 @@ user-invocable: true
 
 **No production code without a failing test first.** Wrote code before the test? Delete it. Rewrite from the test. Exception — ask user first: prototypes, generated code, throwaway scripts.
 
+## Artifact Location
+
+Invoke the script from any directory — it self-resolves via `__dirname`. Output: `.x-skills/tasks/YYYY-MM-DD-<epic>.md` (relative to CWD):
+
+```bash
+node <path-to-save-plan.js> --epic <slug>
+```
+
 ## Workflow
 
-For each task in `docs/staging/plans/YYYY-MM-DD-<topic>.md`:
+For each task in `.x-skills/tasks/YYYY-MM-DD-<epic>.md`:
 
 1. **RED** — Write the minimal failing test for the task's acceptance criterion. It must fail for the *right reason*.
 2. **GREEN** — Write the minimum implementation to pass that test. Nothing more.
 3. **REFACTOR** — Evaluate against SOLID/clean code. State what you assessed and what (if anything) improved — or why no changes were needed.
-4. **SYNC DOCS** — Update staging spec (`docs/staging/specs/*.md`) if it exists; otherwise update living docs (README, comments) directly.
+4. **SYNC DOCS** — Update spec (`.x-skills/design/*.md`) if it exists; otherwise update living docs (README, comments) directly.
 5. **COMMIT** — Use `x-commit` for the message.
 6. **UPDATE PLAN** — Change `- [ ]` to `- [x]` for this task. Do not start the next task without this edit.
 

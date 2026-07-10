@@ -4,6 +4,10 @@
  * Detect duplicated code blocks in source files.
  * Uses a simple line-hashing approach to find repeated sequences.
  *
+ * Known limitations: comment stripping is regex-based (misses heredocs and strings containing //),
+ * so duplicated comments or string literals with embedded slashes may not be detected. For production
+ * use prefer tree-sitter-based extraction when available.
+ *
  * Usage: node scripts/check-duplication.js <file1> [file2] ...
  *        node scripts/check-duplication.js --all [--root ./src]
  *

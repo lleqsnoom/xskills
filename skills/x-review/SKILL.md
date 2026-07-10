@@ -9,22 +9,26 @@ user-invocable: true
 
 # X-Review — Code Review Against Engineering Principles
 
-**What To Do:** When invoked, immediately execute these three commands in order. Do not ask the user what to do.
+## Scripts
 
-1. Run complexity analysis: `node skills/x-review/scripts/analyze-complexity.js --all`
-2. Run duplication check: `node skills/x-review/scripts/check-duplication.js --all`
-3. Create fix plan file: `node skills/x-review/scripts/save-plan.js --output .x-skills/review/`
-
-Parse the JSON output from steps 1 and 2, apply the four principles (below), then write your review into the fix plan file using the format below.
-
-## Run Analysis
+All scripts self-resolve via `__dirname` — run from any working directory by passing the full path:
 
 ```bash
-node skills/x-review/scripts/analyze-complexity.js --all       # complexity + length per function
-node skills/x-review/scripts/check-duplication.js --all        # duplicated blocks (>5 lines)
+# Run from anywhere (use whichever script path is available):
+node <path-to>/analyze-complexity.js --all       # complexity + length per function
+node <path-to>/check-duplication.js --all        # duplicated blocks (>5 lines)
+node <path-to>/save-plan.js --output .x-skills/review/   # create plan file
 ```
 
-The script auto-installs tree-sitter if missing. Output is JSON — parse it for function metrics and duplication counts.
+**Auto-discovery**: Scripts resolve config and sibling scripts relative to `__dirname`, so they work whether installed globally (`~/.agents/skills/x-review/scripts/`) or locally (`.agents/skills/<project>/x-review/scripts/`).
+
+**What To Do:** When invoked, immediately execute these three commands in order. Do not ask the user what to do.
+
+1. Run complexity analysis: `node <path-to>/analyze-complexity.js --all`
+2. Run duplication check: `node <path-to>/check-duplication.js --all`
+3. Create fix plan file: `node <path-to>/save-plan.js --output .x-skills/review/`
+
+The complexity script auto-installs tree-sitter if missing (global install). Output is JSON — parse it for function metrics and duplication counts.
 
 ## Principles Checklist
 
@@ -43,13 +47,13 @@ The script auto-installs tree-sitter if missing. Output is JSON — parse it for
 
 ## Output Format
 
-Produce a review and save it under `/.x-skills/review/`. Use the script to create the directory, detect branch from git, generate timestamp, sanitize filename, and write an empty plan file:
+Produce a review and save it under `.x-skills/review/`. Use `save-plan.js` to create the directory and generate a timestamped plan file:
 
 ```bash
-node skills/x-review/scripts/save-plan.js --output .x-skills/review/
+node <path-to>/save-plan.js --output .x-skills/review/
 ```
 
-The script prints the full path (e.g. `.x-skills/review/2026-07-04T1430_main.md`). Write your review content into that file using this format:
+The script prints the full path. Write your review content into that file using this format:
 
 ```markdown
 # Code Review — Fix Plan
