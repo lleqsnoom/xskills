@@ -43,23 +43,44 @@ let Parser = null;
 let Language = null;
 
 /**
+ * Resolve the global npm prefix (where -g packages are installed).
+ */
+function getGlobalPrefix() {
+  try {
+    const cp = require("node:child_process");
+    return cp.execSync("npm config get prefix", { stdio: ["pipe", "pipe", "ignore"] }).toString().trim();
+  } catch {
+    return path.join(require("os").homedir(), ".npm-global");
+  }
+}
+
+/**
  * Detect which language grammars are already installed for the given extensions.
+ * Checks both local (cwd) and global node_modules paths.
  */
 function detectInstalledGrammars(extSet) {
+  const searchDirs = [process.cwd(), getGlobalPrefix()];
+
   const hasParser = (() => {
-    try { require.resolve("web-tree-sitter", { paths: [process.cwd()] }); return true; } catch { return false; }
+    for (const dir of searchDirs) {
+      try { require.resolve("web-tree-sitter", { paths: [dir] }); return true; } catch {}
+    }
+    return false;
   })();
 
   const hasLangs = {};
   for (const ext of extSet) {
     const langName = EXTENSION_MAP[ext];
     if (!langName) continue;
-    try {
-      require.resolve(`tree-sitter-${langName}/package.json`, { paths: [process.cwd()] });
-      hasLangs[langName] = true;
-    } catch {
-      hasLangs[langName] = false;
+    let found = false;
+    for (const dir of searchDirs) {
+      try {
+        require.resolve(`tree-sitter-${langName}/package.json`, { paths: [dir] });
+        found = true;
+        break;
+      } catch {}
     }
+    hasLangs[langName] = found;
   }
 
   return { hasParser, hasLangs };
@@ -87,33 +108,24 @@ function buildGrammarList(hasParser, hasLangs) {
 }
 
 /**
- * Install grammars via npm with local-first fallback to global.
- * Returns the list of installed packages, or null on failure.
+ * Install grammars globally via npm. Returns the list of installed packages, or null on failure.
  */
 async function installGrammars(neededGrammars) {
   const childProcess = require("node:child_process");
-  console.error("[x-review] Installing web-tree-sitter for AST-based analysis...");
+  console.error("[x-review] Installing web-tree-sitter globally for AST-based analysis...");
 
   try {
     childProcess.execSync(
-      `npm install --save-dev --no-audit --no-fund ${neededGrammars.join(" ")}`,
-      { cwd: process.cwd(), stdio: "pipe" }
+      `npm install -g --no-audit --no-fund ${neededGrammars.join(" ")}`,
+      { stdio: "pipe" }
     );
-    console.error("[x-review] Installed:", neededGrammars.join(", "));
+    console.error("[x-review] Installed globally:", neededGrammars.join(", "));
   } catch {
-    try {
-      childProcess.execSync(
-        `npm install -g --no-audit --no-fund ${neededGrammars.join(" ")}`,
-        { stdio: "pipe" }
-      );
-      console.error("[x-review] Installed globally (no package.json in cwd):", neededGrammars.join(", "));
-    } catch {
-      console.error(
-        "[x-review] Failed to auto-install tree-sitter. Install manually:\n" +
-        `  npm install --save-dev web-tree-sitter ${neededGrammars.filter(g => g !== 'web-tree-sitter').join(' ')}`
-      );
-      return null;
-    }
+    console.error(
+      "[x-review] Failed to auto-install tree-sitter. Install manually:\n" +
+      `  npm install -g web-tree-sitter ${neededGrammars.filter(g => g !== 'web-tree-sitter').join(' ')}`
+    );
+    return null;
   }
 
   return ["web-tree-sitter", ...neededGrammars.filter((g) => g.startsWith("tree-sitter-"))];
@@ -197,8 +209,8 @@ function collectExtsRecursive(dir, extSet) {
 }
 
 try {
-  // Try to resolve web-tree-sitter from cwd first, then skill dir, then parent dirs
-  const searchDirs = [process.cwd(), __dirname, path.join(__dirname, "..", "..")];
+  // Try to resolve web-tree-sitter from cwd, skill dir, parent dirs, then global prefix
+  const searchDirs = [process.cwd(), __dirname, path.join(__dirname, "..", ".."), getGlobalPrefix()];
   let resolved = null;
   for (const dir of searchDirs) {
     try { resolved = require.resolve("web-tree-sitter", { paths: [dir] }); break; } catch {}
@@ -232,8 +244,8 @@ const EXTENSION_MAP = {
 };
 
 function findWasmFile(langName) {
-  // Search from cwd first (where source files are), then skill dir, then parent dirs
-  const searchDirs = [process.cwd(), __dirname, path.join(__dirname, "..", "..")];
+  // Search from cwd first (where source files are), then skill dir, parent dirs, then global prefix
+  const searchDirs = [process.cwd(), __dirname, path.join(__dirname, "..", ".."), getGlobalPrefix()];
   
   for (const baseDir of searchDirs) {
     try {

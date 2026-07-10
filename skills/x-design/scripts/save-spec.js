@@ -1,94 +1,54 @@
 #!/usr/bin/env node
 
 /**
- * Create .x-skills/design/ directory and return the full spec file path.
- * Auto-detects branch name from git if not provided. Generates timestamp.
- * Logs each step to stderr for verification.
- *
- * Usage:
- *   node save-spec.js --topic <slug> [--branch <name>] [--date <YYYY-MM-DDTHHMM>]
- *
- * Output (stdout): absolute path to the spec file, ready to write into with `write`.
+ * Create .x-skills/design/<timestamp>-<topic>.md with a header skeleton.
+ * Usage: node save-spec.js --topic <slug> [--branch <name>] [--date <YYYY-MM-DDTHHMM>]
+ * Output (stdout): path to the created spec file.
  */
 
-const fs = require("node:fs");
 const path = require("node:path");
-
-// ── Logging ───────────────────────────────────────────────────────────
-
-function log(stage) {
-  const ts = new Date().toISOString();
-  process.stderr.write(`[${ts}] [x-design] ${stage}\n`);
-}
-
-// ── Argument parsing ──────────────────────────────────────────────────
-
-function parseArgs(argv) {
-  const args = {};
-  for (let i = 0; i < argv.length; i++) {
-    if ((argv[i] === "--topic" || argv[i] === "-t") && i + 1 < argv.length) args.topic = argv[++i];
-    else if (argv[i] === "--branch" && i + 1 < argv.length) args.branch = argv[++i];
-    else if (argv[i] === "--date" && i + 1 < argv.length) args.date = argv[++i];
-  }
-  return args;
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────
-
-function getBranch() {
-  try {
-    const cp = require("node:child_process");
-    const result = cp.execSync("git rev-parse --abbrev-ref HEAD", { stdio: ["ignore", "pipe", "ignore"] });
-    return result.toString().trim();
-  } catch {
-    return process.env.GIT_BRANCH || "unknown";
-  }
-}
-
-function getTimestamp() {
-  const now = new Date();
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}${pad(now.getMinutes())}`;
-}
-
-// ── Main ──────────────────────────────────────────────────────────────
+const shared = require("./shared");
 
 function main() {
-  const args = parseArgs(process.argv.slice(2));
+  const args = shared.parseArgs(process.argv.slice(2), {
+    "--topic": "topic", "-t": "topic",
+    "--branch": "branch",
+    "--date": "date",
+  });
 
-  log("parsing arguments");
+  shared.log("x-design", "parsing arguments");
 
   if (!args.topic) {
-    console.error("Usage: node save-spec.js --topic <slug> [--branch <name>] [--date <YYYY-MM-DDTHHMM>]");
+    process.stderr.write("Usage: node save-spec.js --topic <slug> [--branch <name>] [--date YYYY-MM-DDTHHMM]\n");
     process.exit(1);
   }
 
-  const branch = args.branch || getBranch();
-  log(`resolved branch: ${branch}`);
+  const slug = shared.sanitizeSlug(args.topic);
+  const branch = args.branch || shared.getBranch();
+  shared.log("x-design", `resolved branch: ${branch}`);
 
-  const date = args.date || getTimestamp();
-  log(`using date stamp: ${date}`);
+  const date = args.date || shared.getTimestamp();
+  shared.log("x-design", `using date stamp: ${date}`);
 
   const dir = path.resolve(".x-skills/design");
-  const filename = `${date}-${args.topic}.md`;
+  const filename = `${date}-${slug}.md`;
   const fullPath = path.join(dir, filename);
 
-  log(`creating directory: ${dir}`);
-  fs.mkdirSync(dir, { recursive: true });
+  try {
+    const header = `# Design — ${args.topic}\n\n**Date:** ${date}\n**Branch:** ${branch}\n\n---\n\n`;
 
-  const header = `# Design — ${args.topic}\n\n**Date:** ${date}\n**Branch:** ${branch}\n\n---\n\n`;
-  log(`writing spec file: ${fullPath} (${header.length} bytes)`);
-  fs.writeFileSync(fullPath, header);
+    shared.log("x-design", `creating directory: ${dir}`);
+    shared.ensureDir(dir);
 
-  // Verify the write succeeded
-  const stats = fs.statSync(fullPath);
-  if (stats.size === 0) {
-    console.error("ERROR: spec file was written but is empty.");
+    shared.log("x-design", `writing spec file: ${fullPath} (${header.length} bytes)`);
+    shared.writeFile(fullPath, header);
+
+    shared.log("x-design", `spec ready: ${fullPath}`);
+    console.log(fullPath);
+  } catch (err) {
+    process.stderr.write(`Error: ${err.message}\n`);
     process.exit(1);
   }
-
-  log(`spec ready: ${fullPath}`);
-  console.log(fullPath);
 }
 
 main();

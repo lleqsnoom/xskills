@@ -44,10 +44,27 @@ xskills/
     ├── x-design/             # Spec-driven design — clarify goals, write specs as declarations
     │   ├── SKILL.md
     │   └── scripts/
-    └── x-plan/               # Milestone planning with executable acceptance
+    ├── x-epic/               # Epic definition — outcome-focused user stories with INVEST and DOD
+    │   ├── SKILL.md
+    │   └── scripts/
+    └── x-decompose/          # Atomic task decomposition — tasks ≤8h with DOD, test plans, effort estimates
         ├── SKILL.md
         └── scripts/
 ```
+
+---
+
+## Development Workflow
+
+The planning workflow follows a three-phase handoff chain:
+
+| Phase | Skill | Input | Output | Gate |
+|-------|-------|-------|--------|------|
+| 1. Design | `x-design` | Vague goal or requirement | `.x-skills/design/YYYY-MM-DD-<topic>.md` (spec) | User approves spec |
+| 2. Epic | `x-epic` | Approved spec | `.x-skills/epics/YYYY-MM-DD-<topic>.md` (user stories + DOD) | User approves epic |
+| 3. Decompose | `x-decompose` | Approved epic | `.x-skills/tasks/YYYY-MM-DD-<epic>.md` (atomic tasks with DOD, test plans, effort) | User approves tasks |
+
+After task approval → `x-implement` executes tasks sequentially or in parallel groups.
 
 ---
 

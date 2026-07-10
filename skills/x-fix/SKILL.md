@@ -11,14 +11,14 @@ user-invocable: true
 
 **What To Do:** When invoked, immediately execute this workflow. Do not ask the user what to do.
 
-1. Find the most recent file under `/.x-skills/review/`.
+1. Find the most recent file under `.x-skills/review/`.
 2. Read it and find the next unchecked `[ ]` issue (CRITICAL → MAJOR → MINOR).
 3. For each: read relevant file context, apply targeted fix, run tests, mark `[ ]` → `[x]`.
 4. Print one-line summary per fix, repeat until all done or no unchecked items remain.
 
 ## Workflow
 
-1. Read the most recent file under `/.x-skills/review/` (or accept a custom path as argument).
+1. Read the most recent file under `.x-skills/review/` (or accept a custom path as argument).
 2. Find the next unchecked `[ ]` issue in priority order: CRITICAL → MAJOR → MINOR.
 3. For each issue:
    - Read the relevant file and surrounding context (±20 lines around the reported line).

@@ -11,9 +11,17 @@ user-invocable: true
 
 **No production code without a failing test first.** Wrote code before the test? Delete it. Rewrite from the test. Exception — ask user first: prototypes, generated code, throwaway scripts.
 
+## Artifact Location
+
+Invoke the script from any directory — it self-resolves via `__dirname`. Output: `.x-skills/tasks/YYYY-MM-DD-<epic>.md` (relative to CWD):
+
+```bash
+node <path-to-save-plan.js> --epic <slug>
+```
+
 ## Workflow
 
-For each task in `.x-skills/plans/YYYY-MM-DD-<topic>.md`:
+For each task in `.x-skills/tasks/YYYY-MM-DD-<epic>.md`:
 
 1. **RED** — Write the minimal failing test for the task's acceptance criterion. It must fail for the *right reason*.
 2. **GREEN** — Write the minimum implementation to pass that test. Nothing more.
