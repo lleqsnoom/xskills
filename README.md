@@ -60,7 +60,7 @@ Run `npx xskills list` to see all available skills. Each skill may include:
 The skills compose into a production workflow:
 
 ```mermaid
-flowchart LR
+flowchart TD
     A[x-design] -->|writes spec| B[x-epic]
     B -->|writes epic| C[x-decompose]
     C -->|writes tasks| D[x-implement]
