@@ -2,6 +2,8 @@
 
 Cross-CLI agentic skills installer. Install once, use with **45+ compatible AI coding tools**.
 
+**xskills doesn't just teach your agent — it hands it real AST complexity analysis, commit validation, and duplication detection wired into a complete workflow chain from design to review.**
+
 ## What is this?
 
 Skills are the [Agent Skills open standard](https://agentskills.io) — a folder with a `SKILL.md` file (YAML frontmatter + Markdown instructions) plus optional `scripts/`, `references/`, and `assets/` subdirectories. They give AI coding agents specialized knowledge and workflows.
