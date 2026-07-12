@@ -64,9 +64,9 @@ describe("save-tasks.js — argument validation", () => {
   });
 });
 
-// ── File creation and output path ───────────────────────────────────
+// ── Directory creation and output path ──────────────────────────────
 
-describe("save-tasks.js — file creation", () => {
+describe("save-tasks.js — directory creation", () => {
   it("creates .x-skills/tasks/ directory in cwd", async () => {
     const tmpDir = createTempDir();
     try {
@@ -78,41 +78,38 @@ describe("save-tasks.js — file creation", () => {
     }
   });
 
-  it("writes a non-empty tasks file with header", async () => {
+  it("creates a task subdirectory with the epic slug", async () => {
     const tmpDir = createTempDir();
     try {
       const res = await runSaveTasks(["--epic", "feature-a"], tmpDir);
       assert.equal(res.code, 0);
 
       const fullPath = res.stdout.trim();
-      assert.ok(fs.existsSync(fullPath), `File should exist: ${fullPath}`);
-
-      const content = fs.readFileSync(fullPath, "utf8");
-      assert.ok(content.length > 0, "File must not be empty");
-      assert.match(content, /^# Tasks — feature-a$/m);
+      assert.ok(fs.existsSync(fullPath), `Directory should exist: ${fullPath}`);
+      assert.ok(fs.statSync(fullPath).isDirectory(), "Output path must be a directory");
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
   });
 
-  it("includes epic name in the filename", async () => {
+  it("includes epic name in the directory name", async () => {
     const tmpDir = createTempDir();
     try {
       const res = await runSaveTasks(["--epic", "my-cool-topic"], tmpDir);
       assert.equal(res.code, 0);
       const fullPath = res.stdout.trim();
-      assert.match(path.basename(fullPath), /my-cool-topic\.md$/);
+      assert.match(path.basename(fullPath), /my-cool-topic$/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
   });
 
-  it("includes date stamp in the filename", async () => {
+  it("includes date stamp in the directory name", async () => {
     const tmpDir = createTempDir();
     try {
       await runSaveTasks(["--epic", "dated"], tmpDir);
       const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "tasks"));
-      assert.match(dirContents[0], /^\d{4}-\d{2}-\d{2}T\d{4}-dated\.md$/);
+      assert.match(dirContents[0], /^\d{4}-\d{2}-\d{2}T\d{4}-dated$/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
@@ -123,22 +120,7 @@ describe("save-tasks.js — file creation", () => {
     try {
       await runSaveTasks(["--epic", "custom-date", "--date", "2099-12-31T2359"], tmpDir);
       const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "tasks"));
-      assert.match(dirContents[0], /^2099-12-31T2359-custom-date\.md$/);
-    } finally {
-      fs.rmSync(tmpDir, { recursive: true });
-    }
-  });
-
-  it("uses custom branch in the header", async () => {
-    const tmpDir = createTempDir();
-    try {
-      await runSaveTasks(["--epic", "branch-test", "--branch", "my/custom-branch"], tmpDir);
-      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "tasks"));
-      const content = fs.readFileSync(
-        path.join(tmpDir, ".x-skills", "tasks", dirContents[0]),
-        "utf8"
-      );
-      assert.ok(content.includes("my/custom-branch"), `Expected branch in header, got:\n${content}`);
+      assert.match(dirContents[0], /^2099-12-31T2359-custom-date$/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
@@ -155,34 +137,30 @@ describe("save-tasks.js — file creation", () => {
     }
   });
 
-  it("stdout contains the full path to the tasks file", async () => {
+  it("stdout contains the full path to the tasks directory", async () => {
     const tmpDir = createTempDir();
     try {
       const res = await runSaveTasks(["--epic", "stdout-test"], tmpDir);
       assert.match(res.stdout, /\.x-skills\/tasks\//);
-      assert.match(res.stdout, /stdout-test\.md$/);
+      assert.match(res.stdout, /stdout-test$/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
   });
 });
 
-// ── Tasks file content structure ────────────────────────────────────
+// ── Directory is empty (zero meta files) ────────────────────────────
 
-describe("save-tasks.js — tasks file content", () => {
-  it("writes a header template with Date and Branch fields", async () => {
+describe("save-tasks.js — zero meta files", () => {
+  it("creates an empty directory with no meta files", async () => {
     const tmpDir = createTempDir();
     try {
-      await runSaveTasks(["--epic", "content-check"], tmpDir);
-      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "tasks"));
-      const content = fs.readFileSync(
-        path.join(tmpDir, ".x-skills", "tasks", dirContents[0]),
-        "utf8"
-      );
+      const res = await runSaveTasks(["--epic", "empty-check"], tmpDir);
+      assert.equal(res.code, 0);
 
-      assert.match(content, /^# Tasks — content-check$/m);
-      assert.match(content, /\*\*Date:\*\*/);
-      assert.match(content, /\*\*Branch:\*\*/);
+      const fullPath = res.stdout.trim();
+      const contents = fs.readdirSync(fullPath);
+      assert.equal(contents.length, 0, "Task directory must be empty (no meta files)");
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
@@ -191,7 +169,6 @@ describe("save-tasks.js — tasks file content", () => {
   it("auto-resolves epic path when epic file exists with matching slug", async () => {
     const tmpDir = createTempDir();
     try {
-      // First create an epic for the topic
       const saveEpicScript = path.join(__dirname, "..", "skills", "x-epic", "scripts", "save-epic.js");
       await new Promise((resolve, reject) => {
         const child = spawn("node", [saveEpicScript, "--topic", "auto-link"], { cwd: tmpDir });
@@ -199,81 +176,20 @@ describe("save-tasks.js — tasks file content", () => {
         child.on("close", (code) => code === 0 ? resolve() : reject(new Error(`save-epic failed with ${code}`)));
       });
 
-      // Now run save-tasks and check it resolved the epic path
       const tasksRes = await runSaveTasks(["--epic", "auto-link"], tmpDir);
       assert.equal(tasksRes.code, 0);
-
-      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "tasks"));
-      const content = fs.readFileSync(
-        path.join(tmpDir, ".x-skills", "tasks", dirContents[0]),
-        "utf8"
-      );
-
-      // The epic: line should contain an actual path to an epic file with the topic slug
-      const epicMatch = content.match(/^epic:\s+(.+)$/m);
-      assert.ok(epicMatch, `tasks header should have resolved epic: line. Content:\n${content}`);
-      assert.ok(
-        epicMatch[1].includes("auto-link"),
-        `epic path should contain topic slug. Got: ${epicMatch[1]}`
-      );
-
-      // stderr should confirm resolution
       assert.match(tasksRes.stderr, /resolved epic path/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
   });
 
-  it("leaves placeholder when no epic file exists for topic", async () => {
+  it("logs 'no epic file found' when no epic file exists for topic", async () => {
     const tmpDir = createTempDir();
     try {
       const tasksRes = await runSaveTasks(["--epic", "orphan"], tmpDir);
       assert.equal(tasksRes.code, 0);
-
-      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "tasks"));
-      const content = fs.readFileSync(
-        path.join(tmpDir, ".x-skills", "tasks", dirContents[0]),
-        "utf8"
-      );
-
-      // Should have placeholder text for epic path
-      assert.ok(
-        content.includes("epic:") || content.includes("<timestamp>"),
-        `should leave placeholder when no epic file found. Content:\n${content}`
-      );
-    } finally {
-      fs.rmSync(tmpDir, { recursive: true });
-    }
-  });
-
-  it("header ends with trailing newline", async () => {
-    const tmpDir = createTempDir();
-    try {
-      await runSaveTasks(["--epic", "newline-check"], tmpDir);
-      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "tasks"));
-      const content = fs.readFileSync(
-        path.join(tmpDir, ".x-skills", "tasks", dirContents[0]),
-        "utf8"
-      );
-      assert.ok(content.endsWith("\n"), "File should end with trailing newline");
-    } finally {
-      fs.rmSync(tmpDir, { recursive: true });
-    }
-  });
-
-  it("produces lean content (no pre-filled task examples or user story templates)", async () => {
-    const tmpDir = createTempDir();
-    try {
-      await runSaveTasks(["--epic", "lean-check"], tmpDir);
-      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "tasks"));
-      const content = fs.readFileSync(
-        path.join(tmpDir, ".x-skills", "tasks", dirContents[0]),
-        "utf8"
-      );
-      // Should NOT contain pre-filled user story templates or task examples
-      assert.doesNotMatch(content, /As a \*\*</);
-      assert.doesNotMatch(content, /T1: <task name>/);
-      assert.doesNotMatch(content, /\*\*Acceptance criteria:\*\*/);
+      assert.match(tasksRes.stderr, /no epic file found/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
@@ -293,7 +209,7 @@ describe("save-tasks.js — logging", () => {
     assert.match(res.stderr, /parsing arguments/);
   });
 
-  it("logs the file path to stderr", async () => {
+  it("logs the directory path to stderr", async () => {
     const res = await runSaveTasks(["--epic", "log-path"]);
     assert.match(res.stderr, /\.x-skills\/tasks\//);
   });
@@ -310,9 +226,9 @@ describe("save-tasks.js — logging", () => {
     }
   });
 
-  it("logs 'tasks ready' at the end of successful run", async () => {
+  it("logs 'tasks directory ready' at the end of successful run", async () => {
     const res = await runSaveTasks(["--epic", "log-ready"]);
-    assert.match(res.stderr, /tasks ready/);
+    assert.match(res.stderr, /tasks directory ready/);
   });
 
   it("does not write to stdout on error (missing --epic)", async () => {
@@ -325,7 +241,6 @@ describe("save-tasks.js — logging", () => {
   it("logs 'resolved epic path' when epic file is found", async () => {
     const tmpDir = createTempDir();
     try {
-      // Create an epic first
       const saveEpicScript = path.join(__dirname, "..", "skills", "x-epic", "scripts", "save-epic.js");
       await new Promise((resolve, reject) => {
         const child = spawn("node", [saveEpicScript, "--topic", "link-test"], { cwd: tmpDir });
