@@ -37,6 +37,15 @@ The complexity script auto-installs tree-sitter if missing (global install). Out
 3. **KISS** — Flag unnecessary abstractions (interfaces for one implementation), magic numbers without constants, or conditional logic that should be a lookup table.
 4. **DRY** — Flag duplicated behavior (>5 identical lines), copy-pasted error handling, repeated config patterns. DRY targets duplicated *behavior*, not data.
 
+## Organization Principles
+
+Code must be split across directories by concern, never dumped into a single flat directory. When writing the fix plan or reviewing proposed changes:
+
+- **Identify concerns**: What responsibilities exist? (data models, business logic, I/O, API routes, utilities)
+- **Map to directories**: Each responsibility gets its own folder (`models/`, `services/`, `controllers/`, `utils/`, etc.)
+- **Flag flat structures** as CRITICAL or MAJOR issues — a class file that contains model logic, service logic, and HTTP handling in one place violates SRP at the directory level.
+- **Suggest reorganization**: When reviewing existing code, explicitly call out which files/directories should be created or split to separate concerns.
+
 ## Severity
 
 | Level | Meaning | Action |
