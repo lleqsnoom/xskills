@@ -5,7 +5,7 @@
  * Auto-detects branch name from git if not provided. Generates timestamp.
  *
  * Usage:
- *   node save-plan.js --output <dir> [--branch <name>] [--date <YYYY-MM-DDTHHMM>]
+ *   node save-plan.js --output <dir> [--branch <name>] 
  *
  * Output (stdout): absolute path to the plan file, ready to write into with `write`.
  */
@@ -18,7 +18,6 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     if ((argv[i] === "--output" || argv[i] === "-o") && i + 1 < argv.length) args.output = argv[++i];
     else if (argv[i] === "--branch" && i + 1 < argv.length) args.branch = argv[++i];
-    else if (argv[i] === "--date" && i + 1 < argv.length) args.date = argv[++i];
   }
   return args;
 }
@@ -37,10 +36,12 @@ function getBranch() {
   }
 }
 
+// ── Timestamp (JS-generated only — never LLM-determined) ─────────────
+
 function getTimestamp() {
   const now = new Date();
   const pad = (n) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}${pad(now.getMinutes())}`;
+  return `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}-${pad(now.getHours())}:${pad(now.getMinutes())}`;
 }
 
 // ── Self-discovery ────────────────────────────────────────────────────
@@ -63,12 +64,12 @@ function main() {
   const args = parseArgs(process.argv.slice(2));
 
   if (!args.output) {
-    console.error("Usage: node save-plan.js --output <dir> [--branch <name>] [--date <YYYY-MM-DDTHHMM>]");
+    console.error("Usage: node save-plan.js --output <dir> [--branch <name>] ");
     process.exit(1);
   }
 
   const branch = args.branch || getBranch();
-  const date = args.date || getTimestamp();
+  const date = getTimestamp();
   const dir = path.resolve(args.output);
   const filename = `${date}_${sanitizeBranch(branch)}.md`;
   const fullPath = path.join(dir, filename);

@@ -120,7 +120,7 @@ describe("save-spec.js — file creation", () => {
     try {
       await runSaveSpec(["--topic", "dated"], tmpDir);
       const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "design"));
-      assert.match(dirContents[0], /^\d{4}-\d{2}-\d{2}T\d{4}-dated\.md$/);
+      assert.match(dirContents[0], /^\d{2}-\d{2}-\d{4}-\d{2}:\d{2}-dated\.md$/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
@@ -131,7 +131,7 @@ describe("save-spec.js — file creation", () => {
     try {
       await runSaveSpec(["--topic", "custom-date", "--date", "2099-12-31T2359"], tmpDir);
       const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "design"));
-      assert.match(dirContents[0], /^2099-12-31T2359-custom-date\.md$/);
+      assert.match(dirContents[0], /^[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9]-[0-9][0-9]:[0-9][0-9]-custom-date\.md$/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
@@ -289,7 +289,7 @@ describe("save-spec.js — logging", () => {
 
   it("logs 'using date stamp' when custom date is provided", async () => {
     const res = await runSaveSpec(["--topic", "log-custom-date", "--date", "2099-12-31T2359"]);
-    assert.match(res.stderr, /using date stamp: 2099-12-31T2359/);
+    assert.match(res.stderr, /using date stamp:/);
   });
 
   it("logs 'parsing arguments' even when --topic is missing", async () => {

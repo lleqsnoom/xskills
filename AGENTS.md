@@ -60,9 +60,9 @@ The planning workflow follows a three-phase handoff chain:
 
 | Phase | Skill | Input | Output | Gate |
 |-------|-------|-------|--------|------|
-| 1. Design | `x-design` | Vague goal or requirement | `.x-skills/design/YYYY-MM-DD-<topic>.md` (spec) | User approves spec |
-| 2. Epic | `x-epic` | Approved spec | `.x-skills/epics/YYYY-MM-DD-<topic>.md` (user stories + DOD) | User approves epic |
-| 3. Decompose | `x-decompose` | Approved epic | `.x-skills/tasks/YYYY-MM-DD-<epic>.md` (atomic tasks with DOD, test plans, effort) | User approves tasks |
+| 1. Design | `x-design` | Vague goal or requirement | `.x-skills/design/DD-MM-YYYY-hh:mm-<topic>.md` (spec) | User approves spec |
+| 2. Epic | `x-epic` | Approved spec | `.x-skills/epics/DD-MM-YYYY-hh:mm-<topic>.md` (user stories + DOD) | User approves epic |
+| 3. Decompose | `x-decompose` | Approved epic | `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>.md` (atomic tasks with DOD, test plans, effort) | User approves tasks |
 
 After task approval → `x-implement` executes tasks sequentially or in parallel groups.
 

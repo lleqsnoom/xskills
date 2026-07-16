@@ -2,7 +2,7 @@
 
 /**
  * Create .x-skills/design/<timestamp>-<topic>.md with a header skeleton.
- * Usage: node save-spec.js --topic <slug> [--branch <name>] [--date <YYYY-MM-DDTHHMM>]
+ * Usage: node save-spec.js --topic <slug> [--branch <name>] 
  * Output (stdout): path to the created spec file.
  */
 
@@ -13,13 +13,12 @@ function main() {
   const args = shared.parseArgs(process.argv.slice(2), {
     "--topic": "topic", "-t": "topic",
     "--branch": "branch",
-    "--date": "date",
   });
 
   shared.log("x-design", "parsing arguments");
 
   if (!args.topic) {
-    process.stderr.write("Usage: node save-spec.js --topic <slug> [--branch <name>] [--date YYYY-MM-DDTHHMM]\n");
+    process.stderr.write("Usage: node save-spec.js --topic <slug> [--branch <name>]\n");
     process.exit(1);
   }
 
@@ -27,7 +26,7 @@ function main() {
   const branch = args.branch || shared.getBranch();
   shared.log("x-design", `resolved branch: ${branch}`);
 
-  const date = args.date || shared.getTimestamp();
+  const date = shared.getTimestamp();
   shared.log("x-design", `using date stamp: ${date}`);
 
   const dir = path.resolve(".x-skills/design");

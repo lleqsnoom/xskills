@@ -26,6 +26,41 @@ function walkDir(dir, out) {
 }
 
 /**
+ * Discover source files tracked by git in the current repository.
+ * Respects .gitignore — only returns files that git knows about.
+ *
+ * @param {string[]} [exts] - Optional set of extensions to filter by (e.g. ['.js', '.ts']).
+ *                            If omitted, all matching SOURCE_EXTENSIONS are used.
+ * @returns {string[]} Resolved absolute file paths (deduplicated)
+ */
+function findTrackedSourceFiles(exts) {
+  const cp = require("node:child_process");
+  const files = [];
+
+  try {
+    // Only look at tracked files (not untracked, not in .gitignore, not submodules)
+    const out = cp.execSync("git ls-files -z", { stdio: ["pipe", "pipe", "ignore"], cwd: process.cwd() }).toString();
+    if (!out) return [];
+
+    for (const file of out.split("\0").filter(Boolean)) {
+      // Skip binary files and non-source extensions
+      const ext = path.extname(file).toLowerCase();
+      if (exts && !exts.includes(ext)) continue;
+      if (!SOURCE_EXTENSIONS.test(file)) continue;
+      try {
+        // Verify the file still exists on disk (handles renames/deletes)
+        fs.accessSync(path.join(process.cwd(), file));
+        files.push(path.resolve(process.cwd(), file));
+      } catch { /* skip — deleted or inaccessible */ }
+    }
+  } catch {
+    // Not a git repo, or git command failed → return empty (caller falls back to walkDir)
+  }
+
+  return [...new Set(files)];
+}
+
+/**
  * Discover source files from command-line arguments.
  *
  * @param {string[]} fileArgs - CLI arguments (may include --all flag)
@@ -47,9 +82,14 @@ function findSourceFiles(fileArgs, rootDir) {
     } catch { /* skip */ }
   }
 
-  // --all flag without specific args → scan rootDir or cwd
+  // --all flag without specific args → use git-tracked source files when in a repo,
+  // otherwise fall back to walking rootDir (preserves behavior for non-git projects)
   const hasSpecificArgs = fileArgs.some((a) => !a.startsWith("--"));
   if (!hasSpecificArgs && fileArgs.includes("--all")) {
+    const tracked = findTrackedSourceFiles();
+    if (tracked.length > 0) {
+      return tracked;
+    }
     const root = rootDir || process.cwd();
     walkDir(root, files);
   }
@@ -57,4 +97,4 @@ function findSourceFiles(fileArgs, rootDir) {
   return [...new Set(files)];
 }
 
-module.exports = { findSourceFiles, walkDir };
+module.exports = { findSourceFiles, findTrackedSourceFiles, walkDir };

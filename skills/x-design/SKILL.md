@@ -11,6 +11,18 @@ user-invocable: true
 
 Do not write any code until the spec is approved by the user.
 
+## CRITICAL: Pipeline Enforcement
+
+You MUST follow this exact pipeline order: `x-design → x-epic → x-decompose → x-implement`. **Never skip a phase.** Specifically:
+
+- **NEVER write implementation code** (functions, classes, modules, routes) during design.
+- **NEVER create task files or decompose work**. That is `x-decompose`'s job.
+- **NEVER run git commits** or modify source files beyond creating/editing the spec file itself.
+- **When asked to implement**, respond: "This requires an approved epic and tasks first. I will proceed with x-epic."
+- The only files you may create are `.x-skills/design/<DD-MM-YYYY-hh:mm>-<topic>.md` and its working notes.
+
+If the user says "just do it" or "skip to implementation", refuse and explain that the epic phase is mandatory.
+
 ## Workflow
 
 1. **Classify scope** — Is the goal vague enough that you can't name what to build, for whom, or what success looks like?
@@ -51,7 +63,7 @@ Append an `## Working notes` section for scratch, open questions, hypotheses. St
 
 ## Artifact Location
 
-Invoke the script from any directory — it self-resolves via `__dirname`. Output: `.x-skills/design/YYYY-MM-DD-<topic>.md` (relative to CWD):
+Invoke the script from any directory — it self-resolves via `__dirname`. Output: `.x-skills/design/DD-MM-YYYY-hh:mm-<topic>.md` (relative to CWD):
 
 ```bash
 node <path-to-save-spec.js> --topic <slug>
@@ -77,13 +89,13 @@ If the user decides not to proceed after clarification, stop. Record reason in w
 
 ## Handoff Flow
 
-Spec written → `.x-skills/design/YYYY-MM-DD-<topic>.md`. User approves the spec. Then transition to `x-epic`:
+Spec written → `.x-skills/design/DD-MM-YYYY-hh:mm-<topic>.md`. User approves the spec. Then transition to `x-epic`:
 "Spec approved. Shall I proceed with x-epic?"
 
 ## Verification Checklist
 
 Before declaring a phase complete, confirm:
 
-1. Artifact file exists at `.x-skills/design/YYYY-MM-DD-<topic>.md`
+1. Artifact file exists at `.x-skills/design/DD-MM-YYYY-hh:mm-<topic>.md`
 2. Spec contains required declarations (contract, invariant, test)
 3. Next-phase script (`save-epic.js --topic <slug>`) can locate this file via topic slug matching

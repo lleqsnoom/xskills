@@ -22,11 +22,18 @@ node <path-to>/save-plan.js --output .x-skills/review/   # create plan file
 
 **Auto-discovery**: Scripts resolve config and sibling scripts relative to `__dirname`, so they work whether installed globally (`~/.agents/skills/x-review/scripts/`) or locally (`.agents/skills/<project>/x-review/scripts/`).
 
-**What To Do:** When invoked, immediately execute these three commands in order. Do not ask the user what to do.
+**What To Do:** When invoked, determine the user's scope (single file, directory, or full project) and execute these commands. Do not ask the user what to do.
 
-1. Run complexity analysis: `node <path-to>/analyze-complexity.js --all`
-2. Run duplication check: `node <path-to>/check-duplication.js --all`
-3. Create fix plan file: `node <path-to>/save-plan.js --output .x-skills/review/`
+1. **Run complexity analysis** — pass specific files/dirs when given, otherwise `--all`:
+   - Single file: `node <path-to>/analyze-complexity.js synetic-studio-webapp/src/lib/media-library/media-library-proxy.ts`
+   - Directory: `node <path-to>/analyze-complexity.js synetic-studio-webapp/src/lib/`
+   - Full project (no scope specified): `node <path-to>/analyze-complexity.js --all`
+
+2. **Run duplication check** — same scope logic as above:
+   - Single file / directory → pass the path directly
+   - Full project → `node <path-to>/check-duplication.js --all`
+
+3. **Create fix plan file**: `node <path-to>/save-plan.js --output .x-skills/review/`
 
 The complexity script auto-installs tree-sitter if missing (global install). Output is JSON — parse it for function metrics and duplication counts.
 
@@ -67,7 +74,7 @@ The script prints the full path. Write your review content into that file using 
 ```markdown
 # Code Review — Fix Plan
 
-**Date:** YYYY-MM-DDTHH:MM
+**Date:** DD-MM-YYYY-hh:mm
 **Files analyzed:** N
 **Functions with complexity > 5:** N
 **Functions longer than 20 lines:** N

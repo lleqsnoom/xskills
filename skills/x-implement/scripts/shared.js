@@ -46,12 +46,12 @@ function getBranch() {
   }
 }
 
-// ── Timestamp ────────────────────────────────────────────────────────
+// ── Timestamp (JS-generated only — never LLM-determined) ─────────────
 
 function getTimestamp() {
   const now = new Date();
   const pad = (n) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}${pad(now.getMinutes())}`;
+  return `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}-${pad(now.getHours())}:${pad(now.getMinutes())}`;
 }
 
 // ── Slug sanitization ────────────────────────────────────────────────

@@ -112,7 +112,7 @@ describe("save-epic.js — file creation", () => {
     try {
       await runSaveEpic(["--topic", "dated"], tmpDir);
       const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "epics"));
-      assert.match(dirContents[0], /^\d{4}-\d{2}-\d{2}T\d{4}-dated\.md$/);
+      assert.match(dirContents[0], /^\d{2}-\d{2}-\d{4}-\d{2}:\d{2}-dated\.md$/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
@@ -123,7 +123,7 @@ describe("save-epic.js — file creation", () => {
     try {
       await runSaveEpic(["--topic", "custom-date", "--date", "2099-12-31T2359"], tmpDir);
       const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "epics"));
-      assert.match(dirContents[0], /^2099-12-31T2359-custom-date\.md$/);
+      assert.match(dirContents[0], /^[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9]-[0-9][0-9]:[0-9][0-9]-custom-date\.md$/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }

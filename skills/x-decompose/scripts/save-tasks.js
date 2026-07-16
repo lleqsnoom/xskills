@@ -3,7 +3,7 @@
 /**
  * Create .x-skills/tasks/<timestamp>-<epic>/ staging directory.
  * Auto-finds the matching epic by topic slug for logging.
- * Usage: node save-tasks.js --epic <slug> [--date <YYYY-MM-DDTHHMM>]
+ * Usage: node save-tasks.js --epic <slug> 
  * Output (stdout): path to the created tasks directory.
  */
 
@@ -13,18 +13,17 @@ const shared = require("./shared");
 function main() {
   const args = shared.parseArgs(process.argv.slice(2), {
     "--epic": "epic", "-e": "epic",
-    "--date": "date",
   });
 
   shared.log("x-decompose", "parsing arguments");
 
   if (!args.epic) {
-    process.stderr.write("Usage: node save-tasks.js --epic <slug> [--date YYYY-MM-DDTHHMM]\n");
+    process.stderr.write("Usage: node save-tasks.js --epic <slug>\n");
     process.exit(1);
   }
 
   const slug = shared.sanitizeSlug(args.epic);
-  const date = args.date || shared.getTimestamp();
+  const date = shared.getTimestamp();
 
   // Auto-resolve the epic file path from disk (for logging)
   const epicFullPath = shared.findFileByTopic(".x-skills/epics", slug);

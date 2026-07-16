@@ -1,6 +1,6 @@
 ---
 name: x-epic
-description: Convert approved spec into user stories — INVEST-gated, scope-bounded epics with epic-level DOD; outputs .x-skills/epics/YYYY-MM-DD-<topic>.md for handoff to x-decompose
+description: Convert approved spec into user stories — INVEST-gated, scope-bounded epics with epic-level DOD; outputs .x-skills/epics/DD-MM-YYYY-hh:mm-<topic>.md for handoff to x-decompose
 version: 1.0.0
 author: Community
 tags: [epic, user-stories, invest, scope, definition-of-done]
@@ -9,7 +9,7 @@ user-invocable: true
 
 # X-Epic — Spec-to-User-Stories Conversion
 
-`.x-skills/epics/YYYY-MM-DD-<topic>.md`. One file per topic. Reference the spec; don't repeat it.
+`.x-skills/epics/DD-MM-YYYY-hh:mm-<topic>.md`. One file per topic. Reference the spec; don't repeat it.
 
 No implementation until the epic is approved.
 
@@ -21,9 +21,9 @@ No implementation until the epic is approved.
 node <path-to-save-epic.js> --topic <slug>
 ```
 
-Output: `.x-skills/epics/YYYY-MM-DD-<topic>.md` (relative to CWD).
+Output: `.x-skills/epics/DD-MM-YYYY-hh:mm-<topic>.md` (relative to CWD).
 
-2. **Read the spec** — Open the file referenced by `spec:` in the Epic Header (`.x-skills/design/YYYY-MM-DD-<topic>.md`). Extract every contract, invariant, and constraint into user stories. One story per coherent unit of value.
+2. **Read the spec** — Open the file referenced by `spec:` in the Epic Header (`.x-skills/design/DD-MM-YYYY-hh:mm-<topic>.md`). Extract every contract, invariant, and constraint into user stories. One story per coherent unit of value.
 
 3. **Write user stories** — See User Story Format below. Apply INVEST to each.
 
@@ -59,7 +59,7 @@ As a **<role>**, I want **<capability>** so that **<value>**.
 ```markdown
 # Epic — <Topic>
 
-**Date:** YYYY-MM-DDTHH:MM
+**Date:** DD-MM-YYYY-hh:mm
 **Branch:** <branch>
 **Scope:** <one sentence covering this epic>
 
@@ -67,7 +67,7 @@ As a **<role>**, I want **<capability>** so that **<value>**.
 
 goal:         <outcome in one sentence>
 milestone:    <skip if work fits in one milestone, otherwise M<n> from roadmap>
-spec:         .x-skills/design/YYYY-MM-DD-<topic>.md
+spec:         .x-skills/design/DD-MM-YYYY-hh:mm-<topic>.md
 ```
 
 ## Epic-Level Definition of Done
@@ -90,6 +90,6 @@ spec:         .x-skills/design/YYYY-MM-DD-<topic>.md
 
 ## Handoff Flow
 
-`.x-skills/epics/YYYY-MM-DD-<topic>.md` must exist on disk before handing off to `x-decompose`. Confirm user stories with the user.
+`.x-skills/epics/DD-MM-YYYY-hh:mm-<topic>.md` must exist on disk before handing off to `x-decompose`. Confirm user stories with the user.
 
 **Next:** `x-decompose` reads this epic and produces atomic tasks with DOD, test plans, and effort estimates.

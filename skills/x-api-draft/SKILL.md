@@ -52,7 +52,7 @@ node ./.agents/skills/x-api-draft/scripts/save-design.js --topic <slug>
 node /absolute/path/to/save-design.js --topic <slug>
 ```
 
-Output: `.x-skills/apis/YYYY-MM-DD-<topic>.md` (relative to CWD).
+Output: `.x-skills/apis/DD-MM-YYYY-hh:mm-<topic>.md` (relative to CWD).
 
 ## Design Document Format
 

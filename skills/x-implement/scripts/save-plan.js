@@ -3,8 +3,9 @@
 /**
  * Create .x-skills/tasks/<timestamp>-<epic>.md with a resolved header skeleton.
  * Auto-finds the matching epic by topic slug and fills in the path.
- * Usage: node save-plan.js --epic <slug> [--branch <name>] [--date <YYYY-MM-DDTHHMM>]
+ * Usage: node save-plan.js --epic <slug> [--branch <name>]
  * Output (stdout): path to the created plan file.
+ * NOTE: Timestamps are always JS-generated. No --date flag is accepted.
  */
 
 const path = require("node:path");
@@ -14,19 +15,18 @@ function main() {
   const args = shared.parseArgs(process.argv.slice(2), {
     "--epic": "epic", "-e": "epic",
     "--branch": "branch",
-    "--date": "date",
   });
 
   shared.log("x-implement", "parsing arguments");
 
   if (!args.epic) {
-    process.stderr.write("Usage: node save-plan.js --epic <slug> [--branch <name>] [--date YYYY-MM-DDTHHMM]\n");
+    process.stderr.write("Usage: node save-plan.js --epic <slug> [--branch <name>]\n");
     process.exit(1);
   }
 
   const slug = shared.sanitizeSlug(args.epic);
   const branch = args.branch || shared.getBranch();
-  const date = args.date || shared.getTimestamp();
+  const date = shared.getTimestamp();
 
   // Auto-resolve the epic file path from disk
   const epicPath = shared.findFileByTopic(".x-skills/epics", slug)

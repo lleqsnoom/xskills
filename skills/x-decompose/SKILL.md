@@ -15,7 +15,7 @@ If unresolved epic notes affect task ordering or scope, return to `x-epic`.
 
 ## Artifact Location
 
-Invoke the script from any directory — it self-resolves via `__dirname`. Output: `.x-skills/tasks/YYYY-MM-DD-<epic>/` directory (relative to CWD):
+Invoke the script from any directory — it self-resolves via `__dirname`. Output: `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>/` directory (relative to CWD):
 
 ```bash
 node <path-to-save-tasks.js> --epic <slug>
@@ -27,9 +27,9 @@ The script creates the staging directory. You then write one task file per user 
 
 1. **Create staging directory** — Run the script (see Artifact Location above).
 
-Output: `.x-skills/tasks/YYYY-MM-DD-<epic>/` (relative to CWD).
+Output: `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>/` (relative to CWD).
 
-2. **Read the epic** — Derive the epic file path from the topic slug: `.x-skills/epics/YYYY-MM-DD-<topic>.md`. Open it and extract every user story with its acceptance criteria.
+2. **Read the epic** — Derive the epic file path from the topic slug: `.x-skills/epics/DD-MM-YYYY-hh:mm-<topic>.md`. Open it and extract every user story with its acceptance criteria.
 
 3. **Write one task file per user story** — For each user story, create a separate `.md` file inside the staging directory. Each file is a complete, standalone task document (see Task Format). Inline all context — no references to other task files, no task IDs, no epic path links.
 
@@ -124,13 +124,13 @@ Apply these checks to every proposed task. A task that fails any gate must be ad
 
 ## Hand off
 
-The task directory `.x-skills/tasks/YYYY-MM-DD-<epic>/` must exist on disk with one `.md` file per user story before handing off to implementation. Confirm task list with the user.
+The task directory `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>/` must exist on disk with one `.md` file per user story before handing off to implementation. Confirm task list with the user.
 
 ## Verification Checklist
 
 Before declaring decomposition complete, confirm:
 
-1. Task directory exists at `.x-skills/tasks/YYYY-MM-DD-<epic>/`
+1. Task directory exists at `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>/`
 2. One file per user story — no more, no less
 3. Every file is self-contained (no references to other files or task IDs)
 4. Every file has a Context section with all details a developer needs

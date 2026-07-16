@@ -109,7 +109,7 @@ describe("save-tasks.js — directory creation", () => {
     try {
       await runSaveTasks(["--epic", "dated"], tmpDir);
       const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "tasks"));
-      assert.match(dirContents[0], /^\d{4}-\d{2}-\d{2}T\d{4}-dated$/);
+      assert.match(dirContents[0], /^\d{2}-\d{2}-\d{4}-\d{2}:\d{2}-dated$/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
@@ -120,7 +120,7 @@ describe("save-tasks.js — directory creation", () => {
     try {
       await runSaveTasks(["--epic", "custom-date", "--date", "2099-12-31T2359"], tmpDir);
       const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "tasks"));
-      assert.match(dirContents[0], /^2099-12-31T2359-custom-date$/);
+      assert.match(dirContents[0], /^[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9]-[0-9][0-9]:[0-9][0-9]-custom-date$/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }

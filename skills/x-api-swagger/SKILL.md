@@ -13,7 +13,7 @@ Convert a markdown API design draft produced by `x-api-draft` into a valid OpenA
 
 ## Workflow
 
-1. **Read the draft** — Read the approved API design from `.x-skills/apis/YYYY-MM-DD-<topic>.md` produced by `x-api-draft`. Confirm with the user which draft to convert if multiple exist.
+1. **Read the draft** — Read the approved API design from `.x-skills/apis/DD-MM-YYYY-hh:mm-<topic>.md` produced by `x-api-draft`. Confirm with the user which draft to convert if multiple exist.
 
 2. **Parse endpoints & schemas** — Extract from the draft:
    - All endpoint paths with HTTP methods, descriptions, and auth requirements

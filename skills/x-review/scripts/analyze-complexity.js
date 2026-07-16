@@ -16,7 +16,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { findSourceFiles } = require("./utils/file-discovery");
+const { findSourceFiles, findTrackedSourceFiles } = require("./utils/file-discovery");
 
 // ── Thresholds (override via ASSETS_CONFIG env or defaults) ─────────
 
@@ -136,22 +136,22 @@ async function installGrammars(neededGrammars) {
  * Runs `npm install --save-dev` non-interactively.
  */
 async function ensureTreeSitterInstalled() {
-  // Collect extensions from input files to determine which grammars are needed
+  // Collect extensions from input files to determine which grammars are needed.
+  // When --all is passed without specific files, use git-tracked source files
+  // so we only install grammars for languages actually present in the repo.
   const extSet = new Set();
-  const allArgs = process.argv.slice(2).filter((a) => !a.startsWith("--"));
-
-  for (const arg of allArgs) {
-    try {
-      const stat = require("node:fs").statSync(arg);
-      if (!stat.isDirectory()) extSet.add(require("node:path").extname(arg));
-      else collectExtsRecursive(arg, extSet);
-    } catch {}
-  }
-
-  // When --all is used without specific files, scan cwd for all source extensions to pre-discover needed grammars
-  const useAll = process.argv.slice(2).includes("--all");
-  if (useAll && allArgs.length === 0) {
-    collectExtsRecursive(process.cwd(), extSet);
+  if (process.argv.slice(2).includes("--all") && !process.argv.slice(2).some((a) => !a.startsWith("--"))) {
+    const tracked = findTrackedSourceFiles();
+    for (const f of tracked) extSet.add(path.extname(f));
+  } else {
+    const allArgs = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+    for (const arg of allArgs) {
+      try {
+        const stat = require("node:fs").statSync(arg);
+        if (!stat.isDirectory()) extSet.add(require("node:path").extname(arg));
+        else collectExtsRecursive(arg, extSet);
+      } catch {}
+    }
   }
 
   // Detect installed state and build install list

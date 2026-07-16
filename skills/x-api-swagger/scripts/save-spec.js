@@ -6,9 +6,10 @@
  * Logs each step to stderr for verification.
  *
  * Usage:
- *   node save-spec.js --topic <slug> [--branch <name>] [--date <YYYY-MM-DDTHHMM>]
+ *   node save-spec.js --topic <slug> [--branch <name>]
  *
  * Output (stdout): absolute path to the YAML spec file, ready to write into with `write`.
+ * NOTE: Timestamps are always JS-generated. No --date flag is accepted.
  */
 
 const fs = require("node:fs");
@@ -28,7 +29,6 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     if ((argv[i] === "--topic" || argv[i] === "-t") && i + 1 < argv.length) args.topic = argv[++i];
     else if (argv[i] === "--branch" && i + 1 < argv.length) args.branch = argv[++i];
-    else if (argv[i] === "--date" && i + 1 < argv.length) args.date = argv[++i];
   }
   return args;
 }
@@ -45,10 +45,12 @@ function getBranch() {
   }
 }
 
+// ── Timestamp (JS-generated only — never LLM-determined) ─────────────
+
 function getTimestamp() {
   const now = new Date();
   const pad = (n) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}${pad(now.getMinutes())}`;
+  return `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}-${pad(now.getHours())}:${pad(now.getMinutes())}`;
 }
 
 // ── Self-discovery ────────────────────────────────────────────────────
@@ -75,14 +77,14 @@ function main() {
   log("parsing arguments");
 
   if (!args.topic) {
-    console.error("Usage: node save-spec.js --topic <slug> [--branch <name>] [--date <YYYY-MM-DDTHHMM>]");
+    console.error("Usage: node save-spec.js --topic <slug> [--branch <name>]\n");
     process.exit(1);
   }
 
   const branch = args.branch || getBranch();
   log(`resolved branch: ${branch}`);
 
-  const date = args.date || getTimestamp();
+  const date = getTimestamp();
   log(`using date stamp: ${date}`);
 
   const dir = path.resolve(".x-skills/apis");

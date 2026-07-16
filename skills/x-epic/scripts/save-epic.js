@@ -3,7 +3,7 @@
 /**
  * Create .x-skills/epics/<timestamp>-<topic>.md with a resolved header skeleton.
  * Auto-finds the matching design spec by topic slug and fills in the path.
- * Usage: node save-epic.js --topic <slug> [--branch <name>] [--date <YYYY-MM-DDTHHMM>]
+ * Usage: node save-epic.js --topic <slug> [--branch <name>] 
  * Output (stdout): path to the created epic file.
  */
 
@@ -14,19 +14,18 @@ function main() {
   const args = shared.parseArgs(process.argv.slice(2), {
     "--topic": "topic", "-t": "topic",
     "--branch": "branch",
-    "--date": "date",
   });
 
   shared.log("x-epic", "parsing arguments");
 
   if (!args.topic) {
-    process.stderr.write("Usage: node save-epic.js --topic <slug> [--branch <name>] [--date YYYY-MM-DDTHHMM]\n");
+    process.stderr.write("Usage: node save-epic.js --topic <slug> [--branch <name>]\n");
     process.exit(1);
   }
 
   const slug = shared.sanitizeSlug(args.topic);
   const branch = args.branch || shared.getBranch();
-  const date = args.date || shared.getTimestamp();
+  const date = shared.getTimestamp();
 
   // Auto-resolve the design spec path from disk (single call)
   const specFullPath = shared.findFileByTopic(".x-skills/design", slug);
