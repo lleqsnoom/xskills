@@ -1,3 +1,5 @@
+## [1.0.7] - 2026-07-18
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
@@ -9,3 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Initial release of xskills — cross-CLI agentic skills package
+
+### Added
+* chore: sync package.json to 1.0.6 after v1.0.5 publish (a7bafb0)
