@@ -5,6 +5,11 @@ version: 2.0.0
 author: Community
 tags: [code-review, solid, kiss, dry, single-responsibility, cyclomatic-complexity, code-quality]
 user-invocable: true
+auto-trigger:
+  on-file-pattern: "*.ts,*.tsx,*.js,*.jsx,*.py,*.go,*.java,*.rb,*.rs"
+  not-when:
+    - path-matches: "node_modules/**"
+    - file-size-above: 5242880  # Skip files > 5MB
 ---
 
 # X-Review — Code Review Against Engineering Principles

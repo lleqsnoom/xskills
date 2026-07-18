@@ -1,0 +1,31 @@
+graph TD
+    subgraph "Planning Phase"
+        A["📝 x-design<br/>Create design spec"] -->|"User approves"| B["📋 x-epic<br/>Convert to user stories"]
+        B -->|"Stories approved"| C["✅ x-decompose<br/>Break into atomic tasks"]
+    end
+
+    subgraph "Execution Phase"
+        C -->|"Tasks approved"| D["🔨 x-implement<br/>TDD: Red → Green → Refactor"]
+        D -->|"Task N complete"| E{"All tasks done?"}
+        E -->|"No"| F["Review next task"]
+        F --> D
+        E -->|"Yes"| G["✅ Ship"]
+    end
+
+    subgraph "Supporting Skills"
+        H["🔍 x-review<br/>Code complexity analysis"] -.->|Runs during review| C
+        I["🐛 x-fix<br/>Resolve review issues"] -.->|Fixes from review| D
+        J["📦 x-commit<br/>Validate commit messages"] -.->|Every commit in implement| D
+    end
+
+    subgraph "Workflow Artifacts"
+        A -->|"Outputs"| DA[".x-skills/design/<timestamp>-<topic>.md"]
+        B -->|"Outputs"| DB[".x-skills/epics/<timestamp>-<topic>.md"]
+        C -->|"Outputs"| DC[".x-skills/tasks/<timestamp>-<topic>.md"]
+    end
+
+    style A fill:#e1f5fe,stroke:#01579b
+    style B fill:#f3e5f5,stroke:#4a148c
+    style C fill:#e8f5e9,stroke:#1b5e20
+    style D fill:#fff3e0,stroke:#e65100
+    style G fill:#c8e6c9,stroke:#2e7d32
