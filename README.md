@@ -43,13 +43,17 @@ npx xskills <skill-name>
 
 ## MCP Server
 
-For CLIs that support MCP (Model Context Protocol), run the bundled stdio server:
+For CLIs that support MCP (Model Context Protocol), run the bundled stdio server. **First install skills, then start the server:**
 
 ```bash
+# 1. Install all skills locally or globally
+npx @lleqsnoom/x-skills install-all --global
+
+# 2. Start the MCP server
 npx @lleqsnoom/x-skills mcp-server
 ```
 
-This exposes all skills as MCP tools — useful for editors and agents with native MCP support.
+The server discovers installed skills from `.agents/skills/` (local) or `~/.agents/skills/` (global) and exposes them as MCP tools.
 
 ### Configure in Client
 
@@ -72,13 +76,15 @@ To use the MCP server across all projects without per-project config:
 
 ```bash
 # Install globally so npx can resolve it anywhere
-npx @lleqsnoom/x-skills install-all --global
-```
-
-Or pin a specific version:
-```bash
 npm install -g @lleqsnoom/x-skills
 npx xskills mcp-server
+```
+
+Or pin a specific version and install skills separately:
+```bash
+npm install -g @lleqsnoom/x-skills@latest
+xskills install-all --global  # Install skills globally once
+xskills mcp-server            # Start MCP server whenever needed
 ```
 
 ### Available MCP Tools
@@ -136,18 +142,34 @@ x-rollback       (standalone)
 
 ### Quick Start
 
-**Option A — Install all skills (recommended for most projects):**
+**Step 1: Install skills** (choose one approach):
+
 ```bash
-npx xskills install-all
+# Option A — All skills globally (recommended for most users)
+npx @lleqsnoom/x-skills install-all --global
+
+# Option B — Specific skills locally in current project
+npx @lleqsnoom/x-skills install x-design x-epic x-decompose x-implement
+
+# Option D — Start MCP server after installing skills first
+npx @lleqsnoom/x-skills mcp-server  # Requires skills to be installed beforehand
 ```
 
-**Option B — Pick specific skills:**
-```bash
-npx xskills install x-design x-epic x-decompose x-implement
-```
+**Step 2: Use with your AI coding agent**
 
-1. Ask your AI coding agent to follow the workflow chain
-2. Each skill gates on user approval before moving to the next step
+Your CLI will auto-discover installed skills and offer them when relevant. Each skill gates on user approval before executing.
+
+For MCP clients (editors, agents), add to config:
+```json
+{
+  "mcpServers": {
+    "xskills": {
+      "command": "npx",
+      "args": ["@lleqsnoom/x-skills", "mcp-server"]
+    }
+  }
+}
+```
 
 ## How It Works
 
