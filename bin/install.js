@@ -71,7 +71,7 @@ function handleMcpServer() {
   const mcpServerPath = path.resolve(path.dirname(__filename), '..', 'lib', 'mcp-server.js');
 
   try {
-    fsp.accessSync(mcpServerPath);
+    require("node:fs").accessSync(mcpServerPath);
   } catch (err) {
     console.error(`MCP server not found at ${mcpServerPath}`);
     console.error("Make sure @lleqsnoom/x-skills is installed properly.");
