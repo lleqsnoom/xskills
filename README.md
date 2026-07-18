@@ -34,9 +34,56 @@ npx xskills install <skill-name>
 # Install globally (available in all projects)
 npx xskills install <skill-name> --global
 
+# Install all 15+ skills at once
+npx xskills install-all
+
 # Shortcut — just type the skill name
 npx xskills <skill-name>
 ```
+
+## MCP Server
+
+For CLIs that support MCP (Model Context Protocol), run the bundled stdio server:
+
+```bash
+npx @lleqsnoom/x-skills mcp-server
+```
+
+This exposes all skills as MCP tools — useful for editors and agents with native MCP support.
+
+### Configure in Client
+
+Add to your client config (e.g., `.claude.json`, `cursor.json`, etc.):
+
+```json
+{
+  "mcpServers": {
+    "xskills": {
+      "command": "npx",
+      "args": ["@lleqsnoom/x-skills", "mcp-server"]
+    }
+  }
+}
+```
+
+### Configure Globally (Optional)
+
+To use the MCP server across all projects without per-project config:
+
+```bash
+# Install globally so npx can resolve it anywhere
+npx @lleqsnoom/x-skills install-all --global
+```
+
+Or pin a specific version:
+```bash
+npm install -g @lleqsnoom/x-skills
+npx xskills mcp-server
+```
+
+### Available MCP Tools
+
+The server exposes all installed skills as tools. Each skill provides its own set of functions (e.g., `x_commit_suggest_type`, `x_review_analyze_complexity`). Run the server and your client will auto-discover them.
 
 ## Available Skills
 
@@ -89,9 +136,18 @@ x-rollback       (standalone)
 
 ### Quick Start
 
-1. Install skills you need: `npx xskills install x-design x-epic x-decompose x-implement`
-2. Ask your AI coding agent to follow the workflow chain
-3. Each skill gates on user approval before moving to the next step
+**Option A — Install all skills (recommended for most projects):**
+```bash
+npx xskills install-all
+```
+
+**Option B — Pick specific skills:**
+```bash
+npx xskills install x-design x-epic x-decompose x-implement
+```
+
+1. Ask your AI coding agent to follow the workflow chain
+2. Each skill gates on user approval before moving to the next step
 
 ## How It Works
 
