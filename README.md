@@ -10,20 +10,20 @@ Skills are the [Agent Skills open standard](https://agentskills.io) — a folder
 
 ## Supported CLIs
 
-|  | CLI | Status |
-|--|------|--------|
-|  | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | Native |
-|  | [Gemini CLI](https://github.com/google-gemini/gemini-cli) | Native |
-|  | [Crush](https://github.com/charmbracelet/crush) | Native |
-|  | [OpenCode](https://github.com/sst/opencode) | Native |
-|  | [Roo Code](https://github.com/RooCodeInc/Roo-Code) | Native |
-|  | [Goose](https://github.com/block/goose) (Block) | Native |
-|  | [OpenAI Codex](https://github.com/openai/codex) | Native |
-|  | [Mistral Vibe](https://github.com/mistralai/mistral-vibe) | Native |
-|  | [NanoBot](https://github.com/HKUDS/nanobot) | Native |
-|  | [Aider](https://aider.chat) | Via `.agents/skills/` discovery |
-|  | [Cursor](https://cursor.sh) | Via `.agents/skills/` discovery |
-|  | **45+ total** | [See full list](https://agentskills.io/clients) |
+| CLI | Status |
+|--|--------|
+| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | Native |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | Native |
+| [Crush](https://github.com/charmbracelet/crush) | Native |
+| [OpenCode](https://github.com/sst/opencode) | Native |
+| [Roo Code](https://github.com/RooCodeInc/Roo-Code) | Native |
+| [Goose](https://github.com/block/goose) (Block) | Native |
+| [OpenAI Codex](https://github.com/openai/codex) | Native |
+| [Mistral Vibe](https://github.com/mistralai/mistral-vibe) | Native |
+| [NanoBot](https://github.com/HKUDS/nanobot) | Native |
+| [Aider](https://aider.chat) | Via `.agents/skills/` discovery |
+| [Cursor](https://cursor.sh) | Via `.agents/skills/` discovery |
+| **45+ total** | [See full list](https://agentskills.io/clients) |
 
 ## Install
 
