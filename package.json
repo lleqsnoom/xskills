@@ -7,8 +7,11 @@
     "xskills": "./bin/install.js",
     "xskills-mcp-server": "./lib/mcp-server.js"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "test": "node --test 'test/*.test.cjs'"
+    "test": "node --test test/*.test.cjs"
   },
   "keywords": [
     "agentic",
