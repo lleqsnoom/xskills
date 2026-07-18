@@ -2,11 +2,15 @@
 
 "use strict";
 
+const { execSync, spawn } = require("node:child_process");
+const path = require("path");
+const fsp = require("node:fs/promises");
 const { install, listSkills, globalInstall, listSkillNames } = require("../lib/install");
 
 const commands = {
   install: handleInstall,
   "install-all": handleInstallAll,
+  "mcp-server": handleMcpServer,
   list: () => listSkills(),
   ls: () => listSkills(),
   help: printHelp,
