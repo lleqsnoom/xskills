@@ -106,11 +106,18 @@ jobs:
           fi
           git commit -m "chore(release): v${{ steps.bump.outputs.new_version }}"
 
-      - name: Publish to npmjs with trusted publishing (OIDC)
+      - name: Publish to npmjs using PAT
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           # Ensure all JS entry points have execute permission so npm accepts them
           find . -path './node_modules' -prune -o \( -name '*.js' -not -path '*/node_modules/*' \) -exec chmod +x {} + 2>/dev/null || true
-          npm publish --provenance --access=public
+
+          # Configure npm to use the token for the registry
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
+          
+          # Publish with --access=public for scoped packages
+          npm publish --access=public
 
       - name: Create Git tag and push
         if: success()
