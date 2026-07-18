@@ -27,18 +27,28 @@ Skills are the [Agent Skills open standard](https://agentskills.io) — a folder
 
 ## Install
 
+**First, make `xskills` available globally or via npx:**
+
 ```bash
-# One command — installs into current project
-npx xskills install <skill-name>
+# Option A: Global install (recommended for persistent use)
+npm install -g @lleqsnoom/x-skills
 
-# Install globally (available in all projects)
-npx xskills install <skill-name> --global
+# Option B: Use via npx without installing (still works)
+npx @lleqsnoom/x-skills help
+```
 
+**Then, install skills:**
+
+```bash
 # Install all 15+ skills at once
-npx xskills install-all
+xskills install-all --global          # Global: ~/.agents/skills/
+xskills install-all                   # Local: .agents/skills/ in current project
+
+# Or specific skills only
+xskills install x-commit x-design --global
 
 # Shortcut — just type the skill name
-npx xskills <skill-name>
+xskills <skill-name>
 ```
 
 ## MCP Server
@@ -142,20 +152,27 @@ x-rollback       (standalone)
 
 ### Quick Start
 
-**Step 1: Install skills** (choose one approach):
+**Step 1: Make `xskills` available:**
 
 ```bash
-# Option A — All skills globally (recommended for most users)
-npx @lleqsnoom/x-skills install-all --global
+# Global install (recommended) — use from anywhere without npx
+npm install -g @lleqsnoom/x-skills
 
-# Option B — Specific skills locally in current project
-npx @lleqsnoom/x-skills install x-design x-epic x-decompose x-implement
-
-# Option D — Start MCP server after installing skills first
-npx @lleqsnoom/x-skills mcp-server  # Requires skills to be installed beforehand
+# Or use via npx (still works, no global install needed)
+npx @lleqsnoom/x-skills help
 ```
 
-**Step 2: Use with your AI coding agent**
+**Step 2: Install skills:**
+
+```bash
+# All skills globally (recommended for most users)
+xskills install-all --global
+
+# Specific skills locally in current project
+xskills install x-design x-epic x-decompose x-implement
+```
+
+**Step 3: Use with your AI coding agent**
 
 Your CLI will auto-discover installed skills and offer them when relevant. Each skill gates on user approval before executing.
 
