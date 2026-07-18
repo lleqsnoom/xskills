@@ -113,7 +113,7 @@ jobs:
         run: |
           # Ensure all JS entry points have execute permission so npm accepts them
           find . -path './node_modules' -prune -o \( -name '*.js' -not -path '*/node_modules/*' \) -exec chmod +x {} + 2>/dev/null || true
-          npm publish --provenance
+          npm publish --provenance --access=public
 
       - name: Create Git tag and push
         if: success()
