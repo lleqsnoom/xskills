@@ -41,14 +41,13 @@ jobs:
           VERSION=$(node -e "const p=require('./package.json'); console.log(p.version)")
           IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
 
-          # Find the last tag (handles both annotated and lightweight tags)
+          # Find the latest v* tag (handles annotated and lightweight tags)
           LAST_TAG=""
-          if git tag --list | sort -V | tail -1 | grep -q '^v'; then
+          if git tag --list 'v*' | sort -V | tail -1 | grep -q '^v'; then
             LAST_TAG=$(git tag --list 'v*' | sort -V | tail -1)
           fi
 
           if [ -z "$LAST_TAG" ]; then
-            # No tags yet — first release is minor bump (skip 0.x.0)
             TYPE="minor"
           else
             COMMITS=$(git log "${LAST_TAG}..HEAD" --pretty=format:"%s")
@@ -61,7 +60,6 @@ jobs:
             fi
           fi
 
-          # Compute new version from bump type
           case "$TYPE" in
             major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
             minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
@@ -70,7 +68,6 @@ jobs:
 
           NEW_VERSION="$MAJOR.$MINOR.$PATCH"
 
-          # Write new version to package.json so it is staged for commit
           node -e "const p=require('./package.json'); p.version='$NEW_VERSION'; require('fs').writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n')"
 
           echo "type=$TYPE" >> "$GITHUB_OUTPUT"
@@ -79,7 +76,7 @@ jobs:
       - name: Generate CHANGELOG entry
         run: |
           LAST_TAG=""
-          if git tag --list 'v*' | sort -V | tail -1; then
+          if git tag --list 'v*' | sort -V | tail -1 | grep -q '^v'; then
             LAST_TAG=$(git tag --list 'v*' | sort -V | tail -1)
           fi
 
@@ -90,7 +87,6 @@ jobs:
           fi
           NEW_VERSION="${{ steps.bump.outputs.new_version }}"
 
-          # Append to changelog under new version header
           TMPFILE=$(mktemp)
           echo "## [$NEW_VERSION] - $(date +%Y-%m-%d)" > "$TMPFILE"
           echo "" >> "$TMPFILE"
@@ -115,19 +111,14 @@ jobs:
 
       - name: Publish to npmjs with trusted publishing (OIDC)
         run: |
-          set +e
-          # Retry once in case of transient network issues; ignore E409 (version exists)
-          npm publish --provenance 2>&1 || true
-        continue-on-error: true
+          # Ensure all JS entry points have execute permission so npm accepts them
+          find . -path './node_modules' -prune -o \( -name '*.js' -not -path '*/node_modules/*' \) -exec chmod +x {} + 2>/dev/null || true
+          npm publish --provenance
 
       - name: Create Git tag and push
-        if: success() || failure()
+        if: success()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="v${{ steps.bump.outputs.new_version }}"
-          # Only create/push tag if it doesn't already exist (avoids errors on re-runs)
-          if ! git rev-parse "$TAG" >/dev/null 2>&1; then
-            git tag "$TAG"
-            git push origin "$TAG" || true
-          fi
+          git tag "$TAG" && git push origin "$TAG"
