@@ -4,7 +4,8 @@
   "description": "Cross-CLI agentic skills — install once, use with 45+ compatible AI coding tools",
   "main": "lib/install.js",
   "bin": {
-    "xskills": "./bin/install.js"
+    "xskills": "./bin/install.js",
+    "xskills-mcp-server": "./lib/mcp-server.js"
   },
   "scripts": {
     "test": "node --test 'test/*.test.cjs'"
@@ -30,7 +31,8 @@
   "files": [
     "bin/",
     "lib/",
-    "skills/"
+    "skills/",
+    "docs/"
   ],
   "repository": {
     "type": "git",
