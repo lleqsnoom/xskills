@@ -2,8 +2,6 @@
 
 Cross-CLI agentic skills installer. Install once, use with **45+ compatible AI coding tools**.
 
-**xskills doesn't just teach your agent — it hands it real AST complexity analysis, commit validation, and duplication detection wired into a complete workflow chain from design to review.**
-
 ## What is this?
 
 Skills are the [Agent Skills open standard](https://agentskills.io) — a folder with a `SKILL.md` file (YAML frontmatter + Markdown instructions) plus optional `scripts/`, `references/`, and `assets/` subdirectories. They give AI coding agents specialized knowledge and workflows.
@@ -13,7 +11,7 @@ Skills are the [Agent Skills open standard](https://agentskills.io) — a folder
 ## Supported CLIs
 
 | CLI | Status |
-|-----|--------|
+|--|--------|
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | Native |
 | [Gemini CLI](https://github.com/google-gemini/gemini-cli) | Native |
 | [Crush](https://github.com/charmbracelet/crush) | Native |
@@ -42,43 +40,58 @@ npx xskills <skill-name>
 
 ## Available Skills
 
-Run `npx xskills list` to see all available skills. Each skill may include:
-- **scripts/** — executable code (Node.js, Bash, Python)
-- **references/** — documentation, type maps, examples
-- **assets/** — configs, templates, reusable files
+Run `npx xskills list` to see all available skills.
 
 | Skill | Description |
 |-------|-------------|
+| `x-api-draft` | Draft API design from requirements — clarify scope, analyze endpoints and data models |
+| `x-api-swagger` | Convert an API design draft to OpenAPI YAML spec with endpoints, schemas, and auth |
 | `x-commit` | Write single-line conventional commit messages with automated type suggestion and validation |
-| `x-review` | Review code against SRP, SOLID, KISS, DRY with cyclomatic complexity and duplication analysis — saves fix plan to markdown |
-| `x-fix`    | Resolve code review issues one-by-one from a fix plan file until complete |
-| `x-design` | Spec-driven design — clarify vague goals, propose approaches with trade-offs, write testable specs, gate on approval |
-| `x-epic`   | Convert approved spec into outcome-focused epics — user stories (INVEST), scope boundaries, epic-level DOD checklist |
-| `x-decompose` | Decompose epic into atomic tasks — each ≤8h with Definition of Done, test plan, effort estimate, dependency tracking |
-| `x-implement` | Test-driven implementation — red/green/refactor per plan task, docs sync, commit via x-commit |
+| `x-debug` | Structured debugging — hypothesis formation, evidence collection, root cause declaration |
+| `x-decompose` | Decompose epic into atomic tasks ≤8h each with DOD, test plan, effort estimate |
+| `x-design` | Spec-driven design — clarify goals, propose approaches with trade-offs, gate on approval |
+| `x-dispatch` | Parallel subagent task dispatcher via git worktrees with dependency management |
+| `x-epic` | Convert approved spec into INVEST-gated user stories and epic-level DOD |
+| `x-fix` | Resolve code review issues one-by-one from a fix plan file until complete |
+| `x-implement` | Test-driven implementation — red/green/refactor per task, docs sync, commit via x-commit |
+| `x-migrate` | Framework/dependency migration assistant — breaking changes, upgrade paths, automated fixes |
+| `x-refactor` | Automated refactoring suggestions against SOLID principles with before/after comparisons |
+| `x-review` | Review code against engineering principles with AST-based complexity analysis across 10+ languages |
+| `x-rollback` | Automated git revert with multi-step confirmation and impact analysis |
+| `x-test-gen` | Generate test stubs from implementation — happy path, error cases, edge case placeholders |
 
-## Skill Flow
+## Workflow
 
-The skills compose into a production workflow:
+Skills compose into production workflows. Pick the one that fits your task:
 
-```mermaid
-flowchart TD
-    A[x-design] -->|writes spec| B[x-epic]
-    B -->|writes epic| C[x-decompose]
-    C -->|writes tasks| D[x-implement]
-    D -->|after each task| E[x-commit]
-    D -->|all tasks green| F[x-review]
-    F -->|writes fix plan| G[x-fix]
-    G -->|issues resolved| D
+**Design → Implement:**
+```
+x-design → x-epic → x-decompose → x-implement → x-commit
+                                         ↘ x-review → x-fix (loop)
 ```
 
-- **x-design**: Clarify vague goals, propose approaches with trade-offs, write specs (contract, invariant, test), gate on approval.
-- **x-epic**: Read spec → derive user stories following INVEST criteria, define scope boundaries and epic-level Definition of Done, gate on approval.
-- **x-decompose**: Read epic → decompose into atomic tasks (≤8h each) with DOD checklist, explicit test plan (happy + error paths), effort estimate in hours, dependency DAG. Enforced size gates prevent oversized tasks.
-- **x-implement**: TDD (red→green→refactor) per task, sync docs, flip checkboxes on task file.
-- **x-commit**: Conventional commit messages — analyze staged changes, validate format, commit atomically. Used at each task boundary.
-- **x-review**: AST complexity + duplication analysis, apply SOLID/KISS/DRY/SRP principles, save fix plan.
-- **x-fix**: Resolve review issues one-by-one by priority (CRITICAL → MAJOR → MINOR), test after each.
+**API Development:**
+```
+x-api-draft → x-api-swagger
+```
+
+**Code Quality:**
+```
+x-review → x-fix → x-refactor
+```
+
+**Debugging & Migration:**
+```
+x-debug          (standalone)
+x-migrate        (standalone)
+x-rollback       (standalone)
+```
+
+### Quick Start
+
+1. Install skills you need: `npx xskills install x-design x-epic x-decompose x-implement`
+2. Ask your AI coding agent to follow the workflow chain
+3. Each skill gates on user approval before moving to the next step
 
 ## How It Works
 

@@ -1,148 +1,94 @@
-# Quickstart — Zero to Working Pipeline in 15 Minutes
+# @lleqsnoom/x-skills
 
-This guide takes you from fresh install to running the full xskills design-to-review pipeline.
+Cross-CLI agentic skills for AI coding tools (45+ compatible). Zero dependencies — Node built-ins only (`fs`, `path`, `os`, `child_process`).
 
----
-
-## Installation (2 minutes)
+## Install
 
 ```bash
-# Install globally for use in all projects
-npm install -g xskills
-
-# Or use npx without installing:
-npx xskills --version
+npm install -g @lleqsnoom/x-skills   # global
+npx @lleqsnoom/x-skills               # without installing
 ```
 
-**Verify installation:**
+Two CLIs available after install:
 
-```bash
-node bin/install.js list
+| Command | Purpose |
+|---------|---------|
+| `xskills` | Skill installer — `xskills list`, `xskills install <name>`, `xskills install <name> --global` |
+| `xskills-mcp-server` | MCP server (JSON-RPC 2.0 over stdio) — exposes all skill scripts as callable tools |
+
+## Available Skills & MCP Functions
+
+14 skills, each with a SKILL.md + optional scripts/references/assets:
+
+| Skill | Purpose | MCP Function |
+|-------|---------|--------------|
+| `x-design` | Spec-driven design (declarations: contract, invariant, test) | `x-design-save-spec`, `x-design-shared` |
+| `x-epic` | Convert approved spec → INVEST-gated user stories with DOD | `x-epic-save-epic`, `x-epic-shared` |
+| `x-decompose` | Decompose epic into atomic tasks (≤8h each) | `x-decompose-save-tasks`, `x-decompose-shared` |
+| `x-implement` | TDD implementation — red/green/refactor/commit per task | `x-implement-save-plan`, `x-implement-shared` |
+| `x-commit` | Conventional commit messages (suggest, validate, atomic commit) | `x-commit-suggest-type`, `x-commit-validate-commit`, `x-commit-commit` |
+| `x-review` | Code review against SOLID/KISS/DRY + AST-based complexity analysis | `x-review-analyze-complexity`, `x-review-check-duplication`, `x-review-save-plan` |
+| `x-fix` | Resolve code review issues from a fix plan file | *(CLI only)* |
+| `x-api-draft` | Draft API design from requirements | `x-api-draft-save-design` |
+| `x-api-swagger` | Convert API draft → OpenAPI YAML spec | `x-api-swagger-save-spec` |
+| `x-debug` | Structured debugging (hypothesis → evidence → root cause) | `x-debug-analyze` |
+| `x-refactor` | Automated refactoring suggestions with before/after comparisons | `x-refactor-analyzer` |
+| `x-migrate` | Framework/dependency migration plans with breaking changes | `x-migrate-analyze` |
+| `x-rollback` | Git revert with multi-step confirmation | `x-rollback-revert` |
+| `x-test-gen` | Generate test stubs from implementation (happy/error/edge cases) | `x-test-gen-generate` |
+| `x-dispatch` | Parallel subagent task dispatcher via git worktrees | `x-dispatch-dispatch` |
+
+## Pipeline Flow
+
+```
+Vague goal or requirement
+        │
+        ▼
+┌───────────────┐     spec approved      ┌──────────────┐   epic approved    ┌──────────────────┐  tasks approved   ┌────────────────┐
+│   x-design    │ ──────────────────────▶│     x-epic    │ ──────────────────▶│   x-decompose    │ ──────────────────▶│   x-implement   │
+│               │                        │              │                    │                  │                 │                │
+│ • Spec format │                        │ • User stories│                    │ • Atomic tasks   │                 │ • TDD cycle     │
+│ • Declarations│                        │ • INVEST gate │                    │ • ≤8h each       │                 │ • Commit via    │
+│ • Gate on     │                        │ • Epic DOD    │                    │ • Test plans     │                 │   x-commit      │
+│   approval    │                        │               │                    │                  │                 │                │
+└───────────────┘                        └──────────────┘                    └──────────────────┘                 └────────────────┘
 ```
 
-You should see a list of available skills with descriptions. If you see this, xskills is working correctly.
+Each step outputs a `.x-skills/` artifact that the next step reads. **Never skip phases** — each gates on approval before proceeding.
 
----
+## MCP Server Usage
 
-## First Project Walkthrough (10 minutes)
+Start the server: `node bin/install.js install x-design && node lib/mcp-server.js`
 
-This walkthrough covers the complete planning workflow: **design → epic → decompose → implement**.
+The server exposes all skill scripts as JSON-RPC tools over stdio (MCP 1.0 protocol). Each tool runs its associated script and returns stdout (JSON) or stderr on failure. Compatible with any MCP client (Claude Code, Crush, etc.).
 
-### Step 1: Design a Feature
+## CI/CD — Auto-Publish on Merge to Main
 
-Create a design spec that defines *what* to build and *why*. This becomes your source of truth for all subsequent steps.
+GitHub Actions workflow at `.github/workflows/publish.yml`:
+- Triggers on `push` to `main` (or PR closed → merge)
+- Node 24 + npm ≥ 11.5.1 for OIDC trusted publishing
+- Inline conventional-commit version bumping (`feat:` → minor, `fix:` → patch, `BREAKING CHANGE` → major)
+- Auto-generates CHANGELOG.md entries
+- `npm publish --provenance` via OIDC (no NPM_TOKEN secret needed — ephemeral per-publish auth minted by npm CLI from GitHub's OIDC token)
+- Creates and pushes Git tag `vX.Y.Z`
+- Completes within 5 minutes
 
-```bash
-# Initialize a new project (if you don't have one)
-mkdir my-feature-project && cd my-feature-project
-git init
+Setup required once: configure trusted publisher on [npmjs.com → @lleqsnoom/x-skills → Settings → Trusted Publisher](https://www.npmjs.com/package/@lleqsnoom/x-skills/settings) with repo `lleqsnoom/xskills`, workflow `.github/workflows/publish.yml`.
 
-# Run x-design to create a spec
-node bin/install.js install x-design
-node <path-to>/x-design/scripts/save-spec.js --topic "user-authentication"
+## Directory Structure
+
+```
+xskills/
+├── package.json              # @lleqsnoom/x-skills, zero runtime deps
+├── bin/install.js            # CLI entry point (CommonJS)
+├── lib/install.js            # Core: install, globalInstall, listSkills, copyDir
+├── lib/mcp-server.js         # stdio MCP server (JSON-RPC 2.0 over stdin/stdout)
+├── lib/mcp-tools.js          # Skill tool discovery from SKILL.md frontmatter
+├── CHANGELOG.md              # Auto-regenerated on each release
+└── skills/                   # 14 skill packages, published as part of the npm tarball
+    ├── x-design/             # Each has: SKILL.md + scripts/ + (optional) references/ assets/
+    ├── x-epic/
+    ├── ...
 ```
 
-**What happens:** The script prompts you for requirements and generates `.x-skills/design/DD-MM-YYYY-hh:mm-user-authentication.md` — a structured design document with scope, constraints, and success criteria.
-
-### Step 2: Approve the Spec
-
-Open the generated spec file in your editor. Review it against your actual requirements. Edit until it accurately captures what you want to build. This is the human-in-the-loop gate — never skip review.
-
-**Key sections to verify:**
-- **Scope**: Does it cover everything needed? Nothing unnecessary?
-- **Constraints**: Are technical limitations documented?
-- **Success criteria**: Can you measure completion?
-
-### Step 3: Create an Epic
-
-Once the spec is approved, convert it into user stories grouped as an epic.
-
-```bash
-node bin/install.js install x-epic
-node <path-to>/x-epic/scripts/save-epic.js --epic "user-authentication"
-```
-
-**What happens:** Generates `.x-skills/epics/DD-MM-YYYY-hh:mm-user-authentication.md` — a collection of INVEST-gated user stories with epic-level Definition of Done. Each story is scope-bounded and outcome-focused (not implementation tasks).
-
-### Step 4: Decompose into Tasks
-
-Break each user story into atomic implementation tasks, each estimated at ≤8 hours.
-
-```bash
-node bin/install.js install x-decompose
-node <path-to>/x-decompose/scripts/save-tasks.js --epic "user-authentication"
-```
-
-**What happens:** Generates `.x-skills/tasks/DD-MM-YYYY-hh:mm-user-authentication.md` — atomic tasks with:
-- Individual effort estimates (hours)
-- Dependencies between tasks
-- Test plans for each task
-- Definition of Done per task
-
-### Step 5: Implement Tasks
-
-Execute tasks sequentially or in parallel groups. Each task follows TDD: red → green → refactor → commit.
-
-```bash
-node bin/install.js install x-implement
-# Run from the project root — x-implement reads the task file and executes each one
-```
-
-**What happens:** For each unchecked `- [ ]` task in the task file:
-1. Writes a failing test for the acceptance criterion
-2. Implements minimum code to pass
-3. Refactors against SOLID principles
-4. Commits via x-commit (validated conventional commit)
-5. Marks task complete with `[x]`
-
----
-
-## Verification (3 minutes)
-
-After completing the walkthrough:
-
-```bash
-# Run all tests — should be green
-npm test
-
-# Verify installed skills are discoverable
-node bin/install.js list
-
-# Check your artifacts exist
-ls .x-skills/design/
-ls .x-skills/epics/
-ls .x-skills/tasks/
-```
-
-All tests passing + visible artifact files = successful setup.
-
----
-
-## Installing Additional Skills
-
-Install any skill from the available list:
-
-```bash
-# Install into current project (local)
-npx xskills install <skill-name>
-
-# Install globally (all projects)
-npx xskills install <skill-name> --global
-
-# Shortcut — just type the name
-npx xskills <skill-name>
-```
-
-**Common skills to try:**
-- `x-commit` — Conventional commit message validation and generation
-- `x-review` — AST-based code complexity analysis and review
-- `x-fix` — Resolve code review issues from a fix plan file
-- `x-api-draft` — Draft API design from requirements
-
----
-
-## Next Steps
-
-- Read [Skill Authoring Guide](docs/skill-authoring-guide.md) to create your own skills
-- View the [Workflow Diagram](docs/workflow-diagram.mmd) for visual overview
-- Check [AGENTS.md](./AGENTS.md) for architecture details and conventions
+All `skills/*/` directories are included in the published tarball per `files` field in package.json.
