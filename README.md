@@ -27,29 +27,43 @@ Skills are the [Agent Skills open standard](https://agentskills.io) — a folder
 
 ## Install
 
+**First, make `xskills` available globally or via npx:**
+
 ```bash
-# One command — installs into current project
-npx xskills install <skill-name>
+# Option A: Global install (recommended for persistent use)
+npm install -g @lleqsnoom/x-skills
 
-# Install globally (available in all projects)
-npx xskills install <skill-name> --global
+# Option B: Use via npx without installing (still works)
+npx @lleqsnoom/x-skills help
+```
 
+**Then, install skills:**
+
+```bash
 # Install all 15+ skills at once
-npx xskills install-all
+xskills install-all --global          # Global: ~/.agents/skills/
+xskills install-all                   # Local: .agents/skills/ in current project
+
+# Or specific skills only
+xskills install x-commit x-design --global
 
 # Shortcut — just type the skill name
-npx xskills <skill-name>
+xskills <skill-name>
 ```
 
 ## MCP Server
 
-For CLIs that support MCP (Model Context Protocol), run the bundled stdio server:
+For CLIs that support MCP (Model Context Protocol), run the bundled stdio server. **First install skills, then start the server:**
 
 ```bash
+# 1. Install all skills locally or globally
+npx @lleqsnoom/x-skills install-all --global
+
+# 2. Start the MCP server
 npx @lleqsnoom/x-skills mcp-server
 ```
 
-This exposes all skills as MCP tools — useful for editors and agents with native MCP support.
+The server discovers installed skills from `.agents/skills/` (local) or `~/.agents/skills/` (global) and exposes them as MCP tools.
 
 ### Configure in Client
 
@@ -72,13 +86,15 @@ To use the MCP server across all projects without per-project config:
 
 ```bash
 # Install globally so npx can resolve it anywhere
-npx @lleqsnoom/x-skills install-all --global
-```
-
-Or pin a specific version:
-```bash
 npm install -g @lleqsnoom/x-skills
 npx xskills mcp-server
+```
+
+Or pin a specific version and install skills separately:
+```bash
+npm install -g @lleqsnoom/x-skills@latest
+xskills install-all --global  # Install skills globally once
+xskills mcp-server            # Start MCP server whenever needed
 ```
 
 ### Available MCP Tools
@@ -136,18 +152,41 @@ x-rollback       (standalone)
 
 ### Quick Start
 
-**Option A — Install all skills (recommended for most projects):**
+**Step 1: Make `xskills` available:**
+
 ```bash
-npx xskills install-all
+# Global install (recommended) — use from anywhere without npx
+npm install -g @lleqsnoom/x-skills
+
+# Or use via npx (still works, no global install needed)
+npx @lleqsnoom/x-skills help
 ```
 
-**Option B — Pick specific skills:**
+**Step 2: Install skills:**
+
 ```bash
-npx xskills install x-design x-epic x-decompose x-implement
+# All skills globally (recommended for most users)
+xskills install-all --global
+
+# Specific skills locally in current project
+xskills install x-design x-epic x-decompose x-implement
 ```
 
-1. Ask your AI coding agent to follow the workflow chain
-2. Each skill gates on user approval before moving to the next step
+**Step 3: Use with your AI coding agent**
+
+Your CLI will auto-discover installed skills and offer them when relevant. Each skill gates on user approval before executing.
+
+For MCP clients (editors, agents), add to config:
+```json
+{
+  "mcpServers": {
+    "xskills": {
+      "command": "npx",
+      "args": ["@lleqsnoom/x-skills", "mcp-server"]
+    }
+  }
+}
+```
 
 ## How It Works
 
