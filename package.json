@@ -1,6 +1,6 @@
 {
   "name": "@lleqsnoom/x-skills",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "description": "Cross-CLI agentic skills — install once, use with 45+ compatible AI coding tools",
   "main": "lib/install.js",
   "bin": {
