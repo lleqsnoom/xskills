@@ -62,9 +62,20 @@ The planning workflow follows a three-phase handoff chain:
 |-------|-------|-------|--------|------|
 | 1. Design | `x-design` | Vague goal or requirement | `.x-skills/design/DD-MM-YYYY-hh:mm-<topic>.md` (spec) | User approves spec |
 | 2. Epic | `x-epic` | Approved spec | `.x-skills/epics/DD-MM-YYYY-hh:mm-<topic>.md` (user stories + DOD) | User approves epic |
-| 3. Decompose | `x-decompose` | Approved epic | `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>.md` (atomic tasks with DOD, test plans, effort) | User approves tasks |
+| 3. Decompose | `x-decompose` | Approved epic | `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>/` (directory with atomic tasks, one file per user story) | User approves tasks |
 
 After task approval → `x-implement` executes tasks sequentially or in parallel groups.
+
+### Code Review Workflow (Optional)
+
+Independent of the planning pipeline, code quality improvements use a separate flow:
+
+| Phase | Skill | Input | Output | Gate |
+|-------|-------|-------|--------|------|
+| 1. Analyze | `x-review` | Source code or project path | `.x-skills/review/DD-MM-YYYY-hh:mm.md` (fix plan) | User reviews issues |
+| 2. Fix | `x-fix` | Fix plan file | Updated source files with all issues resolved | All `[ ]` → `[x]` in plan |
+
+The review directory is not part of the main planning pipeline but integrates with `x-fix` for iterative quality improvements.
 
 ---
 

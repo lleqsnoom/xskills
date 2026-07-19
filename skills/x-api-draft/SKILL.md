@@ -39,18 +39,13 @@ Produce a clean, human-reviewable API design document before implementation begi
 
 ## Output Location
 
-Save the design document using the script (or manually):
+Save the design document using the script:
 
 ```bash
-# Global install:
-node ~/.agents/skills/x-api-draft/scripts/save-design.js --topic <slug>
-
-# Local install:
-node ./.agents/skills/x-api-draft/scripts/save-design.js --topic <slug>
-
-# Auto-discovery — pass any path to save-design.js:
-node /absolute/path/to/save-design.js --topic <slug>
+node <path-to-save-design.js> --topic <slug>
 ```
+
+**Auto-discovery**: The script resolves its own location via `__dirname`, so it works from any directory regardless of install method (global or local). Pass any path to the script and it will work.
 
 Output: `.x-skills/apis/DD-MM-YYYY-hh:mm-<topic>.md` (relative to CWD).
 
