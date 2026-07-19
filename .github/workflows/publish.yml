@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
   id-token: write
@@ -106,16 +110,56 @@ jobs:
           fi
           git commit -m "chore(release): v${{ steps.bump.outputs.new_version }}"
 
+      - name: Ensure all JS entry points have execute permission
+        run: |
+          find . -path './node_modules' -prune -o \( -name '*.js' -not -path '*/node_modules/*' \) -exec chmod +x {} + 2>/dev/null || true
+
+      - name: Auto-bump version if already published on npm
+        id: autoupdate
+        run: |
+          PACKAGE_NAME=$(node -e "console.log(require('./package.json').name)")
+          CURRENT_VERSION="${{ steps.bump.outputs.new_version }}"
+          INITIAL_VERSION="$CURRENT_VERSION"
+
+          # Keep bumping the patch number until we find a free version on npm
+          while true; do
+            if npm view "${PACKAGE_NAME}@${CURRENT_VERSION}" version >/dev/null 2>&1; then
+              echo "::warning::Version ${CURRENT_VERSION} already exists on npm — auto-bumping."
+              IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+              PATCH=$((PATCH + 1))
+              CURRENT_VERSION="$MAJOR.$MINOR.$PATCH"
+
+              # Update package.json with bumped version
+              node -e "const p=require('./package.json'); p.version='$CURRENT_VERSION'; require('fs').writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n')"
+            else
+              break
+            fi
+          done
+
+          echo "::notice::Final version to publish: ${PACKAGE_NAME}@${CURRENT_VERSION}"
+          echo "new_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Re-commit bumped changelog if version changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json CHANGELOG.md
+          # Update CHANGELOG title to match the final version (in case it was bumped)
+          FINAL="${{ steps.autoupdate.outputs.new_version }}"
+          sed -i "s/^## \[[^]]*\]/## [$FINAL/" CHANGELOG.md || true
+          git diff --cached --quiet || git commit -m "chore(release): auto-bumped to v${{ steps.autoupdate.outputs.new_version }}"
+
       - name: Publish to npmjs with trusted publishing (OIDC)
         run: |
-          # Ensure all JS entry points have execute permission so npm accepts them
-          find . -path './node_modules' -prune -o \( -name '*.js' -not -path '*/node_modules/*' \) -exec chmod +x {} + 2>/dev/null || true
           npm publish --provenance --access=public
 
       - name: Create Git tag and push
-        if: success()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="v${{ steps.bump.outputs.new_version }}"
-          git tag "$TAG" && git push origin "$TAG"
+          TAG="v${{ steps.autoupdate.outputs.new_version }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists locally, skipping."
+          else
+            git tag "$TAG" && git push origin "$TAG"
+          fi
