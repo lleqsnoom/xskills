@@ -110,57 +110,56 @@ jobs:
           fi
           git commit -m "chore(release): v${{ steps.bump.outputs.new_version }}"
 
-      - name: Check if version already published on npm
-        id: npm_check
-        run: |
-          VERSION="${{ steps.bump.outputs.new_version }}"
-          PACKAGE_NAME=$(node -e "console.log(require('./package.json').name)")
-
-          if npm view "${PACKAGE_NAME}@${VERSION}" version >/dev/null 2>&1; then
-            echo "already_published=true" >> "$GITHUB_OUTPUT"
-            echo "::warning::${PACKAGE_NAME}@${VERSION} is already published on npm — skipping publish."
-          else
-            echo "already_published=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Ensure all JS entry points have execute permission
         run: |
           find . -path './node_modules' -prune -o \( -name '*.js' -not -path '*/node_modules/*' \) -exec chmod +x {} + 2>/dev/null || true
 
+      - name: Auto-bump version if already published on npm
+        id: autoupdate
+        run: |
+          PACKAGE_NAME=$(node -e "console.log(require('./package.json').name)")
+          CURRENT_VERSION="${{ steps.bump.outputs.new_version }}"
+          INITIAL_VERSION="$CURRENT_VERSION"
+
+          # Keep bumping the patch number until we find a free version on npm
+          while true; do
+            if npm view "${PACKAGE_NAME}@${CURRENT_VERSION}" version >/dev/null 2>&1; then
+              echo "::warning::Version ${CURRENT_VERSION} already exists on npm — auto-bumping."
+              IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+              PATCH=$((PATCH + 1))
+              CURRENT_VERSION="$MAJOR.$MINOR.$PATCH"
+
+              # Update package.json with bumped version
+              node -e "const p=require('./package.json'); p.version='$CURRENT_VERSION'; require('fs').writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n')"
+            else
+              break
+            fi
+          done
+
+          echo "::notice::Final version to publish: ${PACKAGE_NAME}@${CURRENT_VERSION}"
+          echo "new_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Re-commit bumped changelog if version changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json CHANGELOG.md
+          # Update CHANGELOG title to match the final version (in case it was bumped)
+          FINAL="${{ steps.autoupdate.outputs.new_version }}"
+          sed -i "s/^## \[[^]]*\]/## [$FINAL/" CHANGELOG.md || true
+          git diff --cached --quiet || git commit -m "chore(release): auto-bumped to v${{ steps.autoupdate.outputs.new_version }}"
+
       - name: Publish to npmjs with trusted publishing (OIDC)
-        id: npm_publish
-        if: steps.npm_check.outputs.already_published != 'true'
-        continue-on-error: true
         run: |
           npm publish --provenance --access=public
 
       - name: Create Git tag and push
-        if: always() && steps.npm_check.outputs.already_published != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="v${{ steps.bump.outputs.new_version }}"
+          TAG="v${{ steps.autoupdate.outputs.new_version }}"
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists locally, skipping."
           else
             git tag "$TAG" && git push origin "$TAG"
-          fi
-
-      - name: Publish summary
-        if: always()
-        run: |
-          VERSION="${{ steps.bump.outputs.new_version }}"
-          PACKAGE_NAME=$(node -e "console.log(require('./package.json').name)")
-          if [ "${{ steps.npm_check.outputs.already_published }}" = "true" ]; then
-            echo "## npm Publish Summary :fast_forward:" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "**${PACKAGE_NAME}@${VERSION}** is already published on npm — skipped." >> "$GITHUB_STEP_SUMMARY"
-          elif [ "${{ steps.npm_publish.outcome }}" = "success" ]; then
-            echo "## npm Publish Summary :white_check_mark:" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "**${PACKAGE_NAME}@${VERSION}** published successfully." >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "## npm Publish Summary :x:" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "**${PACKAGE_NAME}@${VERSION}** — publish failed. Check logs above." >> "$GITHUB_STEP_SUMMARY"
           fi
