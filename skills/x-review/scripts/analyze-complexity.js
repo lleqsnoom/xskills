@@ -241,6 +241,7 @@ const EXTENSION_MAP = {
   ".sh": "bash",
   ".bash": "bash",
   ".zsh": "bash",
+  ".hx": "haxe",
 };
 
 function findWasmFile(langName) {
@@ -397,9 +398,9 @@ async function extractFunctionsTS(source, langName) {
   if (!parser) return [];
 
   const FUNCTION_NODE_TYPES = [
-    "function_declaration",   // JS, TS, Go, Java, PHP, C-family
+    "function_declaration",   // JS, TS, Go, Java, PHP, C-family, Haxe
     "function_definition",     // Python, Ruby (some grammars)
-    "method_declaration",      // Java, C-family
+    "method_declaration",      // Java, C-family, Haxe
     "method_definition",       // JS, TS
     "arrow_function",          // JS, TS
   ];
