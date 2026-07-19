@@ -1,7 +1,7 @@
 # xskills
 
 <p align="center">
-  <img src="x-skills.svg" alt="xskills logo" width="120" height="120">
+  <img src="x-skills.svg" alt="xskills logo" width="300">
 </p>
 
 **Agentic tooling built for local models under 40B. Every skill fits in a 4K context window — lean, fast, and tested against the constraints local developers actually face.** [Read the manifesto →](MANIFESTO.md)
