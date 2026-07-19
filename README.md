@@ -1,5 +1,7 @@
 # xskills
 
+**One format, all CLIs — optimized for the models people actually run.** [Read the manifesto →](MANIFESTO.md)
+
 Cross-CLI agentic skills installer. Install once, use with **45+ compatible AI coding tools**.
 
 ## What is this?
