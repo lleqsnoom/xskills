@@ -13,11 +13,13 @@ user-invocable: true
 
 ## Artifact Location
 
-Invoke the script from any directory — it self-resolves via `__dirname`. Output: `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>.md` (relative to CWD):
+Invoke the script from any directory — it self-resolves via `__dirname`. Output: `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>/` directory (relative to CWD):
 
 ```bash
 node <path-to-save-plan.js> --epic <slug>
 ```
+
+The script creates the staging directory. Read all `.md` files inside it — one file per user story.
 
 ## Directory Organization
 
@@ -32,7 +34,7 @@ If the task spec or epic defines an architecture section, follow it. If not, inf
 
 ## Workflow
 
-For each task in `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>.md`:
+For each task file in `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>/`:
 
 1. **RED** — Write the minimal failing test for the task's acceptance criterion. It must fail for the *right reason*.
 2. **GREEN** — Write the minimum implementation to pass that test. Nothing more.

@@ -9,7 +9,7 @@ user-invocable: true
 
 # X-Test-Gen — Test Stub Generator
 
-Analyzes source code and generates test stub files with happy path and error case scaffolding. Follows TDD principles by generating tests before implementation exists.
+Analyzes source code and generates test stub files with happy path and error case scaffolding. Useful for bootstrapping test coverage on existing code or generating initial test structure before writing assertions.
 
 ## Scripts
 

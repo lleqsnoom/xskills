@@ -34,7 +34,7 @@ user-invocable: true
 ## Rules
 
 - **One issue at a time.** Never batch multiple fixes into a single edit pass. Each fix gets its own targeted change + test run.
-- **Never use `multiedit`.** Partial multiedit failures leave dangling syntax that is hard to recover from and corrupts the file for subsequent issues. Always use `edit` with a single find-and-replace per call.
+- **Prefer `edit` over `multiedit`.** Use `edit` for most changes — it's easier to recover from failures. Only use `multiedit` when making 3+ unrelated, non-overlapping changes to the same file where each change is independently safe.
 - **Start each issue from a clean checkout.** Run `git checkout -- <file>` before applying each fix so you always have an undo path regardless of edit quality.
 - **Test after every fix.** Run the project's tests (check `package.json` scripts). If a test fails, revert and adjust before moving on.
 - **Validate syntax immediately.** After every single `edit`, run a syntax check (`node -c <file>`) to catch malformed replacements before they compound across multiple issues.

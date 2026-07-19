@@ -11,6 +11,11 @@ user-invocable: true
 
 Analyzes source code and suggests specific refactorings based on SOLID principles, complexity metrics, and naming conventions. Outputs actionable suggestions with before/after comparisons.
 
+## Related Skills
+
+- **x-review** — Comprehensive code review that produces a fix plan file for iterative resolution via `x-fix`. Use when you need a structured quality improvement workflow with tracking.
+- This skill (`x-refactor`) is analysis-only — it outputs JSON/markdown suggestions but does not create fix plans or track resolution progress.
+
 ## Scripts
 
 All scripts self-resolve via `__dirname` — run from any working directory:

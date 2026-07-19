@@ -30,8 +30,8 @@ node <path-to>/save-plan.js --output .x-skills/review/   # create plan file
 **What To Do:** When invoked, determine the user's scope (single file, directory, or full project) and execute these commands. Do not ask the user what to do.
 
 1. **Run complexity analysis** — pass specific files/dirs when given, otherwise `--all`:
-   - Single file: `node <path-to>/analyze-complexity.js synetic-studio-webapp/src/lib/media-library/media-library-proxy.ts`
-   - Directory: `node <path-to>/analyze-complexity.js synetic-studio-webapp/src/lib/`
+   - Single file: `node <path-to>/analyze-complexity.js src/lib/media-library/proxy.ts`
+   - Directory: `node <path-to>/analyze-complexity.js src/lib/`
    - Full project (no scope specified): `node <path-to>/analyze-complexity.js --all`
 
 2. **Run duplication check** — same scope logic as above:
@@ -41,6 +41,11 @@ node <path-to>/save-plan.js --output .x-skills/review/   # create plan file
 3. **Create fix plan file**: `node <path-to>/save-plan.js --output .x-skills/review/`
 
 The complexity script auto-installs tree-sitter if missing (global install). Output is JSON — parse it for function metrics and duplication counts.
+
+## Related Skills
+
+- **x-refactor** — Focused on automated refactoring suggestions (extract method, rename, polymorphism) without a fix plan workflow. Use when you want analysis only, not an iterative fix process.
+- **x-fix** — Consumes the fix plan output by this skill and resolves issues one-by-one with targeted edits + test verification.
 
 ## Principles Checklist
 

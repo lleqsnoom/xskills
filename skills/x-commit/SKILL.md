@@ -13,14 +13,12 @@ Make a conventional commit with info on what current Changes does. One sentence.
 
 ## Script Location
 
-All scripts live inside the **installed skill directory**, not in your project. Resolve `scripts/` relative to `<skill-install-dir>/`:
+All scripts live inside the **installed skill directory**:
 
-- Global install (`~/.agents/skills/x-commit/scripts/<script>`)
-- Local install (`.agents/skills/x-commit/scripts/<script>`)
+- Global install: `~/.agents/skills/x-commit/scripts/<script>`
+- Local install: `.agents/skills/x-commit/scripts/<script>`
 
-**Auto-discovery**: these scripts only use git commands and stdin/stdout — no skill directory resolution needed. Just pass any path to the script and it works from anywhere.
-
-Run each command from any working directory — the paths above are absolute or project-local, never cwd-relative.
+**Auto-discovery**: Scripts self-resolve via `__dirname`, so they work from any working directory without needing skill-dir resolution. Just pass any path to the script and it works.
 
 ## Workflow
 
