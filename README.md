@@ -1,6 +1,6 @@
 # xskills
 
-**One format, all CLIs — optimized for the models people actually run.** [Read the manifesto →](MANIFESTO.md)
+**Agentic tooling built for local models under 40B. Every skill fits in a 4K context window — lean, fast, and tested against the constraints local developers actually face.** [Read the manifesto →](MANIFESTO.md)
 
 Cross-CLI agentic skills installer. Install once, use with **45+ compatible AI coding tools**.
 
