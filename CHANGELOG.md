@@ -1,3 +1,9 @@
+## [5.2.0] - 2026-07-19
+
+* Merge pull request #22 from lleqsnoom/feat/haxe-rules (8daffe2)
+* feat(x-review): expand language support to 30+ TIOBE top-100 languages (9798618)
+* feat(x-review): add Haxe language support with stack adapter and tree-sitter integration (f7cb768)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
