@@ -1,5 +1,9 @@
 # xskills
 
+<p align="center">
+  <img src="x-skills.svg" alt="xskills logo" width="120" height="120">
+</p>
+
 **Agentic tooling built for local models under 40B. Every skill fits in a 4K context window — lean, fast, and tested against the constraints local developers actually face.** [Read the manifesto →](MANIFESTO.md)
 
 Cross-CLI agentic skills installer. Install once, use with **45+ compatible AI coding tools**.
