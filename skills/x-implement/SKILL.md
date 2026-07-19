@@ -8,29 +8,17 @@ user-invocable: true
 ---
 
 # X-Implement — Test-Driven Implementation
-
 **No production code without a failing test first.** Wrote code before the test? Delete it. Rewrite from the test. Exception — ask user first: prototypes, generated code, throwaway scripts.
 
 ## Artifact Location
 
-Invoke the script from any directory — it self-resolves via `__dirname`. Output: `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>/` directory (relative to CWD):
-
 ```bash
 node <path-to-save-plan.js> --epic <slug>
 ```
-
 The script creates the staging directory. Read all `.md` files inside it — one file per user story.
 
 ## Directory Organization
-
-Separate concerns into distinct directories before writing any code. Never dump everything into a single folder or `src/`.
-
-1. **Identify responsibilities** — data models, business logic, I/O boundaries, API routes, utilities, tests.
-2. **Assign each responsibility to its own directory** — e.g., `models/`, `services/`, `controllers/`, `utils/`, `tests/`.
-3. **One file per concern** — a model file contains only model logic; a service file contains only business logic; never mix them.
-4. **Import across boundaries is fine**, but imports should flow top-down (models → services → controllers) and never cycle.
-
-If the task spec or epic defines an architecture section, follow it. If not, infer from the codebase's existing structure — match what's already there before inventing new conventions.
+Assign each responsibility to its own directory (models/, services/, controllers/, utils/, tests/). One file per concern, imports flow top-down, never cycle. See `references/dir-organization.md` for full guidance.
 
 ## Workflow
 
@@ -40,22 +28,14 @@ For each task file in `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>/`:
 2. **GREEN** — Write the minimum implementation to pass that test. Nothing more.
 3. **REFACTOR** — Evaluate against SOLID/clean code. State what you assessed and what (if anything) improved — or why no changes were needed.
 4. **SYNC DOCS** — Update spec (`.x-skills/design/*.md`) if it exists; otherwise update living docs (README, comments) directly.
-5. **COMMIT** — Run `node <path-to-commit.mjs> "<message>"` from the x-commit skill for every single commit. This is mandatory and non-negotiable. Never run `git commit` manually, even for small changes or squash commits. If x-commit exits with an error, stop and ask the user for a corrected message — do not bypass it.
+5. **COMMIT** — Run `node <path-to-commit.mjs> "<message>"` from the x-commit skill for every single commit. This is mandatory and non-negotiable. Never run `git commit` manually. If x-commit exits with an error, stop and ask the user for a corrected message — do not bypass it.
 6. **UPDATE PLAN** — Change `- [ ]` to `- [x]` for this task. Do not start the next task without this edit.
 
 All tasks `- [x]` and green → `ship`.
 
 ## Gate
 
-`<gate>` Before committing: evaluate the implementation against SOLID principles, design patterns, and clean code. State what you assessed and what (if anything) you improved — or why no changes were needed. `</gate>`
+Before committing: evaluate the implementation against SOLID principles, design patterns, and clean code. State what you assessed and what (if anything) you improved — or why no changes were needed.
 
-## Don't
-
-- Test passes without the impl (tests nothing).
-- Mock the unit under test (tests the mock).
-- Assert many behaviors in one test (split).
-- Skip "watch it fail" — if the test doesn't fail, you don't know what it tests.
-- Edit the test to match buggy code (tests the bug).
-- Add abstractions not required by the current test (GREEN phase — not refactor).
-- Edit files outside the failing test's scope.
-- Create ad-hoc summary, notes, or analysis files not defined in the plan or required by a loaded skill.
+## Anti-Patterns
+See `references/tdd-rules.md` for full list of anti-patterns.
