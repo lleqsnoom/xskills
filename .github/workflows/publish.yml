@@ -45,42 +45,6 @@ jobs:
       - name: Semantic Release (version bump + changelog)
         run: npx --yes semantic-release
 
-      - name: Ensure version is higher than latest on npm
-        run: |
-          PACKAGE_NAME=$(node -p "require('./package.json').name")
-          CURRENT_VERSION=$(node -p "require('./package.json').version")
-          LATEST_NPM=$(npm view "$PACKAGE_NAME" version 2>/dev/null || echo "0.0.0")
-          
-          # Compare versions using node semver
-          NEEDS_BUMP=$(node -e "
-            const current = '${CURRENT_VERSION}'.split('.').map(Number);
-            const latest = '${LATEST_NPM}'.split('.').map(Number);
-            if (latest[0] > current[0] || 
-                (latest[0] === current[0] && latest[1] > current[1]) ||
-                (latest[0] === current[0] && latest[1] === current[1] && latest[2] >= current[2])) {
-              console.log('yes');
-            } else {
-              console.log('no');
-            }
-          ")
-          
-          if [ "$NEEDS_BUMP" = "yes" ]; then
-            IFS='.' read -r MAJOR MINOR PATCH <<< "$LATEST_NPM"
-            NEW_MAJOR=$((MAJOR + 1))
-            NEW_VERSION="$NEW_MAJOR.0.0"
-            echo "::warning::npm has $LATEST_NPM but package.json has $CURRENT_VERSION — bumping to $NEW_VERSION"
-            
-            node -e "const p=require('./package.json'); p.version='$NEW_VERSION'; require('fs').writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n')"
-            
-            # Update CHANGELOG title to match
-            sed -i "s/^## \[[^]]*\]/## [$NEW_VERSION/" CHANGELOG.md || true
-            
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add package.json CHANGELOG.md
-            git commit -m "chore(release): bumped to v$NEW_VERSION to surpass existing npm version"
-          fi
-
       - name: Publish to npmjs with trusted publishing (OIDC provenance)
         if: success()
         run: |
