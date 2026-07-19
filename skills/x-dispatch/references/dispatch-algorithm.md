@@ -2,27 +2,32 @@
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    dispatch.js                           │
-│  ┌──────────────┐    ┌───────────────┐   ┌───────────┐  │
-│  │ Task Parser  │───▶│ Dependency DAG│──▶│ Wave Splitter│  │
-│  └──────────────┘    └───────────────┘   └─────────────┘  │
-└─────────────────────────────────────────────────────────┘
-                          │                    │
-         ┌────────────────┼────────────────────┤
-         ▼                ▼                    ▼
-   ┌──────────┐     ┌──────────┐        ┌──────────┐
-   │ worker 1 │     │ worker 2 │   ...  │ worker N │
-   │ (worktree)│    │(worktree)│        │(worktree)│
-   └────┬─────┘     └────┬─────┘        └────┬─────┘
-        │                │                   │
-        └────────────────┼───────────────────┘
-                         ▼
-              ┌──────────────────────┐
-              │    aggregator.js     │
-              │  (merge commits)     │
-              └──────────────────────┘
+```mermaid
+flowchart TD
+    subgraph dispatch["dispatch.js"]
+        parser["Task Parser"]
+        dag["Dependency DAG"]
+        splitter["Wave Splitter"]
+        
+        parser --> dag
+        dag --> splitter
+    end
+    
+    subgraph workers["Parallel Workers"]
+        w1["Worker 1<br/>(worktree)"]
+        w2["Worker 2<br/>(worktree)"]
+        wn["Worker N<br/>(worktree)"]
+    end
+    
+    aggregator["aggregator.js<br/>(merge commits)"]
+    
+    splitter --> w1
+    splitter --> w2
+    splitter --> wn
+    
+    w1 --> aggregator
+    w2 --> aggregator
+    wn --> aggregator
 ```
 
 ## Output Format Example
