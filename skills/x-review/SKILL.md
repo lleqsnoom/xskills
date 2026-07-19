@@ -42,26 +42,12 @@ node <path-to>/save-plan.js --output .x-skills/review/   # create plan file
 
 The complexity script auto-installs tree-sitter if missing (global install). Output is JSON — parse it for function metrics and duplication counts.
 
+For engineering principles definitions and violation patterns, see `references/principles.md`.
+
 ## Related Skills
 
 - **x-refactor** — Focused on automated refactoring suggestions (extract method, rename, polymorphism) without a fix plan workflow. Use when you want analysis only, not an iterative fix process.
 - **x-fix** — Consumes the fix plan output by this skill and resolves issues one-by-one with targeted edits + test verification.
-
-## Principles Checklist
-
-1. **SRP / Small Functions** (highest priority) — Flag functions that are >20 lines, have >3 params, nest deeper than 2 levels, or whose name describes multiple actions (e.g., `processAndSendEmail`).
-2. **SOLID** — Flag classes with >10 methods, inheritance chains >3 levels deep, or concrete class imports where an interface would work better.
-3. **KISS** — Flag unnecessary abstractions (interfaces for one implementation), magic numbers without constants, or conditional logic that should be a lookup table.
-4. **DRY** — Flag duplicated behavior (>5 identical lines), copy-pasted error handling, repeated config patterns. DRY targets duplicated *behavior*, not data.
-
-## Organization Principles
-
-Code must be split across directories by concern, never dumped into a single flat directory. When writing the fix plan or reviewing proposed changes:
-
-- **Identify concerns**: What responsibilities exist? (data models, business logic, I/O, API routes, utilities)
-- **Map to directories**: Each responsibility gets its own folder (`models/`, `services/`, `controllers/`, `utils/`, etc.)
-- **Flag flat structures** as CRITICAL or MAJOR issues — a class file that contains model logic, service logic, and HTTP handling in one place violates SRP at the directory level.
-- **Suggest reorganization**: When reviewing existing code, explicitly call out which files/directories should be created or split to separate concerns.
 
 ## Severity
 
