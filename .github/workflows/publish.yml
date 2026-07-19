@@ -40,62 +40,103 @@ jobs:
         run: |
           find . -path './node_modules' -prune -o \( -name '*.js' -not -path '*/node_modules/*' \) -exec chmod +x {} + 2>/dev/null || true
 
-      # semantic-release handles: version bump in package.json, CHANGELOG.md generation & commit.
-      # We removed @semantic-release/npm to avoid its NPM_TOKEN requirement — OIDC publish is done next step.
-      - name: Semantic Release (version bump + changelog)
-        run: npx --yes semantic-release
+      # Step 1: Determine what bump type the commits warrant (feat→minor, fix→patch, breaking→major)
+      - name: Analyze commits for semver bump type
+        id: bump-type
+        run: |
+          LAST_TAG=$(git tag --list 'v*' | sort -V | tail -1 || echo "")
+          
+          if [ -z "$LAST_TAG" ]; then
+            COMMITS=$(git log --pretty=format:"%s")
+          else
+            COMMITS=$(git log "${LAST_TAG}..HEAD" --pretty=format:"%s")
+          fi
+          
+          # Check commit types using our version-bump logic
+          BUMP_TYPE=$(node -e "
+            const { getReleaseType } = require('./lib/version-bump');
+            const commits = \`$COMMITS\`.split('\n').filter(Boolean);
+            console.log(getReleaseType(commits) || 'none');
+          ")
+          
+          echo "type=$BUMP_TYPE" >> "$GITHUB_OUTPUT"
+          echo "::notice::Commit analysis suggests: $BUMP_TYPE"
 
-      - name: Ensure published version exceeds npm latest
+      # Step 2: Get authoritative latest version from npm (not git tags)
+      - name: Get latest version from npm registry
+        id: npm-latest
         run: |
           PACKAGE_NAME=$(node -p "require('./package.json').name")
-          CURRENT_VERSION=$(node -p "require('./package.json').version")
           LATEST_NPM=$(npm view "$PACKAGE_NAME" version 2>/dev/null || echo "0.0.0")
+          echo "version=$LATEST_NPM" >> "$GITHUB_OUTPUT"
+          echo "::notice::Latest on npm: $LATEST_NPM"
 
-          # Determine what semantic-release would bump based on commits
-          BUMP_TYPE=$(npx --yes --silent semantic-release --dry-run 2>&1 | grep -oP 'release type:\s+\K\w+' || echo "patch")
-
-          IFS='.' read -r CUR_MAJ CUR_MIN CUR_PAT <<< "$CURRENT_VERSION"
-          IFS='.' read -r LAT_MAJ LAT_MIN LAT_PAT <<< "$LATEST_NPM"
-
+      # Step 3: Calculate new version based on npm latest + commit bump type
+      - name: Calculate and apply new version
+        run: |
+          LATEST_NPM="${{ steps.npm-latest.outputs.version }}"
+          BUMP_TYPE="${{ steps.bump-type.outputs.type }}"
+          
+          IFS='.' read -r MAJ MIN PAT <<< "$LATEST_NPM"
+          
           case "$BUMP_TYPE" in
-            major) CUR_MAJ=$((CUR_MAJ + 1)); CUR_MIN=0; CUR_PAT=0 ;;
-            minor) CUR_MIN=$((CUR_MIN + 1)); CUR_PAT=0 ;;
-            patch) CUR_PAT=$((CUR_PAT + 1)) ;;
+            major) MAJ=$((MAJ + 1)); MIN=0; PAT=0 ;;
+            minor) MIN=$((MIN + 1)); PAT=0 ;;
+            patch|none) PAT=$((PAT + 1)) ;;
+            *) PAT=$((PAT + 1)) ;;  # default to patch for unknown types
           esac
+          
+          NEW_VERSION="$MAJ.$MIN.$PAT"
+          
+          node -e "const p=require('./package.json'); p.version='$NEW_VERSION'; require('fs').writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n')"
+          
+          echo "::notice::Bumping from npm $LATEST_NPM → $NEW_VERSION ($BUMP_TYPE)"
 
-          PROPOSED="$CUR_MAJ.$CUR_MIN.$CUR_PAT"
-
-          # If proposed <= latest on npm, bump one more level to exceed it
-          NEEDS_EXTRA=$(node -e "
-            const p = '$PROPOSED'.split('.').map(Number);
-            const l = '$LATEST_NPM'.split('.').map(Number);
-            if (l[0] > p[0] || (l[0] === p[0] && l[1] > p[1]) || (l[0] === p[0] && l[1] === p[1] && l[2] >= p[2])) {
-              console.log('yes');
-            } else {
-              console.log('no');
-            }
-          ")
-
-          if [ "$NEEDS_EXTRA" = "yes" ]; then
-            # Bump to next minor above latest to preserve semver meaning
-            NEW_MINOR=$((LAT_MIN + 1))
-            FINAL="$LAT_MAJ.$NEW_MINOR.0"
-            echo "::warning::Proposed $PROPOSED ≤ npm $LATEST_NPM — bumping to $FINAL"
-
-            node -e "const p=require('./package.json'); p.version='$FINAL'; require('fs').writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n')"
-            sed -i "s/^## \[[^]]*\]/## [$FINAL/" CHANGELOG.md || true
-
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add package.json CHANGELOG.md
-            git commit -m "chore(release): adjusted to v$FINAL to exceed existing npm version"
+      # Step 4: Generate CHANGELOG
+      - name: Generate CHANGELOG entry
+        run: |
+          LAST_TAG=$(git tag --list 'v*' | sort -V | tail -1 || echo "")
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          
+          if [ -z "$LAST_TAG" ]; then
+            COMMITS=$(git log --pretty=format:"* %s (%h)")
+          else
+            COMMITS=$(git log "${LAST_TAG}..HEAD" --pretty=format:"* %s (%h)")
           fi
+          
+          # Create or update CHANGELOG.md
+          if [ ! -f CHANGELOG.md ]; then
+            echo "# Changelog" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+          fi
+          
+          TMPFILE=$(mktemp)
+          echo "## [$NEW_VERSION] - $(date +%Y-%m-%d)" > "$TMPFILE"
+          echo "" >> "$TMPFILE"
+          echo "$COMMITS" >> "$TMPFILE"
+          echo "" >> "$TMPFILE"
+          cat CHANGELOG.md >> "$TMPFILE"
+          mv "$TMPFILE" CHANGELOG.md
 
+      # Step 5: Commit version bump + changelog
+      - name: Commit version bump and changelog
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json CHANGELOG.md
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          git commit -m "chore(release): v$NEW_VERSION"
+
+      # Step 6: Publish to npm with OIDC provenance
       - name: Publish to npmjs with trusted publishing (OIDC provenance)
-        if: success()
         run: |
           npm publish --provenance --access=public
 
+      # Step 7: Create and push git tag
       - name: Create Git tag and push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
