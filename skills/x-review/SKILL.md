@@ -1,12 +1,12 @@
 ---
 name: x-review
-description: Review code against engineering principles — small functions, SOLID, KISS, DRY — with automated AST-based complexity analysis across 10+ languages
+description: Review code against engineering principles — small functions, SOLID, KISS, DRY — with automated AST-based complexity analysis across 30+ languages including Python, C, C++, Java, JavaScript, TypeScript, Go, Rust, Ruby, PHP, Swift, Kotlin, and more
 version: 2.0.0
 author: Community
 tags: [code-review, solid, kiss, dry, single-responsibility, cyclomatic-complexity, code-quality]
 user-invocable: true
 auto-trigger:
-  on-file-pattern: "*.ts,*.tsx,*.js,*.jsx,*.py,*.go,*.java,*.rb,*.rs,*.hx"
+  on-file-pattern: "*.ts,*.tsx,*.js,*.jsx,*.py,*.go,*.java,*.rb,*.rs,*.hx,*.c,*.cpp,*.cs,*.swift,*.kt,*.lua,*.dart,*.scala,*.hs,*.ex,*.erl,*.clj,*.fs,*.zig,*.jl,*.pl,*.r,*.groovy,*.adb"
   not-when:
     - path-matches: "node_modules/**"
     - file-size-above: 5242880  # Skip files > 5MB

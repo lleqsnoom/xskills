@@ -143,7 +143,7 @@ Run `npx xskills list` to see all available skills.
 | `x-implement` | Test-driven implementation — red/green/refactor per task, docs sync, commit via x-commit |
 | `x-migrate` | Framework/dependency migration assistant — breaking changes, upgrade paths, automated fixes |
 | `x-refactor` | Automated refactoring suggestions against SOLID principles with before/after comparisons |
-| `x-review` | Review code against engineering principles with AST-based complexity analysis across 11+ languages (JS, TS, Python, Go, Java, Ruby, Rust, PHP, Bash, C/C++, Haxe) |
+| `x-review` | Review code against engineering principles with AST-based complexity analysis across 30+ languages (Python, C, C++, Java, JS, TS, Go, Rust, Ruby, PHP, Swift, Kotlin, Lua, Dart, Scala, Haskell, Elixir, and more) |
 | `x-rollback` | Automated git revert with multi-step confirmation and impact analysis |
 | `x-test-gen` | Generate test stubs from implementation — happy path, error cases, edge case placeholders |
 
