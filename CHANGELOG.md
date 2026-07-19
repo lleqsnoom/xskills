@@ -1,3 +1,7 @@
+## [5.1.1] - 2026-07-19
+
+* refactor(release): replace semantic-release with npm-registry-driven versioning (97ac55d)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
