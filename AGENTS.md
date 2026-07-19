@@ -12,8 +12,9 @@ The package has **zero dependencies** — it uses only Node.js built-ins (`fs/pr
 
 | Command | Description |
 |---------|-------------|
-| `npm test` | Runs `node bin/install.js list` (lists available skills) |
-| `node bin/install.js list` | Lists all available skills with descriptions |
+| `npm test` | Runs all tests (install, version-bump, etc.) |
+| `npm run release -- --dry-run` | Dry-run semantic-release locally to preview bump type |
+| `node bin/install.js list` | Lists available skills with descriptions |
 | `node bin/install.js install <name>` | Installs a skill into the current project's `.agents/skills/` |
 | `node bin/install.js install <name> --global` | Installs globally to `~/.agents/skills/` |
 | `node bin/install.js <name>` | Shortcut: installs the named skill |
@@ -76,6 +77,41 @@ Independent of the planning pipeline, code quality improvements use a separate f
 | 2. Fix | `x-fix` | Fix plan file | Updated source files with all issues resolved | All `[ ]` → `[x]` in plan |
 
 The review directory is not part of the main planning pipeline but integrates with `x-fix` for iterative quality improvements.
+
+## Release Workflow
+
+Releases are fully automated via [semantic-release](https://github.com/semantic-release/semantic-release) triggered on every push to `main`.
+
+### How it works
+
+1. Push to `main`
+2. GitHub Actions runs semantic-release with OIDC trusted publishing (no NPM_TOKEN needed)
+3. semantic-release analyzes conventional commits since last tag:
+   - `feat:` → **MINOR** bump (`1.0.0` → `1.1.0`)
+   - `fix:`, `perf:` → **PATCH** bump (`1.1.0` → `1.1.1`)
+   - `BREAKING CHANGE:` or `!` suffix → **MAJOR** bump (`1.1.0` → `2.0.0`)
+4. Updates `package.json` version
+5. Generates/updates `CHANGELOG.md`
+6. Commits the changes back to the repo
+7. Publishes to npmjs.org with provenance attestations
+8. Creates a git tag (`v<version>`)
+
+### Commit conventions (Conventional Commits)
+
+| Type | Semver bump |
+|------|-------------|
+| `feat:` | MINOR |
+| `fix:`, `perf:` | PATCH |
+| `BREAKING CHANGE:` in footer, or `!` suffix | MAJOR |
+| `docs:`, `chore:`, `refactor:`, `style:`, `test:`, `ci:` | No release |
+
+### Local dry-run
+
+```bash
+GITHUB_TOKEN=dummy npx semantic-release --dry-run
+```
+
+This analyzes commits and prints what would happen without publishing.
 
 ---
 
@@ -158,7 +194,7 @@ The `description` field is auto-extracted by `listSkills()`. The frontmatter par
 
 6. **The CLI treats unknown commands as skill names** — running `node bin/install.js my-skill` attempts to install it. This is intentional (per README shortcut) but means typos silently install nothing or error with "not found".
 
-7. **No test framework** — the only "test" is `npm test` which just lists skills. There are no unit tests for the install logic.
+7. **`npm test` uses `node:test`** — all tests live in `test/*.test.cjs`. There are unit tests for install logic, version bump mapping, and more.
 
 ---
 
@@ -171,4 +207,6 @@ The `description` field is auto-extracted by `listSkills()`. The frontmatter par
 
 ## Publishing
 
-The package is published via npm. The `files` field in `package.json` ensures only `bin/`, `lib/`, and `skills/` are included (no test files, no `.crush/`).
+The package uses [semantic-release](https://github.com/semantic-release/semantic-release) with OIDC trusted publishing to npmjs.org. No `NPM_TOKEN` secret is required — GitHub Actions uses OIDC tokens for authentication and generates provenance attestations automatically.
+
+Configuration lives in `.releaserc.json`. The CI workflow is at `.github/workflows/publish.yml`.

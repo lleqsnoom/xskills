@@ -1,4 +1,4 @@
-name: Publish to npmjs
+name: Release (semantic-release)
 
 on:
   push:
@@ -9,185 +9,39 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
-  id-token: write
+  contents: write # to create git tags and commit version bumps
+  id-token: write # to enable OIDC trusted publishing & npm provenance
 
 jobs:
-  publish:
+  release:
+    name: Release
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # full history for semantic-release to analyze all past commits
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version: "24"
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests
+      - name: Run tests before release
         run: npm test
 
-      - name: Determine version bump type and compute new version
-        id: bump
-        run: |
-          VERSION=$(node -e "const p=require('./package.json'); console.log(p.version)")
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
-
-          # Find the latest v* tag (handles annotated and lightweight tags)
-          LAST_TAG=""
-          if git tag --list 'v*' | sort -V | tail -1 | grep -q '^v'; then
-            LAST_TAG=$(git tag --list 'v*' | sort -V | tail -1)
-          fi
-
-          if [ -z "$LAST_TAG" ]; then
-            TYPE="minor"
-          else
-            COMMITS=$(git log "${LAST_TAG}..HEAD" --pretty=format:"%s")
-            if echo "$COMMITS" | grep -qE '^feat(\(.+\))?!?:'; then
-              TYPE="major"
-            elif echo "$COMMITS" | grep -qE '^feat(\(.+\)):'; then
-              TYPE="minor"
-            else
-              TYPE="patch"
-            fi
-          fi
-
-          case "$TYPE" in
-            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
-            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
-            patch) PATCH=$((PATCH + 1)) ;;
-          esac
-
-          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
-
-          node -e "const p=require('./package.json'); p.version='$NEW_VERSION'; require('fs').writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n')"
-
-          echo "type=$TYPE" >> "$GITHUB_OUTPUT"
-          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Generate CHANGELOG entry
-        run: |
-          LAST_TAG=""
-          if git tag --list 'v*' | sort -V | tail -1 | grep -q '^v'; then
-            LAST_TAG=$(git tag --list 'v*' | sort -V | tail -1)
-          fi
-
-          if [ -z "$LAST_TAG" ]; then
-            COMMITS=$(git log --pretty=format:"* %s (%h)" HEAD)
-          else
-            COMMITS=$(git log "${LAST_TAG}..HEAD" --pretty=format:"* %s (%h)")
-          fi
-          NEW_VERSION="${{ steps.bump.outputs.new_version }}"
-
-          TMPFILE=$(mktemp)
-          echo "## [$NEW_VERSION] - $(date +%Y-%m-%d)" > "$TMPFILE"
-          echo "" >> "$TMPFILE"
-          if [ -f CHANGELOG.md ]; then
-            grep -v '^\[Unreleased\]' CHANGELOG.md | head -20 >> "$TMPFILE"
-          fi
-          echo "" >> "$TMPFILE"
-          echo "### Added" >> "$TMPFILE"
-          echo "$COMMITS" | head -10 >> "$TMPFILE"
-          mv "$TMPFILE" CHANGELOG.md
-
-      - name: Commit version bump and changelog
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json CHANGELOG.md
-          if git diff --cached --quiet; then
-            echo "No changes to commit (no new commits since last tag)."
-            exit 0
-          fi
-          git commit -m "chore(release): v${{ steps.bump.outputs.new_version }}"
-
-      - name: Ensure all JS entry points have execute permission
+      - name: Ensure JS entry points are executable
         run: |
           find . -path './node_modules' -prune -o \( -name '*.js' -not -path '*/node_modules/*' \) -exec chmod +x {} + 2>/dev/null || true
 
-      - name: Auto-bump version if already published on npm
-        id: autoupdate
-        run: |
-          PACKAGE_NAME=$(node -e "console.log(require('./package.json').name)")
-          CURRENT_VERSION="${{ steps.bump.outputs.new_version }}"
-
-          # Get the highest published version on npm (if any)
-          HIGHEST_PUBLISHED=$(npm view "${PACKAGE_NAME}" version 2>/dev/null || echo "")
-
-          # If a higher version already exists on npm, bump major to surpass it
-          if [ -n "$HIGHEST_PUBLISHED" ]; then
-            # Compare using node (semver-aware)
-            NEEDS_BUMP=$(node -e "
-              const current = '${CURRENT_VERSION}'.split('.').map(Number);
-              const highest = '${HIGHEST_PUBLISHED}'.split('.').map(Number);
-              // If any published version >= current, we need to surpass it
-              if (highest[0] > current[0] ||
-                  (highest[0] === current[0] && highest[1] > current[1]) ||
-                  (highest[0] === current[0] && highest[1] === current[1] && highest[2] >= current[2])) {
-                console.log('yes');
-              } else {
-                console.log('no');
-              }
-            ")
-
-            if [ "$NEEDS_BUMP" = "yes" ]; then
-              IFS='.' read -r MAJOR MINOR PATCH <<< "$HIGHEST_PUBLISHED"
-              MAJOR=$((MAJOR + 1))
-              CURRENT_VERSION="$MAJOR.0.0"
-              echo "::warning::Existing version ${HIGHEST_PUBLISHED} is higher than ${CURRENT_VERSION%.*}.0 — bumping to $CURRENT_VERSION."
-
-              node -e "const p=require('./package.json'); p.version='$CURRENT_VERSION'; require('fs').writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n')"
-            fi
-          fi
-
-          # Keep bumping the patch number until we find a free version on npm
-          while true; do
-            if npm view "${PACKAGE_NAME}@${CURRENT_VERSION}" version >/dev/null 2>&1; then
-              echo "::warning::Version ${CURRENT_VERSION} already exists on npm — auto-bumping."
-              IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
-              PATCH=$((PATCH + 1))
-              CURRENT_VERSION="$MAJOR.$MINOR.$PATCH"
-
-              # Update package.json with bumped version
-              node -e "const p=require('./package.json'); p.version='$CURRENT_VERSION'; require('fs').writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n')"
-            else
-              break
-            fi
-          done
-
-          echo "::notice::Final version to publish: ${PACKAGE_NAME}@${CURRENT_VERSION}"
-          echo "new_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Re-commit bumped changelog if version changed
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json CHANGELOG.md
-          # Update CHANGELOG title to match the final version (in case it was bumped)
-          FINAL="${{ steps.autoupdate.outputs.new_version }}"
-          sed -i "s/^## \[[^]]*\]/## [$FINAL/" CHANGELOG.md || true
-          git diff --cached --quiet || git commit -m "chore(release): auto-bumped to v${{ steps.autoupdate.outputs.new_version }}"
-
-      - name: Publish to npmjs with trusted publishing (OIDC)
-        run: |
-          npm publish --provenance --access=public
-
-      - name: Create Git tag and push
+      - name: Semantic Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="v${{ steps.autoupdate.outputs.new_version }}"
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists locally, skipping."
-          else
-            git tag "$TAG" && git push origin "$TAG"
-          fi
+        run: npx semantic-release
