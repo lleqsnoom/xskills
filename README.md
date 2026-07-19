@@ -4,15 +4,33 @@
   <img src="x-skills.svg" alt="xskills logo" width="300">
 </p>
 
-**Agentic tooling built for local models under 40B. Every skill fits in a 4K context window — lean, fast, and tested against the constraints local developers actually face.** [Read the manifesto →](MANIFESTO.md)
+<p align="center">
+  <a href="https://www.npmjs.com/package/@lleqsnoom/x-skills"><img src="https://img.shields.io/npm/dm/@lleqsnoom/x-skills" alt="npm monthly downloads"></a>
+  <a href="https://github.com/lleqsnoom/xskills/stargazers"><img src="https://img.shields.io/github/stars/lleqsnoom/xskills?style=social" alt="GitHub stars"></a>
+  <a href="https://www.npmjs.com/package/@lleqsnoom/x-skills"><img src="https://img.shields.io/npm/v/@lleqsnoom/x-skills" alt="npm version"></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D18-blue" alt="Node.js >= 18"></a>
+</p>
 
-Cross-CLI agentic skills installer. Install once, use with **45+ compatible AI coding tools**.
+**Stop writing different instructions for every AI coding tool.** xskills gives you reusable, specialized workflows that work across **45+ AI coding CLIs** — Claude Code, Gemini CLI, Cursor, Aider, and more. One format, install once, use everywhere.
 
-## What is this?
+Agentic tooling built for local models under 40B. Every skill fits in a 4K context window — lean, fast, and tested against the constraints real developers face daily. [Read the manifesto →](MANIFESTO.md)
 
-Skills are the [Agent Skills open standard](https://agentskills.io) — a folder with a `SKILL.md` file (YAML frontmatter + Markdown instructions) plus optional `scripts/`, `references/`, and `assets/` subdirectories. They give AI coding agents specialized knowledge and workflows.
+## Why xskills?
 
-**One format, all CLIs.** No adapters needed.
+You're using AI coding tools — maybe Claude Code for complex refactors, Gemini CLI for quick questions, Cursor for inline edits. But each tool needs different instructions, different prompt formats, different setup.
+
+**xskills solves that.** It's a collection of reusable "skills" following the [Agent Skills open standard](https://agentskills.io) — folders with specialized knowledge and workflows that any compatible CLI can use.
+
+- **One format across all CLIs** — no adapters, no rewriting for each tool
+- **15 production-ready skills** — commit conventions, debugging, code review, API design, task decomposition, and more
+- **Zero dependencies** — pure Node.js built-ins, nothing else
+- **Built for local models** — every skill fits in a 4K context window
+
+### The problem it solves
+
+Without xskills: Write custom instructions for Claude Code. Rewrite them for Gemini CLI. Adapt again for Cursor. Maintain three copies.
+
+With xskills: Install once. Every compatible CLI discovers and uses the same skills automatically.
 
 ## Supported CLIs
 
