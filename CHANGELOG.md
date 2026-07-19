@@ -1,3 +1,14 @@
+## [5.1.2] - 2026-07-19
+
+* Merge pull request #21 from lleqsnoom/feat/ponytail-inspired-optimization (1d38e6f)
+* docs: convert dispatch architecture diagram from ASCII to Mermaid (6da4149)
+* refactor: reduce x-dispatch skill size with architecture reference (3f6c016)
+* refactor: reduce x-implement skill size to 40 lines with references (da5ac96)
+* refactor: reduce x-decompose skill size to 50 lines (9da6312)
+* refactor: reduce x-epic skill size by removing redundant sections (6c6b33c)
+* refactor: reduce x-design skill size by moving example to reference (c4452d3)
+* docs: add shared pipeline rules file for all workflow skills (0d107e6)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
