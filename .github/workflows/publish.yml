@@ -45,6 +45,52 @@ jobs:
       - name: Semantic Release (version bump + changelog)
         run: npx --yes semantic-release
 
+      - name: Ensure published version exceeds npm latest
+        run: |
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          LATEST_NPM=$(npm view "$PACKAGE_NAME" version 2>/dev/null || echo "0.0.0")
+
+          # Determine what semantic-release would bump based on commits
+          BUMP_TYPE=$(npx --yes --silent semantic-release --dry-run 2>&1 | grep -oP 'release type:\s+\K\w+' || echo "patch")
+
+          IFS='.' read -r CUR_MAJ CUR_MIN CUR_PAT <<< "$CURRENT_VERSION"
+          IFS='.' read -r LAT_MAJ LAT_MIN LAT_PAT <<< "$LATEST_NPM"
+
+          case "$BUMP_TYPE" in
+            major) CUR_MAJ=$((CUR_MAJ + 1)); CUR_MIN=0; CUR_PAT=0 ;;
+            minor) CUR_MIN=$((CUR_MIN + 1)); CUR_PAT=0 ;;
+            patch) CUR_PAT=$((CUR_PAT + 1)) ;;
+          esac
+
+          PROPOSED="$CUR_MAJ.$CUR_MIN.$CUR_PAT"
+
+          # If proposed <= latest on npm, bump one more level to exceed it
+          NEEDS_EXTRA=$(node -e "
+            const p = '$PROPOSED'.split('.').map(Number);
+            const l = '$LATEST_NPM'.split('.').map(Number);
+            if (l[0] > p[0] || (l[0] === p[0] && l[1] > p[1]) || (l[0] === p[0] && l[1] === p[1] && l[2] >= p[2])) {
+              console.log('yes');
+            } else {
+              console.log('no');
+            }
+          ")
+
+          if [ "$NEEDS_EXTRA" = "yes" ]; then
+            # Bump to next minor above latest to preserve semver meaning
+            NEW_MINOR=$((LAT_MIN + 1))
+            FINAL="$LAT_MAJ.$NEW_MINOR.0"
+            echo "::warning::Proposed $PROPOSED ≤ npm $LATEST_NPM — bumping to $FINAL"
+
+            node -e "const p=require('./package.json'); p.version='$FINAL'; require('fs').writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n')"
+            sed -i "s/^## \[[^]]*\]/## [$FINAL/" CHANGELOG.md || true
+
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add package.json CHANGELOG.md
+            git commit -m "chore(release): adjusted to v$FINAL to exceed existing npm version"
+          fi
+
       - name: Publish to npmjs with trusted publishing (OIDC provenance)
         if: success()
         run: |
