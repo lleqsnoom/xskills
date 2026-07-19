@@ -226,21 +226,120 @@ try {
 // ── Language grammar discovery ─────────────────────────────────────
 
 const EXTENSION_MAP = {
+  // JavaScript ecosystem (TIOBE #6, #47)
   ".js": "javascript",
   ".jsx": "javascript",
   ".mjs": "javascript",
   ".cjs": "javascript",
   ".ts": "typescript",
   ".tsx": "typescript",
+  
+  // Python (TIOBE #1)
   ".py": "python",
-  ".go": "go",
-  ".rs": "rust",
+  
+  // C family (TIOBE #2, #3, #5)
+  ".c": "c",
+  ".h": "c",
+  ".cpp": "cpp",
+  ".cc": "cpp",
+  ".cxx": "cpp",
+  ".hpp": "cpp",
+  ".cs": "c_sharp",
+  
+  // Java (TIOBE #4)
   ".java": "java",
+  
+  // Go (TIOBE #13)
+  ".go": "go",
+  
+  // Rust (TIOBE #10)
+  ".rs": "rust",
+  
+  // Ruby (TIOBE #20)
   ".rb": "ruby",
+  
+  // PHP (TIOBE #14)
   ".php": "php",
+  
+  // Shell scripting (TIOBE #56-61)
   ".sh": "bash",
   ".bash": "bash",
   ".zsh": "bash",
+  
+  // Haxe
+  ".hx": "haxe",
+  
+  // Swift (TIOBE #15)
+  ".swift": "swift",
+  
+  // Kotlin (TIOBE #28)
+  ".kt": "kotlin",
+  ".kts": "kotlin",
+  
+  // Lua (TIOBE #34)
+  ".lua": "lua",
+  
+  // Dart (TIOBE #32)
+  ".dart": "dart",
+  
+  // Scala (TIOBE #49)
+  ".scala": "scala",
+  
+  // Haskell (TIOBE #46)
+  ".hs": "haskell",
+  
+  // Elixir (TIOBE #68)
+  ".ex": "elixir",
+  ".exs": "elixir",
+  
+  // Erlang (TIOBE #69)
+  ".erl": "erlang",
+  ".hrl": "erlang",
+  
+  // Clojure (TIOBE #64)
+  ".clj": "clojure",
+  ".cljs": "clojure",
+  
+  // F# (TIOBE #70)
+  ".fs": "fsharp",
+  ".fsx": "fsharp",
+  
+  // Zig (TIOBE #48)
+  ".zig": "zig",
+  
+  // Julia (TIOBE #27)
+  ".jl": "julia",
+  
+  // Objective-C (TIOBE #30) - note: .m conflicts with MATLAB
+  ".mm": "objc",
+  
+  // Perl (TIOBE #22)
+  ".pl": "perl",
+  ".pm": "perl",
+  
+  // R (TIOBE #9)
+  ".r": "r",
+  ".R": "r",
+  
+  // MATLAB (TIOBE #18) - use .matlab extension to avoid .m conflict with ObjC
+  ".matlab": "matlab",
+  
+  // Fortran (TIOBE #19)
+  ".f": "fortran",
+  ".f90": "fortran",
+  ".f95": "fortran",
+  
+  // COBOL (TIOBE #23)
+  ".cob": "cobol",
+  ".cbl": "cobol",
+  
+  // Ada (TIOBE #16)
+  ".adb": "ada",
+  ".ads": "ada",
+  
+  // Groovy (TIOBE #73)
+  ".groovy": "groovy",
+  ".gradle": "groovy",
 };
 
 function findWasmFile(langName) {
@@ -397,9 +496,9 @@ async function extractFunctionsTS(source, langName) {
   if (!parser) return [];
 
   const FUNCTION_NODE_TYPES = [
-    "function_declaration",   // JS, TS, Go, Java, PHP, C-family
+    "function_declaration",   // JS, TS, Go, Java, PHP, C-family, Haxe
     "function_definition",     // Python, Ruby (some grammars)
-    "method_declaration",      // Java, C-family
+    "method_declaration",      // Java, C-family, Haxe
     "method_definition",       // JS, TS
     "arrow_function",          // JS, TS
   ];
