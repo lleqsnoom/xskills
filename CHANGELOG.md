@@ -1,3 +1,9 @@
+## [5.3.0] - 2026-07-20
+
+* Merge pull request #26 from lleqsnoom/fix/x-debug-mandatory-initialization (765c63f)
+* feat(mcp-server): add resource list and read capability for skill SKILL.md files (74bf742)
+* fix(x-debug): mandate analyze.js initialization before any debugging work (f7e878d)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
