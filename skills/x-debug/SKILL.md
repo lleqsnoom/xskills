@@ -1,49 +1,52 @@
 ---
 name: x-debug
-description: Structured debugging workflow — hypothesis formation, evidence collection, elimination testing, and root cause declaration with session logging
+description: Evidence-based debugging — reproduce, hypothesize, fix root cause, verify
 version: 1.0.0
 author: Community
-tags: [debugging, hypothesis, root-cause, error-analysis, stack-trace, elimination]
+tags: [debugging, root-cause, reproduction, verification]
 user-invocable: true
 ---
 
-# X-Debug — Structured Debugging Workflow
+# X-Debug — Reproduce → Hypothesize → Fix → Verify
 
-Replaces "shotgun debugging" with evidence-based root cause analysis using a systematic hypothesis → test → verdict methodology.
+Never silence errors. Always fix the root cause and verify it's resolved.
 
-## Scripts
-
-All scripts self-resolve via `__dirname` — run from any working directory:
+## Usage
 
 ```bash
-# Analyze error/stack trace and generate hypotheses
 node <path-to>/analyze.js --error "TypeError: Cannot read property 'foo' of undefined" [--file src/main.js]
-
-# Run with full context (auto-detects project)
-node <path-to>/analyze.js --context .
+node <path-to>/analyze.js --context . [--session-id my-session]
+node <path-to>/analyze.js --no-reproduce --error "..."  # skip auto-reproduction
 ```
 
-**Auto-discovery**: Scripts resolve config and sibling scripts relative to `__dirname`, so they work whether installed globally (`~/.agents/skills/x-debug/scripts/`) or locally (`.agents/skills/<project>/x-debug/scripts/`).
+**Output**: Debug session in `.x-skills/debug/`, fix plan in `.x-skills/review/`.
 
-**Output**: The script creates two files:
-1. **Debug session** in `.x-skills/debug/` — detailed hypothesis testing workflow
-2. **Fix plan** in `.x-skills/review/` — actionable issues ready for `x-fix` consumption
+## Workflow (4 Steps)
+
+### 1. Reproduce Locally
+`analyze.js` generates `repro-*.js` for known error patterns. Run it to confirm the error triggers locally. If auto-reproduction fails, write one manually — never proceed without it.
+
+### 2. Hypothesize & Test
+The script lists hypotheses ranked by likelihood. For each, run the proposed test and mark `[ ]` → `[x] Confirmed` or `[ ] Rejected` in `.x-skills/debug/`. Eliminate until one cause remains.
+
+### 3. Fix Root Cause (NOT Silence)
+Apply a targeted fix that eliminates the error condition:
+- **DO** ensure the error can no longer occur
+- **DO NOT** add try/catch wrappers that swallow errors silently
+- **DO NOT** disable error reporting or set `process.exit(0)` on failure paths
+- **DO NOT** use `console.error` as a substitute for fixing
+
+### 4. Verify
+Run `.x-skills/debug/verify-*.js` after applying the fix. Issue is NOT resolved until verification exits 0. If it fails, go back to Step 2.
 
 ## Related Skills
 
-- **x-fix** — After identifying the root cause through debugging, use `x-fix` to systematically resolve the identified issues with targeted edits and test verification.
-- **x-review** — For static code quality issues (complexity, SOLID violations) that don't manifest as runtime errors. Use when the problem is structural rather than behavioral.
-
-## Debugging Workflow
-
-1. **Hypothesis formation** — gather facts, list possible causes ranked by likelihood
-2. **Test design** — create minimal reproduction case and elimination tests
-3. **Evidence collection** — log results with pass/fail verdicts
-4. **Root cause declaration** — document final verdict with evidence chain
+- **x-fix** — Reads fix plans from `.x-skills/review/` and applies fixes with verification
+- **x-review** — Static code quality analysis (complexity, SOLID violations), not runtime errors
 
 ## Definition of Done
 
-- [ ] SKILL.md exists with YAML frontmatter and debugging workflow documented
-- [ ] `scripts/analyze.js` generates structured debug session files in `.x-skills/debug/`
-- [ ] Hypothesis testing produces pass/fail verdicts with evidence logging
-- [ ] Final report includes root cause and recommended fix
+- [ ] Reproduction script triggers the same error locally
+- [ ] Root cause identified through hypothesis elimination
+- [ ] Fix applied (not silenced)
+- [ ] Verification script passes (exit 0)
