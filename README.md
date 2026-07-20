@@ -134,12 +134,12 @@ Run `npx xskills list` to see all available skills.
 | `x-api-draft` | Draft API design from requirements — clarify scope, analyze endpoints and data models |
 | `x-api-swagger` | Convert an API design draft to OpenAPI YAML spec with endpoints, schemas, and auth |
 | `x-commit` | Write single-line conventional commit messages with automated type suggestion and validation |
-| `x-debug` | Structured debugging — hypothesis formation, evidence collection, root cause declaration |
+| `x-debug` | Structured debugging — hypothesis formation, evidence collection, root cause declaration with fix plan export |
 | `x-decompose` | Decompose epic into atomic tasks ≤8h each with DOD, test plan, effort estimate |
 | `x-design` | Spec-driven design — clarify goals, propose approaches with trade-offs, gate on approval |
 | `x-dispatch` | Parallel subagent task dispatcher via git worktrees with dependency management |
 | `x-epic` | Convert approved spec into INVEST-gated user stories and epic-level DOD |
-| `x-fix` | Resolve code review issues one-by-one from a fix plan file until complete |
+| `x-fix` | Resolve identified issues one-by-one from a fix plan file until complete |
 | `x-implement` | Test-driven implementation — red/green/refactor per task, docs sync, commit via x-commit |
 | `x-migrate` | Framework/dependency migration assistant — breaking changes, upgrade paths, automated fixes |
 | `x-refactor` | Automated refactoring suggestions against SOLID principles with before/after comparisons |

@@ -198,24 +198,6 @@ function findMatchingPatterns(errorText) {
   return matches;
 }
 
-function analyzeCodeForContext(filePath) {
-  let source = null;
-  try {
-    source = fs.readFileSync(filePath, "utf-8");
-  } catch (err) {
-    return null;
-  }
-
-  const context = {
-    hasTryCatch: /try\s*\{/.test(source),
-    hasAsyncAwait: /\basync\b|\bawait\b/.test(source),
-    hasConsoleLog: /console\.log/.test(source),
-    functionCount: (source.match(/\bfunction\s+\w+/g) || []).length,
-  };
-
-  return context;
-}
-
 // ── Report Generation ────────────────────────────────────────────────
 
 function generateDebugSession(errorText, matches, targetFile, sessionId) {
