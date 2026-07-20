@@ -282,12 +282,13 @@ function exportToFixPlan(errorText, matches, targetFile, sessionId, rootCauseCon
   }
   planContent += `\n---\n\n`;
 
+  let hypothesisCount = 0;
+  let issueCount = 0;
   if (!rootCauseConfirmed) {
     // Initial hypotheses phase - not ready for x-fix yet
     planContent += `## Phase 1: Hypothesis Testing Required\n\n`;
     planContent += `_Complete hypothesis testing in the debug session before running x-fix._\n\n`;
     
-    let hypothesisCount = 0;
     for (const match of matches) {
       for (let i = 0; i < match.hypotheses.length; i++) {
         const h = match.hypotheses[i];
