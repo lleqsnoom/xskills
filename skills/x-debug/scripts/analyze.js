@@ -198,24 +198,6 @@ function findMatchingPatterns(errorText) {
   return matches;
 }
 
-function analyzeCodeForContext(filePath) {
-  let source = null;
-  try {
-    source = fs.readFileSync(filePath, "utf-8");
-  } catch (err) {
-    return null;
-  }
-
-  const context = {
-    hasTryCatch: /try\s*\{/.test(source),
-    hasAsyncAwait: /\basync\b|\bawait\b/.test(source),
-    hasConsoleLog: /console\.log/.test(source),
-    functionCount: (source.match(/\bfunction\s+\w+/g) || []).length,
-  };
-
-  return context;
-}
-
 // ── Report Generation ────────────────────────────────────────────────
 
 function generateDebugSession(errorText, matches, targetFile, sessionId) {
@@ -280,6 +262,77 @@ function generateDebugSession(errorText, matches, targetFile, sessionId) {
   };
 }
 
+// ── Export to Fix Plan Format ────────────────────────────────────────
+
+function exportToFixPlan(errorText, matches, targetFile, sessionId, rootCauseConfirmed = false) {
+  const reviewDir = path.join(process.cwd(), ".x-skills", "review");
+  fs.mkdirSync(reviewDir, { recursive: true });
+
+  const timestamp = new Date();
+  const dateStr = `${String(timestamp.getDate()).padStart(2, '0')}-${String(timestamp.getMonth() + 1).padStart(2, '0')}-${timestamp.getFullYear()}-${String(timestamp.getHours()).padStart(2, '0')}:${String(timestamp.getMinutes()).padStart(2, '0')}`;
+  const fileName = `debug-${sessionId || dateStr.replace(/[:\s]/g, '-')}.md`;
+  const filePath = path.join(reviewDir, fileName);
+
+  let planContent = `# Debug Session — Fix Plan\n\n`;
+  planContent += `**Date:** ${dateStr}\n`;
+  planContent += `**Source:** x-debug session\n`;
+  planContent += `**Error:** \`${errorText}\`\n`;
+  if (targetFile) {
+    planContent += `**Target File:** ${path.relative(process.cwd(), targetFile)}\n`;
+  }
+  planContent += `\n---\n\n`;
+
+  if (!rootCauseConfirmed) {
+    // Initial hypotheses phase - not ready for x-fix yet
+    planContent += `## Phase 1: Hypothesis Testing Required\n\n`;
+    planContent += `_Complete hypothesis testing in the debug session before running x-fix._\n\n`;
+    
+    let hypothesisCount = 0;
+    for (const match of matches) {
+      for (let i = 0; i < match.hypotheses.length; i++) {
+        const h = match.hypotheses[i];
+        hypothesisCount++;
+        
+        planContent += `### [${match.category.toUpperCase()}] — ${h.cause}\n\n`;
+        planContent += `- [ ] **Hypothesis ID:** ${h.id} (likelihood: ${(h.likelihood * 100).toFixed(0)}%)\n`;
+        planContent += `  - **Test Code:**\n    \`\`\`javascript\n    ${h.test.split('\n').join('\n    ')}\n    \`\`\`\n`;
+        planContent += `  - **Expected Result:** ${h.expectedIfTrue}\n\n`;
+      }
+    }
+
+    planContent += `\n## Next Steps\n\n`;
+    planContent += `1. Run each test above to confirm/reject hypotheses\n`;
+    planContent += `2. Once root cause is identified, re-run x-debug with --session-id to update this plan\n`;
+    planContent += `3. Then run \`x-fix\` to systematically resolve the confirmed issue\n`;
+  } else {
+    // Root cause confirmed - create actionable fix items
+    planContent += `## Confirmed Root Cause\n\n`;
+    
+    let issueCount = 0;
+    for (const match of matches) {
+      // Only include the confirmed hypothesis
+      const confirmedHypothesis = match.hypotheses.find(h => h.confirmed);
+      if (!confirmedHypothesis) continue;
+      
+      issueCount++;
+      planContent += `## [${match.category.toUpperCase()}] — ${confirmedHypothesis.cause}\n\n`;
+      planContent += `- [ ] **Severity:** CRITICAL\n`;
+      planContent += `  - **Location:** ${targetFile ? path.relative(process.cwd(), targetFile) : 'Unknown'}\n`;
+      planContent += `  - **Root Cause:** ${confirmedHypothesis.cause}\n`;
+      planContent += `  - **Recommended Fix:**\n    \`\`\`javascript\n    ${confirmedHypothesis.recommendedFix || '// Implement fix based on confirmed root cause'}\n    \`\`\`\n\n`;
+      planContent += `---\n\n`;
+    }
+
+    planContent += `## Summary\n\n`;
+    planContent += `**Total issues:** ${issueCount}\n`;
+    planContent += `**Status:** 0/${issueCount} resolved | Run \`x-fix\` to systematically resolve.\n`;
+  }
+
+  fs.writeFileSync(filePath, planContent);
+  
+  return { filePath, issueCount: rootCauseConfirmed ? issueCount : hypothesisCount };
+}
+
 // ── Main ──────────────────────────────────────────────────────────────
 
 function main() {
@@ -311,15 +364,28 @@ function main() {
   // Generate debug session report
   const result = generateDebugSession(errorText, matches, targetResolved, sessionId);
 
+  // Export to fix plan format for x-fix consumption (initial hypotheses phase)
+  const fixPlanResult = exportToFixPlan(errorText, matches, targetResolved, sessionId, false);
+
   // Output JSON to stdout
-  console.log(JSON.stringify(result, null, 2));
+  console.log(JSON.stringify({
+    ...result,
+    fixPlanPath: fixPlanResult.filePath,
+    fixPlanIssues: fixPlanResult.issueCount,
+    rootCauseConfirmed: false,
+  }, null, 2));
 
   // Output summary to stderr
   process.stderr.write(`\nDebug session created: ${result.reportPath}\n`);
+  process.stderr.write(`Fix plan exported: ${fixPlanResult.filePath}\n`);
   process.stderr.write(`Matches found: ${matches.length} categories\n`);
   for (const m of result.matches) {
     process.stderr.write(`  - ${m.category}: ${m.hypothesesCount} hypotheses\n`);
   }
+  process.stderr.write(`\nNext steps:\n`);
+  process.stderr.write(`1. Run each test in the debug session to confirm/reject hypotheses\n`);
+  process.stderr.write(`2. Once root cause is confirmed, re-run with --confirmed flag to generate actionable fix plan\n`);
+  process.stderr.write(`3. Then run \`x-fix\` to systematically resolve the confirmed issue\n`);
 
   process.exit(0);
 }

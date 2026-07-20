@@ -13,8 +13,8 @@ Analyzes source code and suggests specific refactorings based on SOLID principle
 
 ## Related Skills
 
-- **x-review** — Comprehensive code review that produces a fix plan file for iterative resolution via `x-fix`. Use when you need a structured quality improvement workflow with tracking.
-- This skill (`x-refactor`) is analysis-only — it outputs JSON/markdown suggestions but does not create fix plans or track resolution progress.
+- **x-review** — Comprehensive code review that analyzes complexity, duplication, and engineering principles. Use `x-review` first to generate metrics, then use this skill for specific refactoring suggestions.
+- This skill (`x-refactor`) is analysis-only — it outputs JSON/markdown suggestions but does not apply changes automatically.
 
 ## Scripts
 

@@ -46,8 +46,8 @@ For engineering principles definitions and violation patterns, see `references/p
 
 ## Related Skills
 
-- **x-refactor** — Focused on automated refactoring suggestions (extract method, rename, polymorphism) without a fix plan workflow. Use when you want analysis only, not an iterative fix process.
-- **x-fix** — Consumes the fix plan output by this skill and resolves issues one-by-one with targeted edits + test verification.
+- **x-refactor** — Use after reviewing this plan to get automated refactoring suggestions (extract method, rename variables, replace conditionals). Run `x-refactor` on flagged files for before/after comparisons. Note: `x-refactor` provides analysis only; apply changes manually based on its suggestions.
+- **x-debug** — For runtime errors or behavioral issues that require hypothesis-driven investigation rather than static code analysis.
 
 ## Severity
 
@@ -90,7 +90,7 @@ The script prints the full path. Write your review content into that file using 
 ## Summary
 
 **Total issues:** N (**critical:** N, **major:** N, **minor:** N)
-**Status:** 0/N resolved | Run `x-fix` to start resolving.
+**Status:** 0/N resolved | Review issues manually or run `x-refactor <file>` for automated suggestions.
 ```
 
-Toggle checkboxes `[ ]` → `[x]` as each issue is resolved by x-fix.
+Apply fixes manually based on review findings. Track progress by updating checkboxes `[ ]` → `[x]`.
