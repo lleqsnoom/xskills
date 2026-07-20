@@ -82,10 +82,11 @@ Independent of the planning pipeline, code quality improvements use two separate
 
 | Phase | Skill | Input | Output | Gate |
 |-------|-------|-------|--------|------|
-| 1. Debug | `x-debug` | Error message or stack trace | `.x-skills/debug/` session + `.x-skills/review/` fix plan with hypotheses | User tests hypotheses |
-| 2. Fix | `x-fix` | Fix plan from x-debug or manual creation | Updated source files with all issues resolved | All `[ ]` → `[x]` in plan |
+| 1. Reproduce | `x-debug` | Error message or stack trace | `.x-skills/debug/repro-*.js`, `.x-skills/debug/verify-*.js` | Reproduction triggers the same error locally |
+| 2. Hypothesize | `x-debug` | Debug session + reproduction results | `.x-skills/debug/` session with pass/fail verdicts | Root cause identified, hypotheses eliminated |
+| 3. Fix root cause | `x-fix` | Fix plan from x-debug | Updated source files | Verification script PASSES (exit 0) |
 
-The review directory serves both workflows: `x-review` creates static analysis plans, while `x-debug` exports runtime error hypotheses as fix plans for `x-fix`.
+The review directory serves both workflows: `x-review` creates static analysis plans, while `x-debug` exports runtime error hypotheses as fix plans for `x-fix`. **Critical rule:** never silence errors — always fix the root cause and verify with reproduction.
 
 ## Release Workflow
 
