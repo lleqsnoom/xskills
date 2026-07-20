@@ -67,16 +67,25 @@ The planning workflow follows a three-phase handoff chain:
 
 After task approval → `x-implement` executes tasks sequentially or in parallel groups.
 
-### Code Review Workflow (Optional)
+### Code Review & Debugging Workflows (Optional)
 
-Independent of the planning pipeline, code quality improvements use a separate flow:
+Independent of the planning pipeline, code quality improvements use two separate flows:
+
+**Static Analysis Flow:**
 
 | Phase | Skill | Input | Output | Gate |
 |-------|-------|-------|--------|------|
-| 1. Analyze | `x-review` | Source code or project path | `.x-skills/review/DD-MM-YYYY-hh:mm.md` (fix plan) | User reviews issues |
-| 2. Fix | `x-fix` | Fix plan file | Updated source files with all issues resolved | All `[ ]` → `[x]` in plan |
+| 1. Analyze | `x-review` | Source code or project path | `.x-skills/review/DD-MM-YYYY-hh:mm.md` (review plan with complexity/duplication metrics) | User reviews issues |
+| 2. Refactor | `x-refactor` | Review findings | JSON/markdown refactoring suggestions (extract method, rename, polymorphism) | User applies changes manually |
 
-The review directory is not part of the main planning pipeline but integrates with `x-fix` for iterative quality improvements.
+**Debugging Flow:**
+
+| Phase | Skill | Input | Output | Gate |
+|-------|-------|-------|--------|------|
+| 1. Debug | `x-debug` | Error message or stack trace | `.x-skills/debug/` session + `.x-skills/review/` fix plan with hypotheses | User tests hypotheses |
+| 2. Fix | `x-fix` | Fix plan from x-debug or manual creation | Updated source files with all issues resolved | All `[ ]` → `[x]` in plan |
+
+The review directory serves both workflows: `x-review` creates static analysis plans, while `x-debug` exports runtime error hypotheses as fix plans for `x-fix`.
 
 ## Release Workflow
 

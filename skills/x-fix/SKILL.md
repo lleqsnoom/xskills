@@ -1,13 +1,19 @@
 ---
 name: x-fix
-description: Resolve code review issues one-by-one from a fix plan under `.x-skills/review/` — read, edit, mark complete, repeat until done
+description: Resolve identified issues one-by-one from a fix plan under `.x-skills/review/` — read, edit, mark complete, repeat until done
 version: 1.0.0
 author: Community
-tags: [code-review, automated-fix, code-quality, refactoring]
+tags: [code-quality, automated-fix, debugging, refactoring]
 user-invocable: true
 ---
 
-# X-Fix — Resolve Review Issues Iteratively
+# X-Fix — Resolve Identified Issues Iteratively
+
+**Prerequisites:** This skill expects a fix plan from:
+- **x-debug** — After root cause is confirmed through hypothesis testing, with specific code locations and recommended fixes exported to `.x-skills/review/`
+- Manual creation of `.x-skills/review/` plan files following the format below
+
+**Note:** `x-review` → `x-refactor` produces analysis-only suggestions without fix plans. Use manual editing or create a fix plan if you want `x-fix` to track resolution.
 
 **What To Do:** When invoked, immediately execute this workflow. Do not ask the user what to do.
 

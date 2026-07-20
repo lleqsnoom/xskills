@@ -25,6 +25,15 @@ node <path-to>/analyze.js --context .
 
 **Auto-discovery**: Scripts resolve config and sibling scripts relative to `__dirname`, so they work whether installed globally (`~/.agents/skills/x-debug/scripts/`) or locally (`.agents/skills/<project>/x-debug/scripts/`).
 
+**Output**: The script creates two files:
+1. **Debug session** in `.x-skills/debug/` — detailed hypothesis testing workflow
+2. **Fix plan** in `.x-skills/review/` — actionable issues ready for `x-fix` consumption
+
+## Related Skills
+
+- **x-fix** — After identifying the root cause through debugging, use `x-fix` to systematically resolve the identified issues with targeted edits and test verification.
+- **x-review** — For static code quality issues (complexity, SOLID violations) that don't manifest as runtime errors. Use when the problem is structural rather than behavioral.
+
 ## Debugging Workflow
 
 1. **Hypothesis formation** — gather facts, list possible causes ranked by likelihood
