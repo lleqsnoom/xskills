@@ -11,6 +11,20 @@ user-invocable: true
 
 Never silence errors. Always fix the root cause and verify it's resolved.
 
+## Critical: Run analyze.js First (Always)
+
+**Before any analysis, hypothesis testing, or fixing begins**, execute `analyze.js` with the user's bug description as the error text:
+
+```bash
+node <path-to>/analyze.js --error "<user's bug description>" --context .
+```
+
+This creates:
+- `.x-skills/debug/<session-id>.md` — debug session doc (required for x-fix handoff)
+- `.x-skills/review/debug-*.md` — fix plan (required input for x-fix skill)
+
+**Never skip this step.** It is required even for behavioral bugs with no stack trace (e.g., "SSE event not triggered", "wrong value displayed"). analyze.js will create empty hypothesis lists in that case, but the docs MUST exist before any further work.
+
 ## Usage
 
 ```bash
@@ -22,6 +36,9 @@ node <path-to>/analyze.js --no-reproduce --error "..."  # skip auto-reproduction
 **Output**: Debug session in `.x-skills/debug/`, fix plan in `.x-skills/review/`.
 
 ## Workflow (4 Steps)
+
+### 0. Initialize — Run analyze.js
+Execute `analyze.js` with the bug description. This is mandatory and must complete before Step 1. The generated docs are the handoff contract for x-fix later. If auto-reproduction fails, write one manually — never proceed without it.
 
 ### 1. Reproduce Locally
 `analyze.js` generates `repro-*.js` for known error patterns. Run it to confirm the error triggers locally. If auto-reproduction fails, write one manually — never proceed without it.
