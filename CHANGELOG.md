@@ -1,3 +1,8 @@
+## [5.2.3] - 2026-07-20
+
+* Merge pull request #25 from lleqsnoom/feat/x-debug-root-cause-improvements (3f0deec)
+* fix(x-debug): add local reproduction and verification to enforce root cause fixes (e71102e)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
