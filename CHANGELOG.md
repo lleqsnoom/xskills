@@ -1,3 +1,9 @@
+## [5.2.1] - 2026-07-20
+
+* Merge pull request #23 from lleqsnoom/fix/skill-flow-correction (30f0660)
+* fix: remove unused function and update skill descriptions (fceb16b)
+* fix: correct skill flow and align with best practices (148c470)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
