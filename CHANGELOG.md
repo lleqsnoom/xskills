@@ -1,3 +1,9 @@
+## [5.2.2] - 2026-07-20
+
+* Merge pull request #24 from lleqsnoom/fix/skill-flow-correction (6baf271)
+* test: add scoping tests for exportToFixPlan variables (893c7d3)
+* fix: move hypothesisCount and issueCount to function scope in x-debug analyze.js (cd8efd2)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
