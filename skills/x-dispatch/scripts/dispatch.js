@@ -6,12 +6,11 @@
  * and dispatches parallel workers via git worktrees.
  */
 
-import { readdir, readFile, writeFile, mkdir, rm, cp } from 'node:fs/promises';
+import { readdir, readFile, writeFile, mkdir, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
-import { spawn } from 'node:child_process';
+import { execSync } from 'node:child_process';
 
-const __dirname = import.meta.dirname;
 const CWD = process.cwd();
 
 // Configuration
@@ -97,59 +96,9 @@ function parseTask(filename, content) {
 }
 
 /**
- * Build dependency DAG and compute waves
- */
-function buildWaves(tasks) {
-  const taskMap = new Map(tasks.map(t => [t.id, t]));
-  
-  // Compute in-degree (number of unresolved dependencies)
-  const inDegree = new Map();
-  for (const task of tasks) {
-    // Filter to only valid task IDs
-    const validDeps = task.dependsOn.filter(id => taskMap.has(id));
-    inDegree.set(task.id, validDeps.length);
-  }
-  
-  const waves = [];
-  let remaining = [...tasks];
-  
-  while (remaining.length > 0) {
-    // Find all tasks with no pending dependencies
-    const waveTasks = remaining.filter(t => {
-      const deps = t.dependsOn.filter(id => taskMap.has(id));
-      return deps.every(depId => {
-        const depTask = taskMap.get(depId);
-        return depTask.status === 'completed';
-      });
-    }).slice(0, PARALLEL_LIMIT);
-    
-    if (waveTasks.length === 0) {
-      // Deadlock - remaining tasks have circular or unmet dependencies
-      console.error('\n⚠️  Dependency deadlock detected!');
-      console.error('   Remaining tasks with unresolved deps:', 
-        remaining.map(t => t.id).join(', '));
-      break;
-    }
-    
-    waves.push(waveTasks);
-    waveTasks.forEach(t => {
-      const task = taskMap.get(t.id);
-      // Mark dependencies as "satisfied" for next wave calculation
-      if (!task.status.startsWith('completed') && !task.status.startsWith('running')) {
-        task._satisfiedDeps = true;
-      }
-    });
-    remaining = remaining.filter(t => !waveTasks.includes(t));
-  }
-  
-  return waves;
-}
-
-/**
  * Simple dependency resolver for single-wave tasks
  */
 function computeWavesSimple(tasks) {
-  const taskMap = new Map(tasks.map(t => [t.id, t]));
   const completed = new Set();
   const waves = [];
   
@@ -191,21 +140,21 @@ function computeWavesSimple(tasks) {
  */
 async function createWorktree(task) {
   const branchName = `impl/${task.id}`;
-  const worktreePath = join(CWD, '..', `xskills-${task.id.replace('US', '')}`);
-  
-  // Check if worktree already exists
-  const worktreeExists = await checkWorktreeExists(worktreePath);
+  const worktreePath = join(CWD, '.worktrees', `xskills-${task.id.replace('US', '')}`);
   if (worktreeExists) {
     console.log(`⚠️  Worktree ${worktreePath} already exists, skipping creation`);
     return { path: worktreePath, branchName, created: false };
   }
   
   try {
+    // Ensure .worktrees directory exists
+    await mkdir(join(CWD, '.worktrees'), { recursive: true });
+
     // Create new branch from current HEAD
-    spawnSync('git', ['checkout', '-b', branchName], { stdio: 'pipe' });
+    runSync('git', `checkout -b ${branchName}`, { stdio: 'pipe' });
     
     // Reset to same commit as main
-    spawnSync('git', ['reset', '--soft', 'HEAD~0'], { stdio: 'pipe' });
+    runSync('git', 'reset --soft HEAD~0', { stdio: 'pipe' });
     
     console.log(`✓ Worktree created: ${worktreePath} (branch ${branchName})`);
     return { path: worktreePath, branchName, created: true };
@@ -215,19 +164,11 @@ async function createWorktree(task) {
   }
 }
 
-function checkWorktreeExists(path) {
-  try {
-    return existsSync(path);
-  } catch {
-    return false;
-  }
-}
-
 /**
  * Spawn agent in worktree
  */
 async function dispatchAgent(task, worktreePath) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const taskFileContent = `Task: ${task.name}\n\nFiles: ${task.files.join(', ') || 'none'}\n`;
     
     // For now, just log what would happen
@@ -241,7 +182,6 @@ async function dispatchAgent(task, worktreePath) {
     }, 100);
   });
 }
-
 /**
  * Aggregate results back to main branch
  */
@@ -252,7 +192,7 @@ async function aggregateResults(tasks, waves) {
     for (const task of wave) {
       if (task.status !== 'completed') continue;
       
-      const worktreePath = join(CWD, '..', `xskills-${task.id.replace('US', '')}`);
+      const worktreePath = join(CWD, '.worktrees', `xskills-${task.id.replace('US', '')}`);
       if (!existsSync(worktreePath)) continue;
       
       // In real implementation: cherry-pick commits from worktree
@@ -320,7 +260,7 @@ async function main() {
     // Cleanup worktrees if not keeping
     if (!KEEP_WORKTREES) {
       for (const task of wave) {
-        const worktreePath = join(CWD, '..', `xskills-${task.id.replace('US', '')}`);
+        const worktreePath = join(CWD, '.worktrees', `xskills-${task.id.replace('US', '')}`);
         try {
           await rm(worktreePath, { recursive: true, force: true });
           console.log(`✓ Cleaned up worktree: ${worktreePath}`);
@@ -341,13 +281,11 @@ async function main() {
   console.log('=============================================\n');
 }
 
-// Helper for sync spawn
-function spawnSync(cmd, args, opts) {
-  const { execSync } = require('node:child_process');
-  return execSync(`${cmd} ${args.join(' ')}`, { 
-    cwd: CWD,
-    stdio: opts?.stdio || 'inherit',
-    ...opts 
+// Helper for sync spawn using execSync with arrays (safe from shell injection)
+function runSync(cmd, args, opts = {}) {
+  return execSync(`${cmd} ${Array.isArray(args) ? args.join(' ') : args}`, { 
+    cwd: opts.cwd || CWD,
+    stdio: opts.stdio || 'inherit',
   });
 }
 
