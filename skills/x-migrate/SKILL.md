@@ -17,10 +17,10 @@ All scripts self-resolve via `__dirname` — run from any working directory:
 
 ```bash
 # Analyze current project for migration opportunities
-node <path-to>/analyze.js --target express@5 [--source express@4]
+node <path-to>/scripts/analyze.js --target express@5 [--source express@4]
 
 # Generate full migration plan document
-node <path-to>/analyze.js --target react@19 --output migration-plan.md
+node <path-to>/scripts/analyze.js --target react@19 --output migration-plan.md
 ```
 
 **Auto-discovery**: Scripts resolve config and sibling scripts relative to `__dirname`, so they work whether installed globally (`~/.agents/skills/x-migrate/scripts/`) or locally (`.agents/skills/<project>/x-migrate/scripts/`).

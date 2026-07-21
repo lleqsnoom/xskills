@@ -20,16 +20,16 @@ All scripts self-resolve via `__dirname` — run from any working directory by p
 
 ```bash
 # Run from anywhere (use whichever script path is available):
-node <path-to>/analyze-complexity.js --all       # AST-based complexity, length, params per function
-node <path-to>/check-duplication.js --all         # duplicated blocks (>5 lines)
-node <path-to>/save-plan.js --output .x-skills/review/   # create plan file with all analysis results
+node <path-to>/scripts/analyze-complexity.js --all       # AST-based complexity, length, params per function
+node <path-to>/scripts/check-duplication.js --all         # duplicated blocks (>5 lines)
+node <path-to>/scripts/save-plan.js --output .x-skills/review/   # create plan file with all analysis results
 ```
 
 **Auto-discovery**: Scripts resolve config and sibling scripts relative to `__dirname`, so they work whether installed globally (`~/.agents/skills/x-review/scripts/`) or locally (`.agents/skills/<project>/x-review/scripts/`).
 
 **What To Do:** When invoked, determine the user's scope (single file, directory, or full project) and execute these commands. Do not ask the user what to do.
 
-1. **Create plan file with all analyses**: `node <path-to>/save-plan.js --output .x-skills/review/` — this runs complexity analysis (AST-based via tree-sitter), duplication check, AND refactor pattern detection in one step.
+1. **Create plan file with all analyses**: `node <path-to>/scripts/save-plan.js --output .x-skills/review/` — this runs complexity analysis (AST-based via tree-sitter), duplication check, AND refactor pattern detection in one step.
 2. The script prints the full path. Open that file with `edit` or `write`, then insert your review content directly into it using the format below.
 
 The complexity script auto-installs tree-sitter if missing (global install). Output is JSON — parse it for function metrics and duplication counts.
@@ -56,7 +56,7 @@ For engineering principles definitions and violation patterns, see `references/p
 Produce a review and save it under `.x-skills/review/`. Use `save-plan.js` to create the directory and generate a timestamped plan file:
 
 ```bash
-node <path-to>/save-plan.js --output .x-skills/review/
+node <path-to>/scripts/save-plan.js --output .x-skills/review/
 ```
 
 The script prints the full path. Open that file with `edit` or `write`, then insert your review content using this format:

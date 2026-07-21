@@ -17,13 +17,13 @@ All scripts self-resolve via `__dirname` — run from any working directory:
 
 ```bash
 # Revert a specific commit by SHA
-node <path-to>/revert.js --commit abc123def456
+node <path-to>/scripts/revert.js --commit abc123def456
 
 # Revert last N commits
-node <path-to>/revert.js --last 1
+node <path-to>/scripts/revert.js --last 1
 
 # Dry-run mode (show what would happen without reverting)
-node <path-to>/revert.js --commit abc123def456 --dry-run
+node <path-to>/scripts/revert.js --commit abc123def456 --dry-run
 ```
 
 **Auto-discovery**: Scripts resolve config and sibling scripts relative to `__dirname`, so they work whether installed globally (`~/.agents/skills/x-rollback/scripts/`) or locally (`.agents/skills/<project>/x-rollback/scripts/`).

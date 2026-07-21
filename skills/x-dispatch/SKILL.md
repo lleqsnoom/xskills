@@ -14,7 +14,7 @@ Dispatches independent tasks to parallel agents via git worktrees. Uses parallel
 ## Usage
 
 ```bash
-node <path-to>/dispatch.js --tasks .x-skills/tasks/<epic-dir> [--parallel 4]
+node <path-to>/scripts/dispatch.js --tasks .x-skills/tasks/<epic-dir> [--parallel 4]
 ```
 
 ## How It Works

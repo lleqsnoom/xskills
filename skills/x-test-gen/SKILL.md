@@ -17,10 +17,10 @@ All scripts self-resolve via `__dirname` — run from any working directory:
 
 ```bash
 # Generate test stubs for a single file or all source in a directory
-node <path-to>/generate.js src/pricing.js [--output tests/unit/ --framework vitest]
+node <path-to>/scripts/generate.js src/pricing.js [--output tests/unit/ --framework vitest]
 
 # Auto-detect framework from project config if not specified
-node <path-to>/generate.js src/ --all
+node <path-to>/scripts/generate.js src/ --all
 ```
 
 **Auto-discovery**: Scripts resolve config and sibling scripts relative to `__dirname`, so they work whether installed globally (`~/.agents/skills/x-test-gen/scripts/`) or locally (`.agents/skills/<project>/x-test-gen/scripts/`).
