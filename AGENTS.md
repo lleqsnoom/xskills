@@ -42,6 +42,9 @@ xskills/
     │   └── assets/
     ├── x-fix/                # Resolve code review issues from fix plan files
     │   └── SKILL.md
+    ├── x-triage/             # Structured intake — classify bug platform/type/evidence before debugging
+    │   ├── SKILL.md
+    │   └── scripts/
     ├── x-plan/             # Plan — clarify goals, write specs as declarations (contract, invariant, test)
     │   ├── SKILL.md
     │   └── scripts/
@@ -82,6 +85,7 @@ Independent of the planning pipeline, code quality improvements use two separate
 
 | Phase | Skill | Input | Output | Gate |
 |-------|-------|-------|--------|------|
+| 0. Triage | `x-triage` | Bug description from user | `.x-skills/debug/triage-brief.md` | All fields classified (platform, bug type, evidence) |
 | 1. Reproduce | `x-debug` | Error message or stack trace | `.x-skills/debug/repro-*.js`, `.x-skills/debug/verify-*.js` | Reproduction triggers the same error locally |
 | 2. Hypothesize | `x-debug` | Debug session + reproduction results | `.x-skills/debug/` session with pass/fail verdicts | Root cause identified, hypotheses eliminated |
 | 3. Fix root cause | `x-fix` | Fix plan from x-debug | Updated source files | Verification script PASSES (exit 0) |
