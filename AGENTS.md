@@ -42,6 +42,9 @@ xskills/
     │   └── assets/
     ├── x-fix/                # Resolve code review issues from fix plan files
     │   └── SKILL.md
+    ├── x-investigate/        # Hypothesis-driven root cause analysis — ranked hypotheses, git history, platform tools
+    │   ├── SKILL.md
+    │   └── scripts/
     ├── x-triage/             # Structured intake — classify bug platform/type/evidence before debugging
     │   ├── SKILL.md
     │   └── scripts/
@@ -86,11 +89,11 @@ Independent of the planning pipeline, code quality improvements use two separate
 | Phase | Skill | Input | Output | Gate |
 |-------|-------|-------|--------|------|
 | 0. Triage | `x-triage` | Bug description from user | `.x-skills/debug/triage-brief.md` | All fields classified (platform, bug type, evidence) |
-| 1. Reproduce | `x-debug` | Error message or stack trace | `.x-skills/debug/repro-*.js`, `.x-skills/debug/verify-*.js` | Reproduction triggers the same error locally |
-| 2. Hypothesize | `x-debug` | Debug session + reproduction results | `.x-skills/debug/` session with pass/fail verdicts | Root cause identified, hypotheses eliminated |
-| 3. Fix root cause | `x-fix` | Fix plan from x-debug | Updated source files | Verification script PASSES (exit 0) |
+| 1. Reproduce | `x-debug` / `x-reproduce` | Error message or stack trace | `.x-skills/debug/repro-*.js`, `.x-skills/debug/verify-*.js` | Reproduction triggers the same error locally |
+| 2. Investigate | `x-investigate` | Triage brief + repro script | `.x-skills/review/debug-<session>.md` (fix plan) | Root cause identified through systematic hypothesis elimination, fix plan in x-fix format |
+| 3. Fix root cause | `x-fix` | Fix plan from x-investigate | Updated source files | Verification script PASSES (exit 0) |
 
-The review directory serves both workflows: `x-review` creates static analysis plans, while `x-debug` exports runtime error hypotheses as fix plans for `x-fix`. **Critical rule:** never silence errors — always fix the root cause and verify with reproduction.
+The review directory serves both workflows: `x-review` creates static analysis plans, while `x-triage` + `x-reproduce` → `x-investigate` exports runtime error hypotheses as fix plans for `x-fix`. **Critical rule:** never silence errors — always fix the root cause and verify with reproduction.
 
 ## Release Workflow
 
