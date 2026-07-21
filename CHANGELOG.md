@@ -1,3 +1,8 @@
+## [5.3.2] - 2026-07-21
+
+* Merge pull request #29 from lleqsnoom/fix/mcp-tools-correct-flag-args (885b4aa)
+* fix(mcp): pass object arguments as CLI flags so skill scripts receive --key value pairs (7c44f69)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
