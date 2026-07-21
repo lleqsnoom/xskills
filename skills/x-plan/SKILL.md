@@ -1,13 +1,13 @@
 ---
-name: x-design
-description: Design before coding — clarify vague goals, propose approaches with trade-offs, write spec as declarations (contract, invariant, test), gate on user approval
+name: x-plan
+description: Plan before coding — clarify vague goals, propose approaches with trade-offs, write spec as declarations (contract, invariant, test), gate on user approval
 version: 1.0.0
 author: Community
-tags: [design, spec, requirements, architecture, clarification, testable]
+tags: [plan, spec, requirements, architecture, clarification, testable]
 user-invocable: true
 ---
 
-# X-Design — Spec-Driven Design
+# X-Plan — Spec-Driven Planning
 
 Do not write any code until the spec is approved by the user. Follow pipeline order from `.agents/rules/xskills.md`.
 
@@ -43,7 +43,7 @@ For worked example: see `references/examples/design-spec.md`.
 node <path-to-save-spec.js> --topic <slug>
 ```
 
-Output: `.x-skills/design/DD-MM-YYYY-hh:mm-<topic>.md` (relative to CWD). Add `milestone: M<n>` when a roadmap applies. If `.x-skills/roadmap.md` exists, append new milestones; otherwise create one for multi-milestone work.
+Output: `.x-skills/plan/DD-MM-YYYY-hh:mm-<topic>.md` (relative to CWD). Add `milestone: M<n>` when a roadmap applies. If `.x-skills/roadmap.md` exists, append new milestones; otherwise create one for multi-milestone work.
 
 ## Abandon
 

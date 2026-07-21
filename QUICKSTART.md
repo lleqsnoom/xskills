@@ -22,7 +22,7 @@ Two CLIs available after install:
 
 | Skill | Purpose | MCP Function |
 |-------|---------|--------------|
-| `x-design` | Spec-driven design (declarations: contract, invariant, test) | `x-design-save-spec`, `x-design-shared` |
+| `x-plan` | Plan before coding (declarations: contract, invariant, test) | `x-plan-save-spec`, `x-plan-shared` |
 | `x-epic` | Convert approved spec → INVEST-gated user stories with DOD | `x-epic-save-epic`, `x-epic-shared` |
 | `x-decompose` | Decompose epic into atomic tasks (≤8h each) | `x-decompose-save-tasks`, `x-decompose-shared` |
 | `x-implement` | TDD implementation — red/green/refactor/commit per task | `x-implement-save-plan`, `x-implement-shared` |
@@ -45,7 +45,7 @@ Vague goal or requirement
         │
         ▼
 ┌───────────────┐     spec approved      ┌──────────────┐   epic approved    ┌──────────────────┐  tasks approved   ┌────────────────┐
-│   x-design    │ ──────────────────────▶│     x-epic    │ ──────────────────▶│   x-decompose    │ ──────────────────▶│   x-implement   │
+│   x-plan    │ ──────────────────────▶│     x-epic    │ ──────────────────▶│   x-decompose    │ ──────────────────▶│   x-implement   │
 │               │                        │              │                    │                  │                 │                │
 │ • Spec format │                        │ • User stories│                    │ • Atomic tasks   │                 │ • TDD cycle     │
 │ • Declarations│                        │ • INVEST gate │                    │ • ≤8h each       │                 │ • Commit via    │
@@ -58,7 +58,7 @@ Each step outputs a `.x-skills/` artifact that the next step reads. **Never skip
 
 ## MCP Server Usage
 
-Start the server: `node bin/install.js install x-design && node lib/mcp-server.js`
+Start the server: `node bin/install.js install x-plan && node lib/mcp-server.js`
 
 The server exposes all skill scripts as JSON-RPC tools over stdio (MCP 1.0 protocol). Each tool runs its associated script and returns stdout (JSON) or stderr on failure. Compatible with any MCP client (Claude Code, Crush, etc.).
 
@@ -86,7 +86,7 @@ xskills/
 ├── lib/mcp-tools.js          # Skill tool discovery from SKILL.md frontmatter
 ├── CHANGELOG.md              # Auto-regenerated on each release
 └── skills/                   # 14 skill packages, published as part of the npm tarball
-    ├── x-design/             # Each has: SKILL.md + scripts/ + (optional) references/ assets/
+    ├── x-plan/             # Each has: SKILL.md + scripts/ + (optional) references/ assets/
     ├── x-epic/
     ├── ...
 ```

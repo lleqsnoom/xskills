@@ -42,7 +42,7 @@ As a **<role>**, I want **<capability>** so that **<value>**.
 
 goal:         <outcome in one sentence>
 milestone:    <skip if work fits in one milestone, otherwise M<n>>
-spec:         .x-skills/design/DD-MM-YYYY-hh:mm-<topic>.md
+spec:         .x-skills/plan/DD-MM-YYYY-hh:mm-<topic>.md
 ```
 
 ## Epic-Level Definition of Done

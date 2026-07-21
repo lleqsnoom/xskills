@@ -230,7 +230,7 @@ Examples from existing skills:
 |-------|---------|---------|
 | `x-review` | `analyze-complexity.js --all` | Full project complexity analysis |
 | `x-commit` | `commit.mjs "fix: resolve crash"` | Validate and commit in one step |
-| `x-design` | `save-spec.js --topic auth` | Generate design spec file |
+| `x-plan` | `save-spec.js --topic auth` | Generate design spec file |
 | `x-epic` | `save-epic.js --epic auth-flow` | Convert spec to epic |
 
 ### Output Location Convention

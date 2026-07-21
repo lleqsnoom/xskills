@@ -27,7 +27,7 @@ For each task file in `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>/`:
 1. **RED** — Write the minimal failing test for the task's acceptance criterion. It must fail for the *right reason*.
 2. **GREEN** — Write the minimum implementation to pass that test. Nothing more.
 3. **REFACTOR** — Evaluate against SOLID/clean code. State what you assessed and what (if anything) improved — or why no changes were needed.
-4. **SYNC DOCS** — Update spec (`.x-skills/design/*.md`) if it exists; otherwise update living docs (README, comments) directly.
+4. **SYNC DOCS** — Update spec (`.x-skills/plan/*.md`) if it exists; otherwise update living docs (README, comments) directly.
 5. **COMMIT** — Run `node <path-to-commit.mjs> "<message>"` from the x-commit skill for every single commit. This is mandatory and non-negotiable. Never run `git commit` manually. If x-commit exits with an error, stop and ask the user for a corrected message — do not bypass it.
 6. **UPDATE PLAN** — Change `- [ ]` to `- [x]` for this task. Do not start the next task without this edit.
 

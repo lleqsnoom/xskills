@@ -11,7 +11,7 @@ const SAVE_SPEC_SCRIPT = path.join(
   __dirname,
   "..",
   "skills",
-  "x-design",
+  "x-plan",
   "scripts",
   "save-spec.js"
 );
@@ -64,7 +64,7 @@ describe("save-spec.js — argument validation", () => {
     try {
       const res = await runSaveSpec(["-t", "my-feature"], tmpDir);
       assert.equal(res.code, 0);
-      assert.match(res.stdout, /\.x-skills\/design\//);
+      assert.match(res.stdout, /\.x-skills\/plan\/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
@@ -74,12 +74,12 @@ describe("save-spec.js — argument validation", () => {
 // ── File creation and output path ───────────────────────────────────
 
 describe("save-spec.js — file creation", () => {
-  it("creates directory .x-skills/design/ in cwd", async () => {
+  it("creates directory .x-skills/plan/ in cwd", async () => {
     const tmpDir = createTempDir();
     try {
       await runSaveSpec(["--topic", "feature-a"], tmpDir);
-      const designDir = path.join(tmpDir, ".x-skills", "design");
-      assert.ok(fs.existsSync(designDir), `Directory should exist: ${designDir}`);
+      const planDir = path.join(tmpDir, ".x-skills", "plan");
+      assert.ok(fs.existsSync(planDir), `Directory should exist: ${planDir}`);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
@@ -119,7 +119,7 @@ describe("save-spec.js — file creation", () => {
     const tmpDir = createTempDir();
     try {
       await runSaveSpec(["--topic", "dated"], tmpDir);
-      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "design"));
+      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "plan"));
       assert.match(dirContents[0], /^\d{2}-\d{2}-\d{4}-\d{2}:\d{2}-dated\.md$/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
@@ -130,7 +130,7 @@ describe("save-spec.js — file creation", () => {
     const tmpDir = createTempDir();
     try {
       await runSaveSpec(["--topic", "custom-date", "--date", "2099-12-31T2359"], tmpDir);
-      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "design"));
+      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "plan"));
       assert.match(dirContents[0], /^[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9]-[0-9][0-9]:[0-9][0-9]-custom-date\.md$/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
@@ -141,9 +141,9 @@ describe("save-spec.js — file creation", () => {
     const tmpDir = createTempDir();
     try {
       await runSaveSpec(["--topic", "branch-test", "--branch", "my/custom-branch"], tmpDir);
-      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "design"));
+      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "plan"));
       const content = fs.readFileSync(
-        path.join(tmpDir, ".x-skills", "design", dirContents[0]),
+        path.join(tmpDir, ".x-skills", "plan", dirContents[0]),
         "utf8"
       );
       assert.ok(content.includes("my/custom-branch"), `Expected branch in header, got:\n${content}`);
@@ -156,7 +156,7 @@ describe("save-spec.js — file creation", () => {
     const tmpDir = createTempDir();
     try {
       const res = await runSaveSpec(["--topic", "stdout-test"], tmpDir);
-      assert.match(res.stdout, /\.x-skills\/design\//);
+      assert.match(res.stdout, /\.x-skills\/plan\/);
       assert.match(res.stdout, /stdout-test\.md$/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
@@ -168,7 +168,7 @@ describe("save-spec.js — file creation", () => {
     try {
       assert.ok(!fs.existsSync(path.join(tmpDir, ".x-skills")), "Directory should not exist before run");
       await runSaveSpec(["--topic", "nested"], tmpDir);
-      assert.ok(fs.existsSync(path.join(tmpDir, ".x-skills", "design")));
+      assert.ok(fs.existsSync(path.join(tmpDir, ".x-skills", "plan")));
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
@@ -182,9 +182,9 @@ describe("save-spec.js — spec file content", () => {
     const tmpDir = createTempDir();
     try {
       await runSaveSpec(["--topic", "content-check"], tmpDir);
-      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "design"));
+      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "plan"));
       const content = fs.readFileSync(
-        path.join(tmpDir, ".x-skills", "design", dirContents[0]),
+        path.join(tmpDir, ".x-skills", "plan", dirContents[0]),
         "utf8"
       );
 
@@ -200,9 +200,9 @@ describe("save-spec.js — spec file content", () => {
     const tmpDir = createTempDir();
     try {
       await runSaveSpec(["--topic", "newline-check"], tmpDir);
-      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "design"));
+      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "plan"));
       const content = fs.readFileSync(
-        path.join(tmpDir, ".x-skills", "design", dirContents[0]),
+        path.join(tmpDir, ".x-skills", "plan", dirContents[0]),
         "utf8"
       );
       assert.match(content, /---\n\n$/);
@@ -215,9 +215,9 @@ describe("save-spec.js — spec file content", () => {
     const tmpDir = createTempDir();
     try {
       await runSaveSpec(["--topic", "exact-topic"], tmpDir);
-      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "design"));
+      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "plan"));
       const content = fs.readFileSync(
-        path.join(tmpDir, ".x-skills", "design", dirContents[0]),
+        path.join(tmpDir, ".x-skills", "plan", dirContents[0]),
         "utf8"
       );
       assert.match(content, /^# Design — exact-topic$/m);
@@ -230,9 +230,9 @@ describe("save-spec.js — spec file content", () => {
 // ── Logging (stderr verification) ───────────────────────────────────
 
 describe("save-spec.js — logging", () => {
-  it("logs each step to stderr with [x-design] tag", async () => {
+  it("logs each step to stderr with [x-plan] tag", async () => {
     const res = await runSaveSpec(["--topic", "log-test"]);
-    assert.match(res.stderr, /\[x-design\]/);
+    assert.match(res.stderr, /\[x-plan\]/);
   });
 
   it("logs the resolved branch to stderr", async () => {
@@ -242,7 +242,7 @@ describe("save-spec.js — logging", () => {
 
   it("logs the file path to stderr", async () => {
     const res = await runSaveSpec(["--topic", "log-path"]);
-    assert.match(res.stderr, /\.x-skills\/design\//);
+    assert.match(res.stderr, /\.x-skills\/plan\/);
   });
 
   it("logs timestamps in ISO format on each line", async () => {

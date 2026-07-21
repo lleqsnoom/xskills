@@ -69,7 +69,7 @@ xskills install-all --global          # Global: ~/.agents/skills/
 xskills install-all                   # Local: .agents/skills/ in current project
 
 # Or specific skills only
-xskills install x-commit x-design --global
+xskills install x-commit x-plan --global
 
 # Shortcut — just type the skill name
 xskills <skill-name>
@@ -136,7 +136,7 @@ Run `npx xskills list` to see all available skills.
 | `x-commit` | Write single-line conventional commit messages with automated type suggestion and validation |
 | `x-debug` | Structured debugging — hypothesis formation, evidence collection, root cause declaration with fix plan export |
 | `x-decompose` | Decompose epic into atomic tasks ≤8h each with DOD, test plan, effort estimate |
-| `x-design` | Spec-driven design — clarify goals, propose approaches with trade-offs, gate on approval |
+| `x-plan` | Plan before coding — clarify goals, propose approaches with trade-offs, write spec as declarations (contract, invariant, test), gate on approval |
 | `x-dispatch` | Parallel subagent task dispatcher via git worktrees with dependency management |
 | `x-epic` | Convert approved spec into INVEST-gated user stories and epic-level DOD |
 | `x-fix` | Resolve identified issues one-by-one from a fix plan file until complete |
@@ -150,9 +150,9 @@ Run `npx xskills list` to see all available skills.
 
 Skills compose into production workflows. Pick the one that fits your task:
 
-**Design → Implement:**
+**Plan → Implement:**
 ```
-x-design → x-epic → x-decompose → x-implement → x-commit
+x-plan → x-epic → x-decompose → x-implement → x-commit
                                          ↘ x-review → x-fix (loop)
 ```
 
@@ -192,7 +192,7 @@ npx @lleqsnoom/x-skills help
 xskills install-all --global
 
 # Specific skills locally in current project
-xskills install x-design x-epic x-decompose x-implement
+xskills install x-plan x-epic x-decompose x-implement
 ```
 
 **Step 3: Use with your AI coding agent**

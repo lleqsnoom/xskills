@@ -27,8 +27,8 @@ function main() {
   const branch = args.branch || shared.getBranch();
   const date = shared.getTimestamp();
 
-  // Auto-resolve the design spec path from disk (single call)
-  const specFullPath = shared.findFileByTopic(".x-skills/design", slug);
+  // Auto-resolve the plan spec path from disk (single call)
+  const specFullPath = shared.findFileByTopic(".x-skills/plan", slug);
   const specPath = specFullPath ? path.relative(process.cwd(), specFullPath) : null;
 
   const dir = path.resolve(".x-skills/epics");
@@ -44,8 +44,8 @@ function main() {
       header += `goal:         <outcome in one sentence>\nmilestone:    <milestone from roadmap or skip if none>\nspec:         ${specPath}\n\n`;
       shared.log("x-epic", `resolved spec path: ${specPath}`);
     } else {
-      header += `goal:         <outcome in one sentence>\nmilestone:    <skip if work fits in one milestone>\nspec:         .x-skills/design/<timestamp>-<topic>.md\n\n`;
-      shared.log("x-epic", "no design spec found for topic — placeholder left");
+      header += `goal:         <outcome in one sentence>\nmilestone:    <skip if work fits in one milestone>\nspec:         .x-skills/plan/<timestamp>-<topic>.md\n\n`;
+      shared.log("x-epic", "no plan spec found for topic — placeholder left");
     }
 
     header += `## Definition of Done (Epic Level)\n\n- [ ] All user stories delivered and acceptance criteria verified\n- [ ] Integration across stories works end-to-end\n- [ ] No regressions in existing behavior\n- [ ] Documentation updated where contracts changed\n`;
