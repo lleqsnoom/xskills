@@ -40,6 +40,9 @@ xskills/
     │   ├── scripts/
     │   ├── references/
     │   └── assets/
+    ├── x-reproduce/          # Creates minimal platform-aware reproducible test cases
+    │   ├── SKILL.md
+    │   └── scripts/
     ├── x-fix/                # Resolve code review issues from fix plan files
     │   └── SKILL.md
     ├── x-investigate/        # Hypothesis-driven root cause analysis — ranked hypotheses, git history, platform tools
@@ -73,27 +76,25 @@ The planning workflow follows a three-phase handoff chain:
 
 After task approval → `x-implement` executes tasks sequentially or in parallel groups.
 
-### Code Review & Debugging Workflows (Optional)
 
-Independent of the planning pipeline, code quality improvements use two separate flows:
+## Debugging Workflow
 
-**Static Analysis Flow:**
-
-| Phase | Skill | Input | Output | Gate |
-|-------|-------|-------|--------|------|
-| 1. Analyze | `x-review` | Source code or project path | `.x-skills/review/DD-MM-YYYY-hh:mm.md` (review plan with complexity/duplication metrics) | User reviews issues |
-| 2. Refactor | `x-refactor` | Review findings | JSON/markdown refactoring suggestions (extract method, rename, polymorphism) | User applies changes manually |
-
-**Debugging Flow:**
+Independent of the planning pipeline, debugging uses a multi-skill scientific method workflow:
 
 | Phase | Skill | Input | Output | Gate |
 |-------|-------|-------|--------|------|
-| 0. Triage | `x-triage` | Bug description from user | `.x-skills/debug/triage-brief.md` | All fields classified (platform, bug type, evidence) |
-| 1. Reproduce | `x-debug` / `x-reproduce` | Error message or stack trace | `.x-skills/debug/repro-*.js`, `.x-skills/debug/verify-*.js` | Reproduction triggers the same error locally |
-| 2. Investigate | `x-investigate` | Triage brief + repro script | `.x-skills/review/debug-<session>.md` (fix plan) | Root cause identified through systematic hypothesis elimination, fix plan in x-fix format |
-| 3. Fix root cause | `x-fix` | Fix plan from x-investigate | Updated source files | Verification script PASSES (exit 0) |
+| 1. Triage | `x-triage` | Bug report (error message, symptoms) | `.x-skills/debug/triage-brief.md` | User confirms classification |
+| 2. Reproduce | `x-reproduce` | Triage brief → Platform field | `.x-skills/debug/repro-<platform>.js` | Reproduction triggers same error locally |
+| 3. Investigate | `x-investigate` | Triage brief + repro script | `.x-skills/review/debug-<session>.md` (fix plan) | Root cause confirmed, hypotheses eliminated |
+| 4. Fix | `x-fix` (existing) | Fix plan from investigate | Updated source files + verification passes | Verification script exits 0 |
 
-The review directory serves both workflows: `x-review` creates static analysis plans, while `x-triage` + `x-reproduce` → `x-investigate` exports runtime error hypotheses as fix plans for `x-fix`. **Critical rule:** never silence errors — always fix the root cause and verify with reproduction.
+**Critical rule:** never silence errors — always fix the root cause and verify with reproduction.
+
+### Skill Descriptions
+
+- **x-triage** — Structured intake: asks targeted questions about platform, symptoms, and evidence before any tools run
+- **x-reproduce** — Creates minimal platform-aware reproducible test cases (browser console, Node standalone, ADB logcat steps)
+- **x-investigate** — Hypothesis-driven root cause analysis using git bisect/blame, Chrome DevTools, debuggers, or engine profilers depending on platform
 
 ## Release Workflow
 
