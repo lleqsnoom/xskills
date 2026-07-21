@@ -19,13 +19,13 @@ node <path-to-x-reproduce-skill>/scripts/<repro-<platform>.js> '<error descripti
 
 ## Workflow
 
-1. **READ** `.x-skills/debug/triage-brief.md` for the `Platform:` field
-2. **SELECT** appropriate template script based on platform:
-   - `backend` → `repro-backend.js` (Node.js standalone script using built-in modules)
-   - `web` → `repro-web.js` (browser console script or Puppeteer-style repro snippet)
-   - `mobile` → `repro-mobile.js` (documented ADB/Logcat steps)
-3. **GENERATE** `.x-skills/debug/repro-<platform>.js` with the template content customized for the specific bug pattern
-4. **RUN** reproduction: exits 1 when bug is present, exits 0 after fix
+1. **READ** `.x-skills/debug/triage-brief.md` and extract the `Platform:` field value (e.g. `web`, `backend`) — this Platform key is looked up in the shared routing table defined by triage
+2. **ROUTE** via `skills/x-triage/scripts/route.js`: load `ROUTE_TABLE` and look up the platform key to get its `reproduceTemplate` name — never hardcode this mapping; it is the single source of truth in route.js
+3. **SELECT** template script at `skills/x-reproduce/scripts/repro-<reproduceTemplate>.js` (e.g. `web` → `browser-console` → `scripts/repro-web.js`)
+4. **GENERATE** `.x-skills/debug/repro-<platform>.js` with the template content customized for the specific bug pattern
+5. **RUN** reproduction: exits 1 when bug is present, exits 0 after fix applied
+
+> **Adding a new platform**: edit only `ROUTE_TABLE` in route.js + add one new `repro-<name>.js` file. x-reproduce SKILL.md never lists platforms directly — it always defers to the table.
 
 ## Platform Templates
 
@@ -103,7 +103,7 @@ process.exit(1); // indicates reproduction steps documented, actual bug not in t
 - Each script ≤300 lines (expected ~25-40 lines per template + routing helper)
 - Zero npm dependencies — only `node:fs/promises`, `path`, `child_process` built-ins
 - SKILL.md ≤2000 tokens of instructions
-- Routing logic in SKILL.md, not script — skill reads triage brief Platform field and selects template
+- Routing logic: platform → template is defined once in `ROUTE_TABLE` (`skills/x-triage/scripts/route.js`). SKILL.md references the table; it never hardcodes all platforms.
 
 ## Error Handling
 
