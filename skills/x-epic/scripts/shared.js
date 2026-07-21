@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Shared helpers for x-design / x-epic / x-decompose save scripts.
+ * Shared helpers for x-plan / x-epic / x-decompose save scripts.
  * Each skill ships its own copy so the skills remain independent install units.
  */
 

@@ -10,7 +10,7 @@ This document defines the declarative gate condition system for xskills workflow
 
 ## Overview
 
-Phases (x-design, x-epic, x-decompose, x-implement) declare gates in their configuration. Each gate is an atomic check that must pass for the phase to be considered complete. Gates are defined as JSON objects and evaluated by `lib/gates.js`.
+Phases (x-plan, x-epic, x-decompose, x-implement) declare gates in their configuration. Each gate is an atomic check that must pass for the phase to be considered complete. Gates are defined as JSON objects and evaluated by `lib/gates.js`.
 
 ```json
 {
@@ -43,7 +43,7 @@ Check whether a file exists at the specified path. Supports glob patterns via `{
 
 **Examples:**
 ```json
-{ "type": "file-exists", "path": ".x-skills/design/{topic}.md" }
+{ "type": "file-exists", "path": ".x-skills/plan/{topic}.md" }
 { "type": "file-exists", "path": "tests/unit/{name}.test.js" }
 ```
 
@@ -122,7 +122,7 @@ Gates are declared in phase-specific config files:
 
 | Phase | Config File | Default Gates |
 |-------|-------------|---------------|
-| `x-design` | `.x-skills/config/gates/design.json` | 2 gates (file-exists, no-empty-body) |
+| `x-plan` | `.x-skills/config/gates/design.json` | 2 gates (file-exists, no-empty-body) |
 | `x-epic` | `.x-skills/config/gates/epic.json` | 2 gates (file-exists, schema-valid) |
 | `x-decompose` | `.x-skills/config/gates/decompose.json` | 2 gates (tests-pass, commit-message-format) |
 | `x-implement` | `.x-skills/config/gates/implement.json` | 3 gates (tests-pass, commit-message-format, no-pattern) |
@@ -237,13 +237,13 @@ Each gate returns one of three states:
 
 ## Example Configurations
 
-### x-design gates (default):
+### x-plan gates (default):
 ```json
 {
   "gates": {
-    "x-design": [
-      { "type": "file-exists", "path": ".x-skills/design/{topic}.md" },
-      { "type": "no-pattern", "pattern": "^\\s*$", "files": ".x-skills/design/{topic}.md" }
+    "x-plan": [
+      { "type": "file-exists", "path": ".x-skills/plan/{topic}.md" },
+      { "type": "no-pattern", "pattern": "^\\s*$", "files": ".x-skills/plan/{topic}.md" }
     ]
   }
 }

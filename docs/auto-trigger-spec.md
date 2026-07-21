@@ -263,7 +263,7 @@ auto-trigger:
   on-commit-msg: "^fix\\(.*\\):|^hotfix:"
 ```
 
-### x-design triggering in docs/ directory:
+### x-plan triggering in docs/ directory:
 ```yaml
 auto-trigger:
   on-file-pattern: "*.md"

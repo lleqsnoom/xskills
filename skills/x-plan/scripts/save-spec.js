@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Create .x-skills/design/<timestamp>-<topic>.md with a header skeleton.
+ * Create .x-skills/plan/<timestamp>-<topic>.md with a header skeleton.
  * Usage: node save-spec.js --topic <slug> [--branch <name>] 
  * Output (stdout): path to the created spec file.
  */
@@ -15,7 +15,7 @@ function main() {
     "--branch": "branch",
   });
 
-  shared.log("x-design", "parsing arguments");
+  shared.log("x-plan", "parsing arguments");
 
   if (!args.topic) {
     process.stderr.write("Usage: node save-spec.js --topic <slug> [--branch <name>]\n");
@@ -24,25 +24,25 @@ function main() {
 
   const slug = shared.sanitizeSlug(args.topic);
   const branch = args.branch || shared.getBranch();
-  shared.log("x-design", `resolved branch: ${branch}`);
+  shared.log("x-plan", `resolved branch: ${branch}`);
 
   const date = shared.getTimestamp();
-  shared.log("x-design", `using date stamp: ${date}`);
+  shared.log("x-plan", `using date stamp: ${date}`);
 
-  const dir = path.resolve(".x-skills/design");
+  const dir = path.resolve(".x-skills/plan");
   const filename = `${date}-${slug}.md`;
   const fullPath = path.join(dir, filename);
 
   try {
-    const header = `# Design — ${args.topic}\n\n**Date:** ${date}\n**Branch:** ${branch}\n\n---\n\n`;
+    const header = `# Plan — ${args.topic}\n\n**Date:** ${date}\n**Branch:** ${branch}\n\n---\n\n`;
 
-    shared.log("x-design", `creating directory: ${dir}`);
+    shared.log("x-plan", `creating directory: ${dir}`);
     shared.ensureDir(dir);
 
-    shared.log("x-design", `writing spec file: ${fullPath} (${header.length} bytes)`);
+    shared.log("x-plan", `writing spec file: ${fullPath} (${header.length} bytes)`);
     shared.writeFile(fullPath, header);
 
-    shared.log("x-design", `spec ready: ${fullPath}`);
+    shared.log("x-plan", `spec ready: ${fullPath}`);
     console.log(fullPath);
   } catch (err) {
     process.stderr.write(`Error: ${err.message}\n`);

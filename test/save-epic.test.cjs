@@ -209,11 +209,11 @@ describe("save-epic.js — epic file content", () => {
     }
   });
 
-  it("auto-resolves spec path when design file exists with matching slug", async () => {
+  it("auto-resolves spec path when plan file exists with matching slug", async () => {
     const tmpDir = createTempDir();
     try {
-      // First create a design spec for the topic
-      const saveSpecScript = path.join(__dirname, "..", "skills", "x-design", "scripts", "save-spec.js");
+      // First create a plan spec for the topic
+      const saveSpecScript = path.join(__dirname, "..", "skills", "x-plan", "scripts", "save-spec.js");
       await new Promise((resolve, reject) => {
         const child = spawn("node", [saveSpecScript, "--topic", "auto-link"], { cwd: tmpDir });
         child.on("error", reject);
@@ -230,7 +230,7 @@ describe("save-epic.js — epic file content", () => {
         "utf8"
       );
 
-      // The spec: line should contain an actual path to a design file with the topic slug
+      // The spec: line should contain an actual path to a plan file with the topic slug
       const specMatch = content.match(/^spec:\s+(.+)$/m);
       assert.ok(specMatch, `epic header should have resolved spec: line. Content:\n${content}`);
       assert.ok(
@@ -245,7 +245,7 @@ describe("save-epic.js — epic file content", () => {
     }
   });
 
-  it("leaves placeholder when no design spec exists for topic", async () => {
+  it("leaves placeholder when no plan spec exists for topic", async () => {
     const tmpDir = createTempDir();
     try {
       const epicRes = await runSaveEpic(["--topic", "orphan"], tmpDir);
@@ -260,7 +260,7 @@ describe("save-epic.js — epic file content", () => {
       // Should have placeholder text for spec path
       assert.ok(
         content.includes("spec:") || content.includes("<timestamp>"),
-        `should leave placeholder when no design file found. Content:\n${content}`
+        `should leave placeholder when no plan file found. Content:\n${content}`
       );
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
@@ -326,11 +326,11 @@ describe("save-epic.js — logging", () => {
     assert.match(res.stderr, /Usage:/);
   });
 
-  it("logs 'resolved spec path' when design file is found", async () => {
+  it("logs 'resolved spec path' when plan file is found", async () => {
     const tmpDir = createTempDir();
     try {
-      // Create a design spec first
-      const saveSpecScript = path.join(__dirname, "..", "skills", "x-design", "scripts", "save-spec.js");
+      // Create a plan spec first
+      const saveSpecScript = path.join(__dirname, "..", "skills", "x-plan", "scripts", "save-spec.js");
       await new Promise((resolve, reject) => {
         const child = spawn("node", [saveSpecScript, "--topic", "link-test"], { cwd: tmpDir });
         child.on("error", reject);
@@ -344,11 +344,11 @@ describe("save-epic.js — logging", () => {
     }
   });
 
-  it("logs 'no design spec found' when no matching design file exists", async () => {
+  it("logs 'no plan spec found' when no matching plan file exists", async () => {
     const tmpDir = createTempDir();
     try {
       const res = await runSaveEpic(["--topic", "orphan-epic"], tmpDir);
-      assert.match(res.stderr, /no design spec found/);
+      assert.match(res.stderr, /no plan spec found/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
