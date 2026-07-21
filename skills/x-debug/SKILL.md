@@ -16,7 +16,7 @@ Never silence errors. Always fix the root cause and verify it's resolved.
 **Before any analysis, hypothesis testing, or fixing begins**, execute `analyze.js` with the user's bug description as the error text:
 
 ```bash
-node <path-to>/analyze.js --error "<user's bug description>" --context .
+node <path-to>/scripts/analyze.js --error "<user's bug description>" --context .
 ```
 
 This creates:
@@ -28,9 +28,9 @@ This creates:
 ## Usage
 
 ```bash
-node <path-to>/analyze.js --error "TypeError: Cannot read property 'foo' of undefined" [--file src/main.js]
-node <path-to>/analyze.js --context . [--session-id my-session]
-node <path-to>/analyze.js --no-reproduce --error "..."  # skip auto-reproduction
+node <path-to>/scripts/analyze.js --error "TypeError: Cannot read property 'foo' of undefined" [--file src/main.js]
+node <path-to>/scripts/analyze.js --context . [--session-id my-session]
+node <path-to>/scripts/analyze.js --no-reproduce --error "..."  # skip auto-reproduction
 ```
 
 **Output**: Debug session in `.x-skills/debug/`, fix plan in `.x-skills/review/`.
