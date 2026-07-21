@@ -22,7 +22,7 @@ You're using AI coding tools — maybe Claude Code for complex refactors, Gemini
 **xskills solves that.** It's a collection of reusable "skills" following the [Agent Skills open standard](https://agentskills.io) — folders with specialized knowledge and workflows that any compatible CLI can use.
 
 - **One format across all CLIs** — no adapters, no rewriting for each tool
-- **15 production-ready skills** — commit conventions, debugging, code review, API design, task decomposition, and more
+- **14 production-ready skills** — commit conventions, debugging, code review, API design, task decomposition, and more
 - **Zero dependencies** — pure Node.js built-ins, nothing else
 - **Built for local models** — every skill fits in a 4K context window
 
@@ -64,7 +64,7 @@ npx @lleqsnoom/x-skills help
 **Then, install skills:**
 
 ```bash
-# Install all 15+ skills at once
+# Install all 14+ skills at once
 xskills install-all --global          # Global: ~/.agents/skills/
 xskills install-all                   # Local: .agents/skills/ in current project
 
@@ -142,8 +142,7 @@ Run `npx xskills list` to see all available skills.
 | `x-fix` | Resolve identified issues one-by-one from a fix plan file until complete |
 | `x-implement` | Test-driven implementation — red/green/refactor per task, docs sync, commit via x-commit |
 | `x-migrate` | Framework/dependency migration assistant — breaking changes, upgrade paths, automated fixes |
-| `x-refactor` | Automated refactoring suggestions against SOLID principles with before/after comparisons |
-| `x-review` | Review code against engineering principles with AST-based complexity analysis across 30+ languages (Python, C, C++, Java, JS, TS, Go, Rust, Ruby, PHP, Swift, Kotlin, Lua, Dart, Scala, Haskell, Elixir, and more) |
+| `x-review` | Review code against engineering principles with AST-based complexity analysis, duplication detection, and refactor pattern suggestions across 30+ languages (Python, C, C++, Java, JS, TS, Go, Rust, Ruby, PHP, Swift, Kotlin, Lua, Dart, Scala, Haskell, Elixir, and more) |
 | `x-rollback` | Automated git revert with multi-step confirmation and impact analysis |
 | `x-test-gen` | Generate test stubs from implementation — happy path, error cases, edge case placeholders |
 
@@ -164,7 +163,7 @@ x-api-draft → x-api-swagger
 
 **Code Quality:**
 ```
-x-review → x-fix → x-refactor
+x-review → x-fix (loop)
 ```
 
 **Debugging & Migration:**
