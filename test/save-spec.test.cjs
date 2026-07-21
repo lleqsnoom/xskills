@@ -64,7 +64,7 @@ describe("save-spec.js — argument validation", () => {
     try {
       const res = await runSaveSpec(["-t", "my-feature"], tmpDir);
       assert.equal(res.code, 0);
-      assert.match(res.stdout, /\.x-skills\/plan\/);
+      assert.match(res.stdout, /\.x-skills\/plan\//);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
@@ -97,7 +97,7 @@ describe("save-spec.js — file creation", () => {
 
       const content = fs.readFileSync(fullPath, "utf8");
       assert.ok(content.length > 0, "File must not be empty");
-      assert.match(content, /# Design — feature-a/);
+      assert.match(content, /# Plan — feature-a/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
@@ -156,7 +156,7 @@ describe("save-spec.js — file creation", () => {
     const tmpDir = createTempDir();
     try {
       const res = await runSaveSpec(["--topic", "stdout-test"], tmpDir);
-      assert.match(res.stdout, /\.x-skills\/plan\/);
+      assert.match(res.stdout, /\.x-skills\/plan\//);
       assert.match(res.stdout, /stdout-test\.md$/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
@@ -188,7 +188,7 @@ describe("save-spec.js — spec file content", () => {
         "utf8"
       );
 
-      assert.match(content, /# Design — content-check/);
+      assert.match(content, /# Plan — content-check/);
       assert.match(content, /\*\*Date:\*\*/);
       assert.match(content, /\*\*Branch:\*\*/);
     } finally {
@@ -211,7 +211,7 @@ describe("save-spec.js — spec file content", () => {
     }
   });
 
-  it("header contains the correct topic name after # Design —", async () => {
+  it("header contains the correct topic name after # Plan —", async () => {
     const tmpDir = createTempDir();
     try {
       await runSaveSpec(["--topic", "exact-topic"], tmpDir);
@@ -220,7 +220,7 @@ describe("save-spec.js — spec file content", () => {
         path.join(tmpDir, ".x-skills", "plan", dirContents[0]),
         "utf8"
       );
-      assert.match(content, /^# Design — exact-topic$/m);
+      assert.match(content, /^# Plan — exact-topic$/m);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
@@ -242,7 +242,7 @@ describe("save-spec.js — logging", () => {
 
   it("logs the file path to stderr", async () => {
     const res = await runSaveSpec(["--topic", "log-path"]);
-    assert.match(res.stderr, /\.x-skills\/plan\/);
+    assert.match(res.stderr, /\.x-skills\/plan\//);
   });
 
   it("logs timestamps in ISO format on each line", async () => {
