@@ -64,6 +64,49 @@ xskills/
 
 ---
 
+## Skill Access Patterns
+
+Skills and MCP servers are two different things. Using the wrong access method causes `mcp '<skill>' not available` errors.
+
+### How to read a skill's instructions (SKILL.md)
+
+| Skill Type | Location on Disk | Correct Tool | Example |
+|------------|-----------------|--------------|---------|
+| **User-installed** (`x-*`) | `$HOME/.agents/skills/<name>/SKILL.md` | `view` tool with file path | `view $HOME/.agents/skills/x-implement/SKILL.md` |
+| **Source repo** (published package) | `<project>/skills/<name>/SKILL.md` | `view` tool with file path | `view skills/x-plan/SKILL.md` |
+| **Builtin** (`jq`, `omarchy`) | Internal to Crush runtime | `crush://skills/<name>/SKILL.md` | `view crush://skills/jq/SKILL.md` |
+
+**Never use `Read Mcp Resource` with a skill name as the MCP server.** There is no MCP server named `x-implement`, `x-commit`, etc. The actual MCP servers are:
+- `chrome-devtools` — Browser automation (29 tools)
+- `github` — GitHub operations (44 tools)
+- `sentry` — Sentry error tracking (8 tools)
+- `xskills` — Skill orchestration tools (dispatch, plan, reproduce, etc.)
+
+### How to invoke a skill's MCP tool
+
+Use the **tool name** directly with its full qualified path (`mcp_<server>_<tool>`), not via resource reading. For example:
+```
+# Correct — call the tool directly
+mcp_xskills_dispatch_dispatch()
+mcp_xskills_plan_save_spec()
+mcp_xskills_reproduce_repro_backend()
+
+# Wrong — these will fail with "mcp 'x-implement' not available"
+Read Mcp Resource { mcp_name: "x-implement", uri: "crush://skills/x-implement/SKILL.md" }
+```
+
+### When task directories don't exist yet
+
+Directories like `.x-skills/tasks/`, `.x-skills/debug/`, etc. are **created by the skills themselves** during workflow execution. If a glob or read fails because these paths don't exist, that means the prior pipeline step hasn't run yet:
+- `.x-skills/plan/` → created when `x-plan` runs (before `x-epic`)
+- `.x-skills/epics/` → created when `x-epic` runs (before `x-decompose`)
+- `.x-skills/tasks/` → created when `x-decompose` runs (before `x-implement`)
+- `.x-skills/debug/` → created when `x-triage` + `x-reproduce` run
+
+If you need content at one of these paths, first execute the skill that creates it.
+
+---
+
 ## Development Workflow
 
 The planning workflow follows a three-phase handoff chain:
