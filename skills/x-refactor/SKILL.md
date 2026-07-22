@@ -22,7 +22,7 @@ All scripts self-resolve via `__dirname` — run from any working directory:
 
 ```bash
 # Analyze single file or directory for refactoring opportunities
-node <path-to>/analyze.js <file-or-dir> [--thresholds 20,5,3]
+node <path-to>/scripts/analyze.js <file-or-dir> [--thresholds 20,5,3]
 
 # Output structured JSON to stdout
 # Exit code 0 = analysis complete (may find issues)

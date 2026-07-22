@@ -17,3 +17,17 @@ All artifacts under `.x-skills/` relative to CWD:
 
 ## Handoff Requirement
 Before declaring a phase complete: confirm artifact file exists at expected path, spec contains required declarations (contract, invariant, test), and next-phase skill can locate it by topic slug.
+
+---
+
+## Skill Access Patterns
+
+**Skills ≠ MCP servers.** Never use `Read Mcp Resource` with a skill name as the server — there is no MCP server named `x-implement`, `x-commit`, etc.
+
+| What to do | Correct approach |
+|------------|-----------------|
+| Read a user-installed skill's SKILL.md | `view $HOME/.agents/skills/<name>/SKILL.md` |
+| Call an xskills MCP tool (dispatch, plan, reproduce) | Use the tool directly: `mcp_xskills_<tool>()` |
+| Access builtin skill docs (jq, omarchy) | `view crush://skills/<name>/SKILL.md` |
+
+The four connected MCP servers are: `chrome-devtools`, `github`, `sentry`, `xskills`. That's it.

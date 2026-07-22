@@ -40,8 +40,17 @@ xskills/
     │   ├── scripts/
     │   ├── references/
     │   └── assets/
+    ├── x-reproduce/          # Creates minimal platform-aware reproducible test cases
+    │   ├── SKILL.md
+    │   └── scripts/
     ├── x-fix/                # Resolve code review issues from fix plan files
     │   └── SKILL.md
+    ├── x-investigate/        # Hypothesis-driven root cause analysis — ranked hypotheses, git history, platform tools
+    │   ├── SKILL.md
+    │   └── scripts/
+    ├── x-triage/             # Structured intake — classify bug platform/type/evidence before debugging
+    │   ├── SKILL.md
+    │   └── scripts/
     ├── x-plan/             # Plan — clarify goals, write specs as declarations (contract, invariant, test)
     │   ├── SKILL.md
     │   └── scripts/
@@ -52,6 +61,48 @@ xskills/
         ├── SKILL.md
         └── scripts/
 ```
+
+---
+
+## Skill Access Patterns
+
+Skills and MCP servers are two different things. Using the wrong access method causes `mcp '<skill>' not available` errors.
+
+### How to read a skill's instructions (SKILL.md)
+
+| Skill Type | Location on Disk | Correct Tool | Example |
+|------------|-----------------|--------------|---------|
+| **User-installed** (`x-*`) | `$HOME/.agents/skills/<name>/SKILL.md` | `view` tool with file path | `view $HOME/.agents/skills/x-implement/SKILL.md` |
+| **Source repo** (published package) | `<project>/skills/<name>/SKILL.md` | `view` tool with file path | `view skills/x-plan/SKILL.md` |
+| **Builtin** (`jq`, `omarchy`) | Internal to Crush runtime | `crush://skills/<name>/SKILL.md` | `view crush://skills/jq/SKILL.md` |
+
+**Never use `Read Mcp Resource` with a skill name as the MCP server.** There is no MCP server named `x-implement`, `x-commit`, etc. The actual MCP servers are:
+- `chrome-devtools` — Browser automation (29 tools)
+- `github` — GitHub operations (44 tools)
+- `sentry` — Sentry error tracking (8 tools)
+- `xskills` — Skill orchestration tools (dispatch, plan, reproduce, etc.)
+
+### How to invoke a skill's MCP tool
+
+Use the **tool name** directly with its full qualified path (`mcp_<server>_<tool>`). For example:
+```
+# Correct — call the tool directly
+mcp_xskills_dispatch_dispatch()
+mcp_xskills_plan_save_spec()
+mcp_xskills_reproduce_repro_backend()
+```
+
+Any attempt to use `Read Mcp Resource` with a skill name as the server will fail. The four MCP servers above are the only ones available.
+
+### When task directories don't exist yet
+
+Directories like `.x-skills/tasks/`, `.x-skills/debug/`, etc. are **created by the skills themselves** during workflow execution. If a glob or read fails because these paths don't exist, that means the prior pipeline step hasn't run yet:
+- `.x-skills/plan/` → created when `x-plan` runs (before `x-epic`)
+- `.x-skills/epics/` → created when `x-epic` runs (before `x-decompose`)
+- `.x-skills/tasks/` → created when `x-decompose` runs (before `x-implement`)
+- `.x-skills/debug/` → created when `x-triage` + `x-reproduce` run
+
+If you need content at one of these paths, first execute the skill that creates it.
 
 ---
 
@@ -67,26 +118,25 @@ The planning workflow follows a three-phase handoff chain:
 
 After task approval → `x-implement` executes tasks sequentially or in parallel groups.
 
-### Code Review & Debugging Workflows (Optional)
 
-Independent of the planning pipeline, code quality improvements use two separate flows:
+## Debugging Workflow
 
-**Static Analysis Flow:**
-
-| Phase | Skill | Input | Output | Gate |
-|-------|-------|-------|--------|------|
-| 1. Analyze | `x-review` | Source code or project path | `.x-skills/review/DD-MM-YYYY-hh:mm.md` (review plan with complexity/duplication metrics) | User reviews issues |
-| 2. Refactor | `x-refactor` | Review findings | JSON/markdown refactoring suggestions (extract method, rename, polymorphism) | User applies changes manually |
-
-**Debugging Flow:**
+Independent of the planning pipeline, debugging uses a multi-skill scientific method workflow:
 
 | Phase | Skill | Input | Output | Gate |
 |-------|-------|-------|--------|------|
-| 1. Reproduce | `x-debug` | Error message or stack trace | `.x-skills/debug/repro-*.js`, `.x-skills/debug/verify-*.js` | Reproduction triggers the same error locally |
-| 2. Hypothesize | `x-debug` | Debug session + reproduction results | `.x-skills/debug/` session with pass/fail verdicts | Root cause identified, hypotheses eliminated |
-| 3. Fix root cause | `x-fix` | Fix plan from x-debug | Updated source files | Verification script PASSES (exit 0) |
+| 1. Triage | `x-triage` | Bug report (error message, symptoms) | `.x-skills/debug/triage-brief.md` | User confirms classification |
+| 2. Reproduce | `x-reproduce` | Triage brief → Platform field | `.x-skills/debug/repro-<platform>.js` | Reproduction triggers same error locally |
+| 3. Investigate | `x-investigate` | Triage brief + repro script | `.x-skills/review/debug-<session>.md` (fix plan) | Root cause confirmed, hypotheses eliminated |
+| 4. Fix | `x-fix` (existing) | Fix plan from investigate | Updated source files + verification passes | Verification script exits 0 |
 
-The review directory serves both workflows: `x-review` creates static analysis plans, while `x-debug` exports runtime error hypotheses as fix plans for `x-fix`. **Critical rule:** never silence errors — always fix the root cause and verify with reproduction.
+**Critical rule:** never silence errors — always fix the root cause and verify with reproduction.
+
+### Skill Descriptions
+
+- **x-triage** — Structured intake: asks targeted questions about platform, symptoms, and evidence before any tools run
+- **x-reproduce** — Creates minimal platform-aware reproducible test cases (browser console, Node standalone, ADB logcat steps)
+- **x-investigate** — Hypothesis-driven root cause analysis using git bisect/blame, Chrome DevTools, debuggers, or engine profilers depending on platform
 
 ## Release Workflow
 
