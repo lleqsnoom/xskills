@@ -84,16 +84,15 @@ Skills and MCP servers are two different things. Using the wrong access method c
 
 ### How to invoke a skill's MCP tool
 
-Use the **tool name** directly with its full qualified path (`mcp_<server>_<tool>`), not via resource reading. For example:
+Use the **tool name** directly with its full qualified path (`mcp_<server>_<tool>`). For example:
 ```
 # Correct — call the tool directly
 mcp_xskills_dispatch_dispatch()
 mcp_xskills_plan_save_spec()
 mcp_xskills_reproduce_repro_backend()
-
-# Wrong — these will fail with "mcp 'x-implement' not available"
-Read Mcp Resource { mcp_name: "x-implement", uri: "crush://skills/x-implement/SKILL.md" }
 ```
+
+Any attempt to use `Read Mcp Resource` with a skill name as the server will fail. The four MCP servers above are the only ones available.
 
 ### When task directories don't exist yet
 
