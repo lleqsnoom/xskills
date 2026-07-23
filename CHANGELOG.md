@@ -1,3 +1,8 @@
+## [5.4.1] - 2026-07-23
+
+* Merge pull request #32 from lleqsnoom/fix/mcp-resource-skill-access (9e5b7be)
+* fix: solve issues with using skills with mcp (c01b533)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
