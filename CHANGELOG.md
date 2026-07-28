@@ -1,3 +1,8 @@
+## [5.5.0] - 2026-07-28
+
+* Merge pull request #33 from lleqsnoom/fix/mcp-resource-skill-access (03e1d49)
+* feat(mcp): extract inputSchema from skill script source for MCP tool discovery (6e1ef90)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
