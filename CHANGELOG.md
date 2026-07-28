@@ -1,3 +1,8 @@
+## [5.6.0] - 2026-07-28
+
+* Merge pull request #34 from lleqsnoom/feat/analyze (c382483)
+* feat(anal): add interactive problem analysis skill with evidence-based thesis and solution routing (8dabc0e)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
