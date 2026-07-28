@@ -45,6 +45,8 @@ xskills/
     │   └── scripts/
     ├── x-fix/                # Resolve code review issues from fix plan files
     │   └── SKILL.md
+    ├── x-anal/               # Interactive analysis — understand problem, produce thesis with evidence, propose solution
+    │   └── SKILL.md
     ├── x-investigate/        # Hypothesis-driven root cause analysis — ranked hypotheses, git history, platform tools
     │   ├── SKILL.md
     │   └── scripts/
@@ -136,6 +138,7 @@ Independent of the planning pipeline, debugging uses a multi-skill scientific me
 
 - **x-triage** — Structured intake: asks targeted questions about platform, symptoms, and evidence before any tools run
 - **x-reproduce** — Creates minimal platform-aware reproducible test cases (browser console, Node standalone, ADB logcat steps)
+- **x-anal** — Interactive analysis: confirms user intent, clarifies ambiguities with suggestions, produces thesis with evidence and solution proposition, routes to fix or task creation
 - **x-investigate** — Hypothesis-driven root cause analysis using git bisect/blame, Chrome DevTools, debuggers, or engine profilers depending on platform
 
 ## Release Workflow
