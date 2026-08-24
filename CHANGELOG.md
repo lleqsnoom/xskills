@@ -1,3 +1,9 @@
+## [5.7.0] - 2026-08-24
+
+* Merge pull request #35 from lleqsnoom/feat/sgile-prototype (cf5cc1f)
+* feat: Asap user check (24630d0)
+* docs(anal): add export-progress-lambda-bridge analysis (d2192e3)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
