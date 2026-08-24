@@ -34,7 +34,37 @@ function main() {
   const fullPath = path.join(dir, filename);
 
   try {
-    const header = `# Plan — ${args.topic}\n\n**Date:** ${date}\n**Branch:** ${branch}\n\n---\n\n`;
+    const header = `# Plan — ${args.topic}
+
+**Date:** ${date}
+**Branch:** ${branch}
+
+---
+
+goal:         <outcome in one sentence>
+constraint:   <non-functional requirements>
+
+## Layers
+
+### L0 — Skeleton / Prototype
+**Goal:** Working end-to-end flow with mocks/stubs
+**What works:** <concrete: which flow completes end-to-end>
+**What's mocked:** <which parts use stubs and why>
+**Definition of Done:**
+- [ ] <automated check>: \`<command>\`
+- [ ] System starts without errors
+
+### L1 — Real Implementation
+**Goal:** Replace mocks with actual logic
+**What changes:** <mocks replaced, logic added>
+**Prerequisite:** Layer 0 complete and passing
+**Definition of Done:**
+- [ ] All L0 tests still pass (regression)
+- [ ] <new testable behavior>
+
+## Working notes
+<scratch space for hypotheses and edge cases>
+`;
 
     shared.log("x-plan", `creating directory: ${dir}`);
     shared.ensureDir(dir);

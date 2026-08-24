@@ -1,34 +1,68 @@
 ---
 name: x-epic
-description: Convert approved spec into user stories — INVEST-gated, scope-bounded epics with epic-level DOD; outputs .x-skills/epics/DD-MM-YYYY-hh:mm-<topic>.md for handoff to x-decompose
-version: 1.0.0
+description: Convert approved spec into a layer-based epic — each layer is a coherent, testable increment from prototype to polished product; outputs .x-skills/epics/DD-MM-YYYY-hh:mm-<topic>.md for handoff to x-decompose
+version: 2.0.0
 author: Community
-tags: [epic, user-stories, invest, scope, definition-of-done]
+tags: [epic, layers, definition-of-done, scope, prototype, incremental]
 user-invocable: true
 ---
 
-# X-Epic — Spec-to-User-Stories Conversion
+# X-Epic — Layer-Based Epic Definition
 
 `.x-skills/epics/DD-MM-YYYY-hh:mm-<topic>.md`. One file per topic. Reference the spec; don't repeat it. Follow pipeline order from `.agents/rules/xskills.md`.
 
 ## Workflow
 
 1. **Open staging file** — Run: `node <path-to-save-epic.js> --topic <slug>`
-2. **Read the spec** — Open file referenced by `spec:` in Epic Header. Extract every contract, invariant, and constraint into user stories. One story per coherent unit of value.
-3. **Write user stories** — See User Story Format below. Apply INVEST (Independent, Negotiable, Valuable, Estimable, Small, Testable — mark ✓ or ✗ with one-line reason; if any ✗, split or rephrase).
-4. **Define scope boundaries** — Explicitly state what is *in* and what is *out*.
+2. **Read the spec** — Open file referenced by `spec:` in Epic Header. Extract every layer from the Layer Roadmap.
+3. **Flesh out layers** — See Layer Format below. Each layer becomes a coherent increment with scope, prerequisites, and DOD.
+4. **Define epic-level boundaries** — Explicitly state what is *in* and what is *out*.
 5. **Gate** — Confirm epic with user before handing off to `x-decompose`.
 
-## User Story Format
+## Layer Format
+
+Each layer from the spec becomes a detailed section in the epic. Layers are the replacement for user stories — they represent **increments of working software**, not components or features.
 
 ```markdown
-### US<n> — <title>
+### Layer <N> — <name>
 
-As a **<role>**, I want **<capability>** so that **<value>**.
-**Acceptance criteria:**
-- [ ] <testable requirement 1>
-- [ ] <testable requirement 2>
+**Objective:** <one sentence: what this layer achieves>
+**From spec:** L<N> — <spec layer name>
+
+**Scope in:**
+- <what this layer delivers>
+- <specific capabilities added or improved>
+
+**Scope out:**
+- <what is explicitly deferred to later layers>
+- <known limitations of this layer>
+
+**Prerequisite:** Layer <N-1> complete and all tests passing
+  (skip for L0 — prerequisite is a clean project state)
+
+**Definition of Done:**
+- [ ] <regression check: L(N-1) tests still pass> (skip for L0)
+- [ ] <new testable behavior 1>
+- [ ] <new testable behavior 2>
 ```
+
+### Layer Design Rules
+
+1. **Each layer = one working increment** — After completing a layer, the system is in a better but fully functional state. Not "header done, waiting for footer."
+2. **Layers peel back abstraction** — L0 uses mocks/stubs. L1 replaces with real logic. L2 adds error handling. L3 polishes. Each layer makes the system more "real."
+3. **Prerequisites are explicit** — State what must be done before this layer starts. This creates a clear execution order for x-decompose and x-implement.
+4. **Scope out is as important as scope in** — Knowing what a layer does NOT do prevents scope creep and keeps each layer small enough to complete in 1-3 tasks.
+
+### How Layers Map to the Onion Metaphor
+
+```
+┌─────────────────────┐  L3: Polish — monitoring, docs, edge cases
+├─────────────────────┤  L2: Resilience — error handling, retries
+├─────────────────────┤  L1: Real logic — replace mocks with actual implementation  
+├─────────────────────┤  L0: Skeleton — working prototype with mocks/stubs
+```
+
+The user sees the outer layers first (polish, monitoring) in the spec as the vision. But implementation goes inside-out: skeleton first, then real logic, then resilience, then polish. Like painting: canvas → base coat → details → varnish.
 
 ## Epic Header
 
@@ -41,7 +75,6 @@ As a **<role>**, I want **<capability>** so that **<value>**.
 ---
 
 goal:         <outcome in one sentence>
-milestone:    <skip if work fits in one milestone, otherwise M<n>>
 spec:         .x-skills/plan/DD-MM-YYYY-hh:mm-<topic>.md
 ```
 
@@ -50,12 +83,12 @@ spec:         .x-skills/plan/DD-MM-YYYY-hh:mm-<topic>.md
 ```markdown
 ## Definition of Done (Epic Level)
 
-- [ ] All user stories delivered and acceptance criteria verified
-- [ ] Integration across stories works end-to-end
-- [ ] No regressions in existing behavior
+- [ ] All layers delivered and acceptance criteria verified
+- [ ] System works end-to-end with real logic (not mocks)
+- [ ] No regressions across layers (L0 tests pass through L(N))
 - [ ] Documentation updated where contracts changed
 ```
 
 ## Handoff Flow
 
-Artifact must exist on disk before handing off to `x-decompose`.
+Artifact must exist on disk before handing off to `x-decompose`. The epic's layers section is the source of truth for decomposition.

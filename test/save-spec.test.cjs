@@ -196,7 +196,7 @@ describe("save-spec.js — spec file content", () => {
     }
   });
 
-  it("spec file ends with a trailing newline after the separator", async () => {
+  it("spec file ends with a trailing newline", async () => {
     const tmpDir = createTempDir();
     try {
       await runSaveSpec(["--topic", "newline-check"], tmpDir);
@@ -205,7 +205,7 @@ describe("save-spec.js — spec file content", () => {
         path.join(tmpDir, ".x-skills", "plan", dirContents[0]),
         "utf8"
       );
-      assert.match(content, /---\n\n$/);
+      assert.match(content, /\n$/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }

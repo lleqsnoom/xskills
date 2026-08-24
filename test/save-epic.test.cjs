@@ -198,11 +198,11 @@ describe("save-epic.js — epic file content", () => {
         "utf8"
       );
       assert.match(content, /## Definition of Done \(Epic Level\)/);
-      // Should contain at least the standard DoD checklist items
+      // Should contain at least the standard DoD checklist items (layer-based)
       assert.ok(
-        content.includes("- [ ] All user stories delivered") ||
-        content.includes("All user stories delivered"),
-        "DoD should mention user story delivery"
+        content.includes("All layers delivered") ||
+        content.includes("all layers delivered"),
+        "DoD should mention layer delivery"
       );
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
