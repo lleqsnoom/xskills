@@ -110,15 +110,56 @@ If you need content at one of these paths, first execute the skill that creates 
 
 ## Development Workflow
 
-The planning workflow follows a three-phase handoff chain:
+The planning workflow follows a three-phase handoff chain using **layer-based decomposition** (onion approach). Each layer is a complete, testable increment — like oil painting: base coat first, detail later.
 
 | Phase | Skill | Input | Output | Gate |
 |-------|-------|-------|--------|------|
-| 1. Plan | `x-plan` | Vague goal or requirement | `.x-skills/plan/DD-MM-YYYY-hh:mm-<topic>.md` (spec) | User approves spec |
-| 2. Epic | `x-epic` | Approved spec | `.x-skills/epics/DD-MM-YYYY-hh:mm-<topic>.md` (user stories + DOD) | User approves epic |
-| 3. Decompose | `x-decompose` | Approved epic | `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>/` (directory with atomic tasks, one file per user story) | User approves tasks |
+| 1. Plan | `x-plan` | Vague goal or requirement | `.x-skills/plan/DD-MM-YYYY-hh:mm-<topic>.md` (spec + layer roadmap) | User approves spec |
+| 2. Epic | `x-epic` | Approved spec | `.x-skills/epics/DD-MM-YYYY-hh:mm-<topic>.md` (layers with scope + DOD) | User approves epic |
+| 3. Decompose | `x-decompose` | Approved epic | `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>/` (layer-organized tasks, each independently testable) | User approves tasks |
 
-After task approval → `x-implement` executes tasks sequentially or in parallel groups.
+After task approval → `x-implement` executes tasks layer by layer (L0 first, then L1, etc.).
+
+### The Onion Approach (Layer-Based Decomposition)
+
+**Old approach (component-based):** Break into pieces like header, footer, queue, lambda. Nothing works until all pieces are done. Hard to test incrementally.
+
+**New approach (layer-based):** Each layer is a complete, working increment:
+
+```
+Layer 0 — Skeleton/Prototype: basic flow with mocks/stubs → something runs and tests pass
+Layer 1 — Real Implementation: replace mocks with actual logic → same tests still pass, real data flows
+Layer 2 — Resilience: error handling, retries, logging → system survives bad input
+Layer 3+ — Polish: monitoring, docs, edge cases → production-ready
+```
+
+**Key rules:**
+- **L0 is always a working prototype** — after Task 0.1, you can run `node test` and see something work
+- **Each task = one verifiable change** — not "created file X" but "file X works and is tested"
+- **Regression is mandatory for L1+** — every task verifies previous layer tests still pass
+- **Tasks within a layer are small steps** (1-3 per layer); layers are the real increments
+- **If you catch yourself decomposing by component** (header, footer, nav), each component must be independently testable to qualify as a layer
+
+### Example: Image Processing Pipeline (SQS + Lambda)
+
+```
+L0 — Skeleton (2 tasks):
+  Task 0.1: Create project + basic sender → mock queue → stub Lambda → fixed response
+  Task 0.2: Add integration test proving end-to-end flow works
+
+L1 — Real Processing (2 tasks):
+  Task 1.1: Implement actual image resize logic in Lambda
+  Task 1.2: Wire real processor, verify all L0 tests still pass with real data
+
+L2 — Resilience (2 tasks):
+  Task 2.1: Add error handling + dead letter queue for failed messages
+  Task 2.2: Add retry logic with exponential backoff
+
+L3 — Observability (1 task):
+  Task 3.1: Add CloudWatch metrics + structured logging
+```
+
+vs. old approach: "Create SQS queue, create Lambda function, implement sender, implement resize" — none of which work until all 4 are done.
 
 
 ## Debugging Workflow
