@@ -1,3 +1,7 @@
+## [5.8.0] - 2026-08-31
+
+* feat: Improve comments quality (1a1fe21)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
