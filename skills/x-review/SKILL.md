@@ -51,6 +51,8 @@ For engineering principles definitions and violation patterns, see `references/p
 | MAJOR | Clear SOLID/KISS/DRY violation | Should fix |
 | MINOR | Style or minor optimization | Nice to have |
 
+**CRITICAL SRP note:** a function that interleaves phases (fetch, validate, probe, decrypt) with inline reporting (`push` to a shared results array inside each branch) is an orchestrator-with-interleaved-reporting violation — always CRITICAL. Verify with the two extract tests in `references/principles.md` (one-sentence test, reporting test).
+
 ## Output Format
 
 Produce a review and save it under `.x-skills/review/`. Use `save-plan.js` to create the directory and generate a timestamped plan file:

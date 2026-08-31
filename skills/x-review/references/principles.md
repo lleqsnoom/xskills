@@ -12,11 +12,20 @@ A function or class should have **one, and only one, reason to change**.
 | Function name is compound | `loadProcessAndSaveData()` |
 | Multiple return points with different semantics | Returns `null` on error, `data` on success, `true` on skip |
 | Can't describe what it does in one sentence | "It fetches the user, checks if they're active, then updates the cache..." |
+| Interleaves 2+ phases that each both work and report | Fetch blob → sniff header → probe endpoint → decrypt, all in one body with a `push(...)` result call inside every branch |
+| One shared accumulator mutated across phases | `let keyHex` assigned inside a loop that also fetches, parses, and reports |
+| A phase isn't reusable without its reporting | Extracting "probe the key endpoint" drags along result strings and the shared `results` array |
+| Class plays 2+ roles (persistence, validation, orchestration) | `UserService` that hits the DB, validates input, and sends emails |
+| Class methods group by role, not shared state (god class) | A `Report` class that renders, exports, emails, and archives |
 
 ### The "extract test"
 
 Ask: **Can this function be split into two smaller functions, each of which still makes sense on its own?**
 If yes → it violates SRP.
+
+Stronger variant for orchestrators: **would any phase still make sense if you deleted its reporting call?** If a phase cannot be extracted without dragging along output collection, the function has at least two responsibilities — the phase's work and the reporting. Fix by composing named phase helpers that return data, and collect the report in one place.
+
+Same test for classes: **can the class be split into two classes that each still make sense on their own?** If yes → it violates SRP.
 
 ### Good example
 
