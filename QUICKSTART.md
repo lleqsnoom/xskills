@@ -36,7 +36,7 @@ Two CLIs available after install:
 | `x-migrate` | Framework/dependency migration plans with breaking changes | `x-migrate-analyze` |
 | `x-rollback` | Git revert with multi-step confirmation | `x-rollback-revert` |
 | `x-test-gen` | Generate test stubs from implementation (happy/error/edge cases) | `x-test-gen-generate` |
-| `x-dispatch` | Parallel subagent task dispatcher via git worktrees | `x-dispatch-dispatch` |
+| `x-parallel` | Parallel background coding agents via git worktrees | `x-parallel-parallel` |
 
 ## Pipeline Flow
 

@@ -138,7 +138,7 @@ Run `npx xskills list` to see all available skills.
 | `x-debug` | Structured debugging — hypothesis formation, evidence collection, root cause declaration with fix plan export |
 | `x-decompose` | Decompose epic into atomic tasks ≤8h each with DOD, test plan, effort estimate |
 | `x-plan` | Plan before coding — clarify goals, propose approaches with trade-offs, write spec as declarations (contract, invariant, test), gate on approval |
-| `x-dispatch` | Parallel subagent task dispatcher via git worktrees with dependency management |
+| `x-parallel` | Run multiple coding tasks in parallel — each in an isolated git worktree with its own background agent, results merged back |
 | `x-epic` | Convert approved spec into INVEST-gated user stories and epic-level DOD |
 | `x-fix` | Resolve identified issues one-by-one from a fix plan file until complete |
 | `x-implement` | Test-driven implementation — red/green/refactor per task, docs sync, commit via x-commit |
