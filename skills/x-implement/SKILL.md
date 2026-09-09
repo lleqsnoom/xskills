@@ -1,9 +1,9 @@
 ---
 name: x-implement
-description: Implement or fix with TDD — failing test first, red-green-refactor cycle, doc sync after each task, gate on plan completion
-version: 1.0.0
+description: Implement or fix with TDD — parallelize independent tasks with x-parallel, apply x-ui for frontend work, red-green-refactor per task, verify with x-review + x-fix, gate on plan completion
+version: 1.1.0
 author: Community
-tags: [tdd, implementation, test-driven, red-green-refactor, production-code]
+tags: [tdd, implementation, test-driven, red-green-refactor, production-code, parallel, ui]
 user-invocable: true
 ---
 
@@ -41,6 +41,28 @@ Prefer a functional approach for readability. Side effects make code hard to rea
 - **Side effects are only acceptable where unavoidable** (I/O, DB, network) — and must be clearly named and isolated.
 - **One responsibility per function; keep orchestrators thin.** Each phase (fetch, validate, probe, decrypt) is a named helper that returns data; the orchestrator only composes them. If a function both does a job and reports on it — a `push` closure appending to a shared `results` array inside every branch — the reporting is entangled with each responsibility; collect the report in exactly one place.
 - **One responsibility per class and file too.** A class plays one role — persistence, validation, orchestration — not several. If a class's methods group by role rather than by shared state, split it; keep one file per concern (see Directory Organization).
+
+## Parallelize Independent Tasks
+
+Implement tasks in dependency order. When two or more tasks can run independently, dispatch them to background agents with x-parallel instead of doing them one by one.
+
+1. Read every task file under `.x-skills/tasks/<epic>/`.
+2. A task is **independent** when no other pending task modifies the same files and no other task requires its output (check each file's `Preconditions` and `Files:`).
+3. Independent tasks run concurrently:
+   ```bash
+   node <path-to-x-parallel>/scripts/parallel.mjs --tasks .x-skills/tasks/<epic> --parallel 4
+   ```
+   x-parallel gives each task an isolated worktree and a full background agent, retries failures, and merges committed results back into your branch.
+4. Tasks that depend on one another stay in the inline TDD loop below, in dependency order.
+5. After an x-parallel batch merges, run the full test suite, then VERIFY (step 4) on the merged changes before updating the plan.
+
+## Frontend Work Uses X-UI
+
+When a task's scope includes UI (HTML/CSS, templates, components, or styles in any framework), apply the x-ui skill to everything you produce:
+
+1. Read `skills/x-ui/SKILL.md` before writing any UI code.
+2. Follow x-ui's method: state the screen's primary task, then build to its strict rules (element count limits, component selection, row actions, status display, pagination rules).
+3. Run x-ui's Pre-Flight Checklist before VERIFY. A screen that fails any checklist item is not done.
 
 ## Workflow
 
