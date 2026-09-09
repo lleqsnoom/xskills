@@ -31,6 +31,7 @@ node <path-to>/scripts/save-plan.js --output .x-skills/review/   # create plan f
 
 1. **Create plan file with all analyses**: `node <path-to>/scripts/save-plan.js --output .x-skills/review/` — this runs complexity analysis (AST-based via tree-sitter), duplication check, AND refactor pattern detection in one step.
 2. The script prints the full path. Open that file with `edit` or `write`, then insert your review content directly into it using the format below.
+3. **Run the comments pass (always, using x-comments)** — apply the rules in `skills/x-comments/SKILL.md` to every reviewed file. Report comment issues under a `[Comments]` heading in the plan: comments that restate code, obvious comments, and paragraph-long explanations that should be a named function. Route comment issues to `x-comments` in Next Steps.
 
 The complexity script auto-installs tree-sitter if missing (global install). Output is JSON — parse it for function metrics and duplication counts.
 
@@ -42,6 +43,7 @@ For engineering principles definitions and violation patterns, see `references/p
 
 - **x-refactor** — Use after reviewing this plan to get automated refactoring suggestions (extract method, rename variables, replace conditionals). Run `x-refactor` on flagged files for before/after comparisons. Note: `x-refactor` provides analysis only; apply changes manually based on its suggestions.
 - **x-debug** — For runtime errors or behavioral issues that require hypothesis-driven investigation rather than static code analysis.
+- **x-comments** — Required on every review. Enforces commentary rules (remove obvious comments, refactor over-commented blocks into named functions, keep only `why` comments). Route comment findings here.
 
 ## Severity
 
@@ -100,5 +102,6 @@ After saving the plan file, recommend the appropriate next skill based on what w
 | Any issues that need fixing (complexity, SOLID violations, duplication) | `x-fix` | Reads your plan and actually edits source files to resolve each issue |
 | Structural refactoring suggestions without applying changes | `x-refactor` | Analysis-only — produces before/after comparisons but doesn't edit code |
 | Behavioral bugs or runtime errors that need investigation | `x-debug` | Hypothesis-driven debugging — reproduce, isolate root cause, then fix with x-fix |
+| Comment noise, obvious comments, over-commented blocks | `x-comments` | Removes noisy comments and refactors over-explained blocks into named functions |
 
 For most review workflows: **use `x-fix`** to resolve issues from your plan. Use `x-refactor` only when you want suggestions without applying changes.

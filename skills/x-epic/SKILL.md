@@ -49,11 +49,11 @@ Each layer from the spec becomes a detailed section in the epic. Layers are the 
 ### Layer Design Rules
 
 1. **Each layer = one working increment** — After completing a layer, the system is in a better but fully functional state. Not "header done, waiting for footer."
-2. **Layers peel back abstraction** — L0 uses mocks/stubs. L1 replaces with real logic. L2 adds error handling. L3 polishes. Each layer makes the system more "real."
+2. **Each layer replaces the previous layer's stubs.** L0 uses mocks/stubs. L1 replaces them with real logic. L2 adds error handling. L3 polishes.
 3. **Prerequisites are explicit** — State what must be done before this layer starts. This creates a clear execution order for x-decompose and x-implement.
 4. **Scope out is as important as scope in** — Knowing what a layer does NOT do prevents scope creep and keeps each layer small enough to complete in 1-3 tasks.
 
-### How Layers Map to the Onion Metaphor
+### Layer Order (prototype to polish)
 
 ```
 ┌─────────────────────┐  L3: Polish — monitoring, docs, edge cases
@@ -62,7 +62,7 @@ Each layer from the spec becomes a detailed section in the epic. Layers are the 
 ├─────────────────────┤  L0: Skeleton — working prototype with mocks/stubs
 ```
 
-The user sees the outer layers first (polish, monitoring) in the spec as the vision. But implementation goes inside-out: skeleton first, then real logic, then resilience, then polish. Like painting: canvas → base coat → details → varnish.
+Implementation order is fixed: L0 skeleton, then L1 real logic, then L2 resilience, then L3 polish. Build in this order regardless of how the spec presents the layers.
 
 ## Epic Header
 

@@ -11,9 +11,9 @@ user-invocable: true
 
 One task file per sub-step, organized by layer. Each task is a self-contained, testable increment that builds on the previous one. Follow pipeline order from `.agents/rules/xskills.md`.
 
-## The Onion Principle
+## Decomposition Rule
 
-Tasks are **not** components (header, footer, queue, lambda). Tasks are **steps within layers**, and layers are **complete increments**.
+Tasks are not components. A task is one step within a layer, and each layer is a complete, runnable increment.
 
 ```
 Layer 0 (Skeleton)     → Task 0.1: project setup + basic flow with mock
@@ -73,7 +73,7 @@ Layer 3 (Polish)       → Task 3.1: add monitoring + documentation
 | Complex (many concepts) | 3 tasks | "Error handling" = error types + retry logic + logging |
 | Very complex | Split across layers | If a layer needs 4+ tasks, some belong in the next layer |
 
-**Rule of thumb:** if you're writing more than 3 tasks for a layer, some of those tasks probably represent a separate concern that should be its own layer.
+**Rule:** if a layer needs more than 3 tasks, move the extra tasks to the next layer.
 
 ### Layer-to-Task Examples
 
