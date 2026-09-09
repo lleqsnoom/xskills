@@ -1,3 +1,10 @@
+## [5.9.0] - 2026-09-09
+
+* Merge pull request #36 from lleqsnoom/feat/x-ui-design-skill (7a20c7c)
+* feat: wire review and comment checks into the workflow (0bd8c14)
+* docs: replace vague skill directives with concrete rules (05b1c43)
+* feat: add x-ui UI design skill (ea207e0)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
