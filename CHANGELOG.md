@@ -1,3 +1,8 @@
+## [5.11.0] - 2026-09-09
+
+* Merge pull request #38 from lleqsnoom/feat/implement-parallel-ui (eac9d2f)
+* feat: parallelize and apply x-ui in x-implement (c9bd9b8)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
