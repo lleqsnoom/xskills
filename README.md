@@ -146,6 +146,7 @@ Run `npx xskills list` to see all available skills.
 | `x-migrate` | Framework/dependency migration assistant — breaking changes, upgrade paths, automated fixes |
 | `x-review` | Review code against engineering principles with AST-based complexity analysis, duplication detection, and refactor pattern suggestions across 30+ languages (Python, C, C++, Java, JS, TS, Go, Rust, Ruby, PHP, Swift, Kotlin, Lua, Dart, Scala, Haskell, Elixir, and more) |
 | `x-triage` | Structured intake conversation — ask targeted questions to classify bug platform, type, and evidence before any debugging begins |
+| `x-ui` | Design HTML app UIs that are clean, clear, and effective — principle-first method (Rams, Rand, Apple HIG) with concrete techniques and a pre-flight checklist |
 | `x-rollback` | Automated git revert with multi-step confirmation and impact analysis |
 | `x-reproduce` | Platform-aware minimal reproduction script generation for browser, Node, and mobile debugging |
 | `x-test-gen` | Generate test stubs from implementation — happy path, error cases, edge case placeholders |
