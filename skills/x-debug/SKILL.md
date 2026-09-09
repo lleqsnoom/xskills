@@ -9,7 +9,7 @@ user-invocable: true
 
 # X-Debug — Reproduce → Hypothesize → Fix → Verify
 
-Never silence errors. Always fix the root cause and verify it's resolved.
+Do not suppress errors, disable reporting, or add try/catch that swallows them. Fix the cause and verify with the reproduction script.
 
 ## Critical: Run analyze.js First (Always)
 

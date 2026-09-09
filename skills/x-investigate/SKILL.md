@@ -9,7 +9,7 @@ user-invocable: true
 
 # X-Investigate — Hypothesis-Driven Root Cause Analysis
 
-Systematically test hypotheses using the right tools for your platform and git history. Find the real root cause instead of guessing.
+Generate hypotheses, test them with platform tools and git history, and eliminate until one root cause remains.
 
 ## Prerequisites
 

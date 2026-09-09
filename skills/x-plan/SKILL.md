@@ -39,7 +39,7 @@ For worked example: see `references/examples/design-spec.md`.
 
 ### Layer Roadmap (Required)
 
-Every spec **must** include a `## Layers` section. This is the heart of the onion approach — you can't think of everything upfront, so you plan in peels.
+Every spec **must** include a `## Layers` section. Define layers from prototype to polish; fill in details during decomposition.
 
 ```markdown
 ## Layers
@@ -72,7 +72,7 @@ Every spec **must** include a `## Layers` section. This is the heart of the onio
 
 1. **L0 is always a prototype** — the first layer is always a working skeleton with mocks/stubs. If you can't describe what L0 does in one sentence, clarify before writing the spec.
 2. **Each layer is independently testable** — after completing a layer, you should be able to run tests and see something work. If a "layer" only makes sense when combined with 3 others, it's not a layer — split it.
-3. **Layers peel back complexity** — L0 has the simplest possible version of everything. Each subsequent layer replaces a mock with real logic, adds error handling, or improves quality. Like oil painting: base coat first, detail later.
+3. **Each layer removes one simplification.** L0 has the simplest version of everything. Each later layer replaces a mock with real logic, adds error handling, or improves quality.
 4. **Layers have prerequisites** — L(N+1) depends on LN being complete. State this explicitly.
 5. **Don't over-plan layers** — define 3-5 layers at the spec level. Details within each layer emerge during decomposition and implementation. It's OK if L4 is just a one-liner like "polish and documentation."
 
@@ -86,7 +86,7 @@ Every spec **must** include a `## Layers` section. This is the heart of the onio
 | CLI tool | L0: argument parsing + stub action → L1: real action logic → L2: output formatting → L3: edge cases |
 | Library / utility | L0: function signatures + mock returns → L1: real implementation → L2: edge cases + types |
 
-**Rule of thumb:** if you catch yourself writing "L1: header, L2: footer, L3: navigation" — that's component decomposition, not layer decomposition. Each layer should be a complete increment, not a piece. If components are what you need, each component must be independently testable (e.g., each page renders on its own).
+**Rule:** writing "L1: header, L2: footer, L3: navigation" is component decomposition, not layer decomposition. Each layer must be a complete, runnable increment. If you need components, each component must be independently testable (each page renders on its own).
 
 ## Artifact Location
 
