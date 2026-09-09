@@ -1,3 +1,8 @@
+## [5.10.0] - 2026-09-09
+
+* Merge pull request #37 from lleqsnoom/feat/x-parallel (00c23b1)
+* feat: add x-parallel background agent dispatcher (e5ad563)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
