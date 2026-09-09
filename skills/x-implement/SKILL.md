@@ -51,9 +51,14 @@ For each task file in `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>/`:
 3. **REFACTOR** — Evaluate against SOLID/clean code, the comment rules, and the functional style above. Strip comments that restate code; extract explained blocks into named functions; push side effects to the edges and prefer pure, immutable functions. State what you assessed and what (if anything) improved — or why no changes were needed.
    - **One-sentence test:** every function you wrote must be describable in one sentence; if not, split it.
    - **Reporting test:** if deleting a phase's `push`/output call leaves the phase unusable, the phase was never a unit. Delegate each phase to a named helper that returns data and let the orchestrator collect the report in one place.
-4. **SYNC DOCS** — Update spec (`.x-skills/plan/*.md`) if it exists; otherwise update living docs (README, comments) directly.
-5. **COMMIT** — Run `node <path-to-commit.mjs> "<message>"` from the x-commit skill for every single commit. This is mandatory and non-negotiable. Never run `git commit` manually. If x-commit exits with an error, stop and ask the user for a corrected message — do not bypass it.
-6. **UPDATE PLAN** — Change `- [ ]` to `- [x]` for this task. Do not start the next task without this edit.
+4. **VERIFY — x-review + x-fix + test.** Run on every finished task before committing:
+   - **Test** — run the task's tests and the full regression suite. All must pass.
+   - **x-review** — run the review skill on the changed files. It produces a fix plan under `.x-skills/review/`.
+   - **x-fix** — resolve every issue in the fix plan. Re-run tests after each fix.
+   - Repeat x-review + x-fix until the plan has no unresolved issues and all tests are green.
+5. **SYNC DOCS** — Update spec (`.x-skills/plan/*.md`) if it exists; otherwise update living docs (README, comments) directly.
+6. **COMMIT** — Run `node <path-to-commit.mjs> "<message>"` from the x-commit skill for every single commit. This is mandatory and non-negotiable. Never run `git commit` manually. If x-commit exits with an error, stop and ask the user for a corrected message — do not bypass it.
+7. **UPDATE PLAN** — Change `- [ ]` to `- [x]` for this task. Do not start the next task without this edit.
 
 All tasks `- [x]` and green → `ship`.
 
