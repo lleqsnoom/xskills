@@ -1,3 +1,9 @@
+## [5.12.0] - 2026-09-11
+
+* Merge pull request #39 from lleqsnoom/feat/x-browser-x-roast (4327ef1)
+* feat: add x-roast skill for critical review of documents and plans (ca929ab)
+* feat: add x-browser skill for launching Chrome with DevTools MCP (cc1bce9)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
