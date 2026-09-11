@@ -133,6 +133,7 @@ Run `npx xskills list` to see all available skills.
 |-------|-------------|
 | `x-api-draft` | Draft API design from requirements — clarify scope, analyze endpoints and data models |
 | `x-api-swagger` | Convert an API design draft to OpenAPI YAML spec with endpoints, schemas, and auth |
+| `x-browser` | Launch real Chrome/Chromium with remote debugging and attach chrome-devtools MCP — auto-detects the app URL from README/config/env |
 | `x-commit` | Write single-line conventional commit messages with automated type suggestion and validation |
 | `x-comments` | Comment management — add precise meaningful comments, remove noisy/obvious ones, refactor overly commented code into self-explanatory functions |
 | `x-debug` | Structured debugging — hypothesis formation, evidence collection, root cause declaration with fix plan export |
