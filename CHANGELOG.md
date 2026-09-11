@@ -1,3 +1,8 @@
+## [5.13.0] - 2026-09-11
+
+* Merge pull request #40 from lleqsnoom/feat/x-humanize (4fb8c6a)
+* feat(x-humanize): add skill to simplify prose to a B2 reading level (0514313)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
