@@ -133,6 +133,7 @@ Run `npx xskills list` to see all available skills.
 |-------|-------------|
 | `x-api-draft` | Draft API design from requirements — clarify scope, analyze endpoints and data models |
 | `x-api-swagger` | Convert an API design draft to OpenAPI YAML spec with endpoints, schemas, and auth |
+| `x-browser` | Launch real Chrome/Chromium with remote debugging and attach chrome-devtools MCP — auto-detects the app URL from README/config/env |
 | `x-commit` | Write single-line conventional commit messages with automated type suggestion and validation |
 | `x-comments` | Comment management — add precise meaningful comments, remove noisy/obvious ones, refactor overly commented code into self-explanatory functions |
 | `x-debug` | Structured debugging — hypothesis formation, evidence collection, root cause declaration with fix plan export |
@@ -145,6 +146,7 @@ Run `npx xskills list` to see all available skills.
 | `x-investigate` | Hypothesis-driven root cause analysis with git history, ranked hypotheses, and platform-aware debugging tools |
 | `x-migrate` | Framework/dependency migration assistant — breaking changes, upgrade paths, automated fixes |
 | `x-review` | Review code against engineering principles with AST-based complexity analysis, duplication detection, and refactor pattern suggestions across 30+ languages (Python, C, C++, Java, JS, TS, Go, Rust, Ruby, PHP, Swift, Kotlin, Lua, Dart, Scala, Haskell, Elixir, and more) |
+| `x-roast` | Critically review non-code artifacts (articles, analyses, epics, tasks, research) — online fact-checking, a creative re-think, concrete improvements, and a reproducible weighted rubric score |
 | `x-triage` | Structured intake conversation — ask targeted questions to classify bug platform, type, and evidence before any debugging begins |
 | `x-ui` | Design HTML app UIs that are clean, clear, and effective — principle-first method (Rams, Rand, Apple HIG) with concrete techniques and a pre-flight checklist |
 | `x-rollback` | Automated git revert with multi-step confirmation and impact analysis |
