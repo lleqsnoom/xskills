@@ -142,6 +142,7 @@ Run `npx xskills list` to see all available skills.
 | `x-parallel` | Run multiple coding tasks in parallel — each in an isolated git worktree with its own background agent, results merged back |
 | `x-epic` | Convert approved spec into INVEST-gated user stories and epic-level DOD |
 | `x-fix` | Resolve identified issues one-by-one from a fix plan file until complete |
+| `x-humanize` | Simplify text, an article, a commit or PR to a B2 reading level — measure sentence length and complexity, cut noise, rewrite, then verify no meaning was lost |
 | `x-implement` | Test-driven implementation — red/green/refactor per task, docs sync, commit via x-commit |
 | `x-investigate` | Hypothesis-driven root cause analysis with git history, ranked hypotheses, and platform-aware debugging tools |
 | `x-migrate` | Framework/dependency migration assistant — breaking changes, upgrade paths, automated fixes |
