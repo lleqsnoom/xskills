@@ -50,6 +50,10 @@ xskills/
     │   ├── SKILL.md
     │   ├── scripts/
     │   └── references/
+    ├── x-humanize/           # Simplify prose to a B2 reading level — measure, rewrite, verify meaning kept + no noise
+    │   ├── SKILL.md
+    │   ├── scripts/
+    │   └── references/
     ├── x-fix/                # Resolve code review issues from fix plan files
     │   └── SKILL.md
     ├── x-anal/               # Interactive analysis — understand problem, produce thesis with evidence, propose solution
