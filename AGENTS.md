@@ -46,6 +46,10 @@ xskills/
     ├── x-browser/            # Launch Chrome with remote debugging + attach chrome-devtools MCP
     │   ├── SKILL.md
     │   └── scripts/
+    ├── x-roast/              # Critique articles/analyses/epics/tasks/research with online fact-checking + reproducible rubric score
+    │   ├── SKILL.md
+    │   ├── scripts/
+    │   └── references/
     ├── x-fix/                # Resolve code review issues from fix plan files
     │   └── SKILL.md
     ├── x-anal/               # Interactive analysis — understand problem, produce thesis with evidence, propose solution
