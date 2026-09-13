@@ -138,6 +138,7 @@ Run `npx xskills list` to see all available skills.
 | `x-comments` | Comment management — add precise meaningful comments, remove noisy/obvious ones, refactor overly commented code into self-explanatory functions |
 | `x-debug` | Structured debugging — hypothesis formation, evidence collection, root cause declaration with fix plan export |
 | `x-decompose` | Decompose epic into atomic tasks ≤8h each with DOD, test plan, effort estimate |
+| `x-essay` | Author an article end-to-end on a fixed loop — x-anal thesis, x-roast critique, x-humanize rewrite — repeating until it scores strong and reads clean |
 | `x-plan` | Plan before coding — clarify goals, propose approaches with trade-offs, write spec as declarations (contract, invariant, test), gate on approval |
 | `x-parallel` | Run multiple coding tasks in parallel — each in an isolated git worktree with its own background agent, results merged back |
 | `x-epic` | Convert approved spec into INVEST-gated user stories and epic-level DOD |

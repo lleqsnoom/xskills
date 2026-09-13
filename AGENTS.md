@@ -54,6 +54,10 @@ xskills/
     │   ├── SKILL.md
     │   ├── scripts/
     │   └── references/
+    ├── x-essay/              # Author an article on a fixed loop: x-anal → x-roast → x-humanize, bounded by score gate + cap
+    │   ├── SKILL.md
+    │   ├── scripts/
+    │   └── references/
     ├── x-fix/                # Resolve code review issues from fix plan files
     │   └── SKILL.md
     ├── x-anal/               # Interactive analysis — understand problem, produce thesis with evidence, propose solution
