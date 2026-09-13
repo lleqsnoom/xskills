@@ -1,3 +1,8 @@
+## [5.14.0] - 2026-09-13
+
+* Merge pull request #41 from lleqsnoom/feat/x-essay (077c6c3)
+* feat(x-essay): add numeric, bounded article authoring loop (97726c6)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
