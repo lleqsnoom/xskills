@@ -232,6 +232,25 @@ Step-by-step instructions for the agent...
 3. Optionally add `scripts/`, `references/`, and `assets/` subdirectories.
 4. Submit a PR, or install it locally with `npx xskills install ./path/to/my-skill`.
 
+## Development
+
+This repo is a Node package with zero runtime dependencies. Tests use the built-in `node:test` runner, so there is nothing to install before running them:
+
+```bash
+npm test                                     # run the full suite
+node bin/install.js list                     # list every skill the package ships
+node skills/x-skill-lint/scripts/lint.mjs    # check the skills themselves
+```
+
+Skills are plain folders. You can also read any `SKILL.md` directly.
+
+## What This Is Not
+
+- **Not a runtime or a model.** xskills ships instructions and small Node scripts. Your AI coding CLI runs them.
+- **Not a hosted service.** No account, no network calls — everything runs locally from `~/.agents/skills/` or `.agents/skills/`.
+- **Not magic.** A skill is guidance for the model. The quality of the output still depends on the CLI and model you use.
+- **Not dependency-free at install time for everyone.** The skills themselves use only Node built-ins, but Node.js 18 or newer is required.
+
 ## License
 
 MIT
