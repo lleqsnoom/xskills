@@ -1,3 +1,7 @@
+## [5.15.1] - 2026-09-14
+
+* docs(readme): correct skill count, dedupe install steps, humanize prose (2e9b4bd)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
