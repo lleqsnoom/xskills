@@ -1,0 +1,21 @@
+{
+  "skill": "x-roast",
+  "note": "Trigger eval set for description tuning. Each entry is a user request; should_trigger says whether x-roast is the right skill. Near-misses share keywords but belong to another skill.",
+  "queries": [
+    { "query": "roast this spec before I commit to it", "should_trigger": true },
+    { "query": "poke holes in this analysis", "should_trigger": true },
+    { "query": "give me a second opinion on this epic", "should_trigger": true },
+    { "query": "score this research report and tell me why", "should_trigger": true },
+    { "query": "review this task file critically", "should_trigger": true },
+    { "query": "roast this skill", "should_trigger": true },
+    { "query": "is this blog post argument sound? fact-check it", "should_trigger": true },
+    { "query": "find the weak claims in this article", "should_trigger": true },
+    { "query": "review this function for SOLID violations", "should_trigger": false },
+    { "query": "run a code review on my changes", "should_trigger": false },
+    { "query": "why does this test fail intermittently", "should_trigger": false },
+    { "query": "write a commit message for these changes", "should_trigger": false },
+    { "query": "simplify this paragraph to a B2 level", "should_trigger": false },
+    { "query": "research the state of vector databases", "should_trigger": false },
+    { "query": "plan the migration to Postgres", "should_trigger": false }
+  ]
+}

@@ -33,7 +33,6 @@ export function renderHeader({ slug, type = "generic", date = new Date() }) {
     `# Roast — ${slug}`,
     "",
     `**Date:** ${timestamp(date)}`,
-    `**Artifact type:** ${type}`,
     `**Profile:** ${type}`,
     "",
     "## Central claim",
