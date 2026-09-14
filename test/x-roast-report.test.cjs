@@ -71,6 +71,13 @@ describe("x-roast check-report", () => {
     assert.deepEqual(JSON.parse(res.stdout).violations, []);
   });
 
+  it("does not flag an inline mention of the template token", async () => {
+    const file = path.join(cwd, "quoted.md");
+    fs.writeFileSync(file, FILLED.replace("## Findings\n", "## Findings\n- add a rule that fails on `<!--` template comments\n"));
+    const res = await run(CHECKER, ["--file", file]);
+    assert.equal(res.code, 0, res.stderr);
+  });
+
   it("flags an empty central claim and missing score", async () => {
     const file = path.join(cwd, "empty.md");
     fs.writeFileSync(file, "# Roast\n\n## Central claim\n\n## Score\n\n## Findings\n- a\n");

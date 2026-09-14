@@ -27,7 +27,7 @@ export function lintReport(text) {
   const body = String(text || "");
   const parts = sections(body);
   const violations = [];
-  if (body.includes("<!--")) {
+  if (body.split(/\r?\n/).some((line) => /^\s*<!--/.test(line))) {
     violations.push({ rule: "template-comment", detail: "report still contains template comments" });
   }
   if (contentLines(parts["central claim"]).length === 0) {
