@@ -1,3 +1,7 @@
+## [5.15.3] - 2026-09-14
+
+* docs(readme): source the model claims, add requirements and design note (35bc485)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
