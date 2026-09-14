@@ -43,6 +43,10 @@ xskills/
     ├── x-reproduce/          # Creates minimal platform-aware reproducible test cases
     │   ├── SKILL.md
     │   └── scripts/
+    ├── x-research/           # Metric-driven iteration loop — one metric + target, atomic change per iteration, keep/revert by numbers
+    │   ├── SKILL.md
+    │   ├── scripts/
+    │   └── references/
     ├── x-browser/            # Launch Chrome with remote debugging + attach chrome-devtools MCP
     │   ├── SKILL.md
     │   └── scripts/

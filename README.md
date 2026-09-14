@@ -22,7 +22,7 @@ You already use AI coding tools. Maybe Claude Code for complex refactors, Gemini
 **xskills fixes that.** It is a set of reusable "skills" built on the [Agent Skills open standard](https://agentskills.io). A skill is a folder of knowledge and workflows. Any compatible CLI can use it.
 
 - **One format for every CLI** — no adapters, no rewriting per tool
-- **26 production-ready skills** — commits, debugging, code review, API design, task decomposition, and more
+- **27 production-ready skills** — commits, debugging, code review, API design, task decomposition, and more
 - **Zero dependencies** — Node.js built-ins only
 - **Built for local models** — every skill fits in a 4K context window
 
@@ -64,7 +64,7 @@ npx @lleqsnoom/x-skills help
 Then install the skills:
 
 ```bash
-# Install all 26 skills at once
+# Install all 27 skills at once
 xskills install-all --global          # Global: ~/.agents/skills/
 xskills install-all                   # Local: .agents/skills/ in current project
 
@@ -156,6 +156,7 @@ Run `npx xskills list` to see all available skills.
 | `x-plan` | Plan before coding — clarify vague goals, propose approaches with trade-offs, write spec as declarations (contract, invariant, test) with a layer roadmap; gate on user approval |
 | `x-refactor` | Automated refactoring suggestions (extract method, rename, replace conditional) — analyzes code against SOLID principles and outputs actionable before/after comparisons |
 | `x-reproduce` | Generates minimal platform-aware reproducible test cases from triage briefs — exits 1 when bug is present, exits 0 after fix applied |
+| `x-research` | Metric-driven research loop — name one metric and a target, then iterate one atomic change at a time, evaluating it mechanically and keeping only measured improvements until the target, a guard, or a hard cap stops the run. Use when asked to optimize or tune a measurable value, run an experiment loop, or search a constrained space toward a target. |
 | `x-review` | Review code against engineering principles — small functions, SOLID, KISS, DRY — with automated AST-based complexity analysis across 30+ languages including Python, C, C++, Java, JavaScript, TypeScript, Go, Rust, Ruby, PHP, Swift, Kotlin, and more |
 | `x-roast` | Critically review any non-code artifact — articles, analyses, epics, tasks, research — with online fact-checking, a creative re-think, concrete improvement proposals, and a weighted rubric score that is reproducible and testable. |
 | `x-rollback` | Automated git revert with multi-step confirmation — identifies target commits, analyzes impact, requires approval, creates properly formatted revert commits via x-commit integration |
