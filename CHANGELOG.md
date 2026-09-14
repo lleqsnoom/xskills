@@ -1,3 +1,8 @@
+## [5.17.0] - 2026-09-14
+
+* Merge pull request #45 from lleqsnoom/feat/x-research-agent-judged (b6ace72)
+* feat(x-research): add agent-judged evaluation mode (9f00e32)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
