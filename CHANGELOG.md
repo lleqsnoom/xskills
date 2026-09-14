@@ -1,3 +1,8 @@
+## [5.16.0] - 2026-09-14
+
+* Merge pull request #43 from lleqsnoom/feat/x-research (8914c81)
+* feat(x-research): add metric-driven iteration loop skill (8ea8d5f)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
