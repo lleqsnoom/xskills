@@ -85,6 +85,10 @@ Once you have enough information (or the user confirms they want to proceed with
 <What the user chose to do — fix now, create tasks, gather more info, or defer>
 ```
 
+**Mechanical check (when the thesis is testable).** Before assigning a confidence level, name the one check that would confirm or refute the thesis, and run it if you can — a command whose exit code or output decides it (e.g. `node repro.js`, `curl -s <url> | grep …`, `git log -S …`), or a concrete observation (a specific log line, a response header). Record it under a `## Mechanical check` heading in the analysis with the command and its result, and let that result set the confidence: a thesis the check confirms is high; one it refutes is not a thesis at all.
+
+If the host gives you no shell or web capability, say so plainly, mark the check as *not run*, and fall back to the confidence gate in Phase 4.
+
 ### Phase 4: Confidence Gate
 
 Before presenting the analysis:
