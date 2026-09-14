@@ -546,3 +546,64 @@ describe("x-research agent-judged evaluator — CLI", async () => {
     }
   });
 });
+
+describe("x-research — graph, memory, and candidates", async () => {
+  const m = await import(STATE);
+
+  it("startState carries the phase graph", () => {
+    const s = m.startState(base());
+    assert.deepEqual(s.graph.nodes, ["baseline", "iterate", "done", "escalate"]);
+    assert.equal(s.graph.edges.length, 4);
+  });
+
+  it("startState refuses fewer than 3 candidates when candidates are given", () => {
+    assert.throws(() => m.startState(base({ candidates: ["a", "b"] })), /3 candidate/);
+    assert.equal(m.startState(base({ candidates: ["a", "b", "c"] })).candidates.length, 3);
+  });
+
+  it("renderGraphMermaid marks the current phase", () => {
+    const out = m.renderGraphMermaid(m.startState(base()));
+    assert.match(out, /```mermaid/);
+    assert.match(out, /class baseline current/);
+  });
+
+  it("start writes memory.md with the candidates", async () => {
+    const root = await fsp.mkdtemp(path.join(os.tmpdir(), "x-research-mem-"));
+    try {
+      const file = path.join(root, "candidates.md");
+      await fsp.writeFile(file, "one\ntwo\nthree\n");
+      const res = await run(STATE, ["start", "--slug", "mem", "--metric", "m", "--target", "5", "--evaluator", "echo ok", "--root", root, "--candidates", file]);
+      assert.equal(res.code, 0, res.stderr);
+      const { dir } = JSON.parse(res.stdout);
+      const memory = await fsp.readFile(path.join(dir, "memory.md"), "utf8");
+      assert.match(memory, /one/);
+      assert.match(memory, /three/);
+    } finally {
+      await fsp.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("record appends a memory bullet", async () => {
+    const root = await fsp.mkdtemp(path.join(os.tmpdir(), "x-research-mem2-"));
+    try {
+      const res = await run(STATE, ["start", "--slug", "mem", "--metric", "m", "--target", "5", "--evaluator", "echo ok", "--root", root, "--candidates", "a,b,c"]);
+      const { dir } = JSON.parse(res.stdout);
+      const before = (await fsp.readFile(path.join(dir, "memory.md"), "utf8")).split("\n").filter(Boolean).length;
+      await run(STATE, ["record", "--dir", dir, "--baseline", "10"]);
+      const after = (await fsp.readFile(path.join(dir, "memory.md"), "utf8")).split("\n").filter(Boolean).length;
+      assert.ok(after > before);
+    } finally {
+      await fsp.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("start without --candidates still works", async () => {
+    const root = await fsp.mkdtemp(path.join(os.tmpdir(), "x-research-mem3-"));
+    try {
+      const res = await run(STATE, ["start", "--slug", "plain", "--metric", "m", "--target", "5", "--evaluator", "echo ok", "--root", root]);
+      assert.equal(res.code, 0, res.stderr);
+    } finally {
+      await fsp.rm(root, { recursive: true, force: true });
+    }
+  });
+});

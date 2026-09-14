@@ -42,6 +42,9 @@ function main() {
 ---
 
 goal:         <outcome in one sentence>
+contract:     <interface or API shape>
+invariant:    <what must always hold>
+test:         <acceptance criterion with given/when/then>
 constraint:   <non-functional requirements>
 
 ## Layers

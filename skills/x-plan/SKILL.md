@@ -1,6 +1,6 @@
 ---
 name: x-plan
-description: Plan before coding — clarify vague goals, propose approaches with trade-offs, write spec as declarations (contract, invariant, test) with a layer roadmap; gate on user approval
+description: Plan before coding — research the project and the web first, ask short plain questions until the user is sure, propose three approaches with trade-offs, then write a layered spec (contract, invariant, test) as a graph-driven scenario with guards and a memory file; gate on user approval
 version: 2.0.0
 author: Community
 tags: [plan, spec, requirements, architecture, clarification, testable, layers, prototype]
@@ -9,15 +9,59 @@ user-invocable: true
 
 # X-Plan — Layered Spec-Driven Planning
 
-Do not write any code until the spec is approved by the user. Follow pipeline order from `.agents/rules/xskills.md`.
+Do not write any code until the spec is approved by the user. Pipeline order: `x-plan → x-epic → x-decompose → x-implement`.
+
+## When to use
+
+- "Plan this", "write a spec", "design X before coding".
+- A vague goal you cannot yet name what to build for.
+- You need three approaches with trade-offs before committing.
+
+## Scenario
+
+The run is a guarded graph. `state.json` is the single source of truth; `memory.md` records every
+event; the spec lands at the legacy path so `x-epic` still finds it.
+
+```mermaid
+graph LR
+  intake --> research
+  research -->|research_recorded| clarify
+  clarify --> clarify
+  clarify -->|no_open_questions,three_options| propose
+  propose -->|three_options| decide
+  decide -->|decision_made| spec
+  spec -->|spec_complete| gate
+  gate -->|gate_approved| handoff
+  gate --> abandon
+```
+
+```bash
+node <skill>/scripts/scenario.mjs start --slug <slug> [--goal <text>]
+node <skill>/scripts/scenario.mjs record --dir <dir> --event research --data "<finding>"
+node <skill>/scripts/scenario.mjs record --dir <dir> --event option --data "<approach>"
+node <skill>/scripts/scenario.mjs record --dir <dir> --to <node>
+node <skill>/scripts/scenario.mjs guard  --dir <dir> --gate <name>
+node <skill>/scripts/scenario.mjs verify --dir <dir>   # exit 0 iff the stop is justified
+```
+
+| Gate | Passes when |
+|------|-------------|
+| `research_recorded` | at least one research finding is recorded |
+| `no_open_questions` | every question in `memory.md` is answered |
+| `three_options` | three distinct approaches are recorded |
+| `decision_made` | the user picked an approach |
+| `spec_complete` | the spec has `contract`, `invariant`, `test`, and `## Layers` |
+| `gate_approved` | the user approved the handoff |
+
+Completion: `verify` exits 0, or the run moved to `abandon`.
 
 ## Workflow
 
-1. **Classify scope** — Is the goal vague enough that you can't name what to build?
-2. **Clarify** (if vague) — Ask one question per turn until concrete. Don't propose solutions until problem is understood.
-3. **Propose approaches** (if clear) — Recommend 2–3 approaches with trade-offs; pick one. Then write spec.
+1. **Research first** — search the project, the web, and (for code) GitHub before asking anything. See `references/research-first.md`.
+2. **Clarify** — ask short plain questions until the open list is empty. See `references/questions.md`.
+3. **Propose three approaches** — record each with a trade-off; let the user pick.
 4. **Write the spec** — See Spec Format below. Always include a Layer Roadmap starting with L0 (prototype).
-5. **Gate** — Confirm with user before handing off to `x-epic`.
+5. **Gate** — confirm with user before handing off to `x-epic`.
 
 ## Spec Format
 
@@ -91,10 +135,11 @@ Every spec **must** include a `## Layers` section. Define layers from prototype 
 ## Artifact Location
 
 ```bash
-node <path-to-save-spec.js> --topic <slug>
+node <skill>/scripts/scenario.mjs start --slug <topic>
 ```
 
-Output: `.x-skills/plan/DD-MM-YYYY-hh:mm-<topic>.md` (relative to CWD).
+- Run folder (state + memory): `.x-skills/plan/DD-MM-YYYY-hh:mm-<topic>/` with `state.json` and `memory.md`.
+- Spec report (handoff): `.x-skills/plan/DD-MM-YYYY-hh:mm-<topic>.md` — the path `x-epic` reads.
 
 ## Abandon
 
@@ -102,4 +147,13 @@ If user decides not to proceed after clarification, stop. Record reason in worki
 
 ## Handoff Flow
 
-Artifact must exist on disk with required declarations (contract, invariant, test) and a Layer Roadmap before handing off to `x-epic`.
+Artifact must exist on disk with required declarations (contract, invariant, test) and a Layer Roadmap before handing off to `x-epic`. Prove it with `scenario.mjs guard --gate spec_complete` (exit 0).
+
+## Files
+
+- `scripts/scenario.mjs` — the run graph, guards, memory, and report writer.
+- `scripts/check-questions.mjs` — enforces the B2 question rules (`references/questions.md`).
+- `scripts/save-spec.js` — writes the richer spec skeleton (`contract`/`invariant`/`test` + layers).
+- `references/questions.md` — how to ask, and when to stop asking.
+- `references/research-first.md` — the research pass before the first question.
+- `references/examples/design-spec.md` — a worked spec.

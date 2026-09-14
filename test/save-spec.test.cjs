@@ -225,6 +225,23 @@ describe("save-spec.js — spec file content", () => {
       fs.rmSync(tmpDir, { recursive: true });
     }
   });
+
+  it("skeleton satisfies the handoff declarations", async () => {
+    const tmpDir = createTempDir();
+    try {
+      await runSaveSpec(["--topic", "handoff-check"], tmpDir);
+      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "plan"));
+      const content = fs.readFileSync(
+        path.join(tmpDir, ".x-skills", "plan", dirContents[0]),
+        "utf8"
+      );
+      for (const marker of ["goal:", "contract:", "invariant:", "test:", "constraint:", "## Layers"]) {
+        assert.ok(content.includes(marker), `skeleton is missing ${marker}`);
+      }
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true });
+    }
+  });
 });
 
 // ── Logging (stderr verification) ───────────────────────────────────

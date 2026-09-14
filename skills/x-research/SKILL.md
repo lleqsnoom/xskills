@@ -1,6 +1,6 @@
 ---
 name: x-research
-description: Research a topic or tune a metric — define one metric and a target, then iterate one atomic change at a time, evaluating it mechanically (a command, or agent-judged criteria coverage) and keeping only measured improvements until the target, a guard, or a hard cap stops the run. Use for "research X", "compile/summarise sources on Y until N criteria are covered", filling knowledge gaps, literature/topic research with coverage criteria, or optimizing a measurable value.
+description: Research a topic or tune a metric — research the project and web first, propose three candidate changes, then iterate one atomic change at a time, evaluating it mechanically (a command, or agent-judged criteria coverage) and keeping only measured improvements until the target, a guard, or a hard cap stops the run; graph-driven with guards, a memory file, and a report. Use for "research X", "compile/summarise sources on Y until N criteria are covered", filling knowledge gaps, literature/topic research with coverage criteria, or optimizing a measurable value.
 version: 1.1.0
 author: Community
 tags: [research, experiment, optimization, metric, loop, iteration, evaluation, tuning, autonomous, literature, coverage]
@@ -29,6 +29,33 @@ and no autonomy doctrine — repetition is owned by the host (see
 `references/running-unattended.md`), and the host's permission and approval gates
 **always win**. It never tells you to ignore a confirmation, never says "never
 stop", and never says "never ask".
+
+## Scenario
+
+The loop is a guarded graph over numbers. `state.json` is the source of truth; `memory.md` records
+every event beside the other trail files.
+
+```mermaid
+graph LR
+  baseline --> iterate
+  iterate -->|target_unmet| iterate
+  iterate -->|target_met_and_pass| done
+  iterate -->|cap_reached| escalate
+```
+
+Before the first experiment, propose **three** candidate changes (`--candidates`), research the
+goal first (`references/research-first.md`), and ask only what research cannot settle
+(`references/questions.md`). Machines can only judge coverage or a number; the questions that
+remain belong to the user.
+
+## Memory and report
+
+Each run directory holds:
+
+- `state.json` — the machine state (single source of truth),
+- `memory.md` — append-only: the candidates, then one bullet per event,
+- `research.md`, `research_log.md`, `results.tsv` — the numeric trail,
+- `final_report.md` — written at stop, with the phase graph under `## Scenario`.
 
 ## When to use
 
@@ -120,12 +147,13 @@ node <skill>/scripts/state.mjs start \
 node <skill>/scripts/state.mjs start \
   --slug llm-agents-in-2026 --goal "compile a sourced overview of LLM agent frameworks" \
   --metric criteria_coverage --evaluator agent --criteria criteria.md \
-  --cap 12
+  --candidates candidates.md --cap 12
 ```
-Creates `.x-skills/research/<ts>-<slug>/` with `state.json`, `research.md`,
-`research_log.md`, `results.tsv`, and prints the first action. For the agent mode
-`--target` defaults to `1` and `--direction` to `maximize`. Completion: `state.json`
-exists with `phase:"baseline"`.
+Creates `.x-skills/research/<ts>-<slug>/` with `state.json`, `memory.md`,
+`research.md`, `research_log.md`, `results.tsv`, and prints the first action. For
+the agent mode `--target` defaults to `1` and `--direction` to `maximize`.
+`--candidates <file|a,b,c>` requires at least 3 candidate changes. Completion:
+`state.json` exists with `phase:"baseline"`.
 
 ### 2. Baseline
 Measure the current value and record it. For a command evaluator run it once
@@ -224,4 +252,7 @@ host, its permission and approval gates still apply on every iteration.
   evaluator the loop relies on; the agent mode needs no command and does not use it.
 - `references/loop.md` — the state diagram, the gates, the two policies, and the two
   evaluator kinds.
+- `references/questions.md` — the B2 question rules for the user-facing choices.
+- `references/research-first.md` — the research pass before the first experiment.
+- `scripts/check-questions.mjs` — enforces the B2 question rules.
 - `references/running-unattended.md` — how each host owns repetition (no bundled runner).

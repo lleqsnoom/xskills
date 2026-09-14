@@ -113,3 +113,43 @@ describe("x-skill-lint CLI", () => {
     assert.match(res.stderr, /Unknown argument/);
   });
 });
+
+// ── standalone-script rules ──────────────────────────────────────────
+
+describe("x-skill-lint — standalone scripts", async () => {
+  const mod = await import(MOD);
+
+  it("flags an import that reaches into another skill", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "x-skill-lint-import-"));
+    const a = path.join(root, "skills", "x-alpha", "scripts");
+    fs.mkdirSync(a, { recursive: true });
+    fs.writeFileSync(path.join(root, "skills", "x-alpha", "SKILL.md"), "---\nname: x-alpha\ndescription: d\n---\n");
+    fs.writeFileSync(path.join(a, "run.mjs"), "import { x } from '../../x-beta/scripts/util.mjs';\n");
+    fs.writeFileSync(path.join(root, "README.md"), "| `x-alpha` | d |\n");
+
+    const result = mod.lintRepo(root);
+    assert.ok(result.violations.some((v) => v.rule === "cross-skill-import" && v.skill === "x-alpha"));
+
+    const res = await runCli(["--root", root]);
+    assert.equal(res.code, 1);
+  });
+
+  it("flags copy drift between shared scripts", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "x-skill-lint-drift-"));
+    for (const [name, body] of [["x-one", "one\n"], ["x-two", "two\n"]]) {
+      const scripts = path.join(root, "skills", name, "scripts");
+      fs.mkdirSync(scripts, { recursive: true });
+      fs.writeFileSync(path.join(root, "skills", name, "SKILL.md"), `---\nname: ${name}\ndescription: d\n---\n`);
+      fs.writeFileSync(path.join(scripts, "check-questions.mjs"), body);
+    }
+    fs.writeFileSync(path.join(root, "README.md"), "| `x-one` | d |\n| `x-two` | d |\n");
+
+    const result = mod.lintRepo(root);
+    assert.ok(result.violations.some((v) => v.rule === "copy-drift"));
+  });
+
+  it("stays clean on the real repo", async () => {
+    const res = await runCli([]);
+    assert.equal(res.code, 0, res.stderr);
+  });
+});
