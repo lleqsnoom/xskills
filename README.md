@@ -131,29 +131,32 @@ Run `npx xskills list` to see all available skills.
 
 | Skill | Description |
 |-------|-------------|
-| `x-api-draft` | Draft API design from requirements — clarify scope, analyze endpoints and data models |
-| `x-api-swagger` | Convert an API design draft to OpenAPI YAML spec with endpoints, schemas, and auth |
-| `x-browser` | Launch real Chrome/Chromium with remote debugging and attach chrome-devtools MCP — auto-detects the app URL from README/config/env |
-| `x-commit` | Write single-line conventional commit messages with automated type suggestion and validation |
-| `x-comments` | Comment management — add precise meaningful comments, remove noisy/obvious ones, refactor overly commented code into self-explanatory functions |
-| `x-debug` | Structured debugging — hypothesis formation, evidence collection, root cause declaration with fix plan export |
-| `x-decompose` | Decompose epic into atomic tasks ≤8h each with DOD, test plan, effort estimate |
-| `x-essay` | Author an article end-to-end on a fixed loop — x-anal thesis, x-roast critique, x-humanize rewrite — repeating until it scores strong and reads clean |
-| `x-plan` | Plan before coding — clarify goals, propose approaches with trade-offs, write spec as declarations (contract, invariant, test), gate on approval |
-| `x-parallel` | Run multiple coding tasks in parallel — each in an isolated git worktree with its own background agent, results merged back |
-| `x-epic` | Convert approved spec into INVEST-gated user stories and epic-level DOD |
-| `x-fix` | Resolve identified issues one-by-one from a fix plan file until complete |
-| `x-humanize` | Simplify text, an article, a commit or PR to a B2 reading level — measure sentence length and complexity, cut noise, rewrite, then verify no meaning was lost |
-| `x-implement` | Test-driven implementation — red/green/refactor per task, docs sync, commit via x-commit |
-| `x-investigate` | Hypothesis-driven root cause analysis with git history, ranked hypotheses, and platform-aware debugging tools |
-| `x-migrate` | Framework/dependency migration assistant — breaking changes, upgrade paths, automated fixes |
-| `x-review` | Review code against engineering principles with AST-based complexity analysis, duplication detection, and refactor pattern suggestions across 30+ languages (Python, C, C++, Java, JS, TS, Go, Rust, Ruby, PHP, Swift, Kotlin, Lua, Dart, Scala, Haskell, Elixir, and more) |
-| `x-roast` | Critically review non-code artifacts (articles, analyses, epics, tasks, research) — online fact-checking, a creative re-think, concrete improvements, and a reproducible weighted rubric score |
-| `x-triage` | Structured intake conversation — ask targeted questions to classify bug platform, type, and evidence before any debugging begins |
-| `x-ui` | Design HTML app UIs that are clean, clear, and effective — principle-first method (Rams, Rand, Apple HIG) with concrete techniques and a pre-flight checklist |
-| `x-rollback` | Automated git revert with multi-step confirmation and impact analysis |
-| `x-reproduce` | Platform-aware minimal reproduction script generation for browser, Node, and mobile debugging |
-| `x-test-gen` | Generate test stubs from implementation — happy path, error cases, edge case placeholders |
+| `x-anal` | Interactive analysis skill — understand the user’s problem, produce a thesis with evidence, and propose a solution; route to fix or task creation when ready. |
+| `x-api-draft` | Draft API design from requirements — clarify scope, analyze endpoints and data models, produce a human-reviewable API design in markdown |
+| `x-api-swagger` | Convert an API design draft to OpenAPI YAML — generate a valid spec from markdown drafts with endpoints, schemas, and auth definitions |
+| `x-browser` | Launch the real Chrome/Chromium with remote debugging and attach the chrome-devtools MCP to the project’s app URL — detects the URL from README/config/env, verifies the dev server, and opens the browser so you can drive it without manual setup. |
+| `x-comments` | Comment management — add only precise, meaningful comments and remove noisy or obvious ones; refactor overly commented code into self-explanatory functions instead of describing it |
+| `x-commit` | Write single-line conventional commit messages — one authoritative type map, imperative mood, no description body |
+| `x-debug` | Evidence-based debugging — reproduce, hypothesize, fix root cause, verify |
+| `x-decompose` | Decompose approved epic into layer-based tasks — each task is an independent, testable increment that builds on the previous; outputs .x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>/ for handoff to x-implement |
+| `x-epic` | Convert approved spec into a layer-based epic — each layer is a coherent, testable increment from prototype to polished product; outputs .x-skills/epics/DD-MM-YYYY-hh:mm-<topic>.md for handoff to x-decompose |
+| `x-essay` | Write an article end-to-end on a fixed loop — x-anal thesis, x-roast critique, x-humanize rewrite — repeating until it scores strong and reads clean. Use when asked to write or draft an article, blog post, or essay that must defend a claim. |
+| `x-fix` | Resolve issues from fix plans — read, edit, verify, mark complete |
+| `x-humanize` | Simplify text, an article, a commit or PR to a B2 reading level — measure sentence length and complexity, cut noise, rewrite, then verify no meaning was lost. Use when asked to humanize, simplify, make easy to read, or plain-language a piece of prose. |
+| `x-implement` | Implement or fix with TDD — parallelize independent tasks with x-parallel, apply x-ui for frontend work, red-green-refactor per task, verify with x-review + x-fix, gate on plan completion |
+| `x-investigate` | Hypothesis-driven root cause analysis — generate ranked hypotheses from evidence, test systematically with platform tools and git history, eliminate candidates until one root cause remains, output fix plan for x-fix |
+| `x-migrate` | Framework/dependency migration assistant — generates migration plans with breaking changes, upgrade paths, and automated fix candidates from source analysis |
+| `x-parallel` | Run multiple coding tasks in parallel — each task gets an isolated git worktree and its own background agent process with full tools, then committed results merge back into your branch |
+| `x-plan` | Plan before coding — clarify vague goals, propose approaches with trade-offs, write spec as declarations (contract, invariant, test) with a layer roadmap; gate on user approval |
+| `x-refactor` | Automated refactoring suggestions (extract method, rename, replace conditional) — analyzes code against SOLID principles and outputs actionable before/after comparisons |
+| `x-reproduce` | Generates minimal platform-aware reproducible test cases from triage briefs — exits 1 when bug is present, exits 0 after fix applied |
+| `x-review` | Review code against engineering principles — small functions, SOLID, KISS, DRY — with automated AST-based complexity analysis across 30+ languages including Python, C, C++, Java, JavaScript, TypeScript, Go, Rust, Ruby, PHP, Swift, Kotlin, and more |
+| `x-roast` | Critically review any non-code artifact — articles, analyses, epics, tasks, research — with online fact-checking, a creative re-think, concrete improvement proposals, and a weighted rubric score that is reproducible and testable. |
+| `x-rollback` | Automated git revert with multi-step confirmation — identifies target commits, analyzes impact, requires approval, creates properly formatted revert commits via x-commit integration |
+| `x-skill-lint` | Validate this repo’s own skills — frontmatter parses and `name` matches the folder, every referenced `scripts/*` and `references/*` exists, no stray template tokens, and the README skills table lists every skill |
+| `x-test-gen` | Generate test stubs from implementation — analyzes source code and creates scaffolded tests with happy path, error cases, and edge case placeholders |
+| `x-triage` | Structured intake conversation — ask targeted questions to classify a bug’s platform, type, and evidence before touching any tools. Outputs .x-skills/debug/triage-brief.md. |
+| `x-ui` | Design and audit app UIs to be clean, clear, and effective — framework-agnostic method (Vue/React/HTML) with component-selection, row-action, and pre-flight rules. |
 
 ## Workflow
 

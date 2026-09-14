@@ -98,6 +98,16 @@ console.log("5. Search for error: grep -i 'error\\|exception\\|fatal' repro-log.
 process.exit(1); // indicates reproduction steps documented, actual bug not in this script
 ```
 
+## Customization contract
+
+The three templates above are **scaffolds**, not working reproductions. Each ends with
+`process.exit(1)` and a "customize with actual bug pattern" line — that is a placeholder,
+not the bug. You must replace the placeholder block with the real trigger taken from the
+triage brief (and `x-debug` / `x-investigate` evidence) before the script reproduces
+anything. A delivered `repro-<platform>.js` that still contains the placeholder text has
+not been customized: treat it as not done. Only a script that exits 1 for the *bug's own
+reason* (and 0 once fixed) is a reproduction.
+
 ## Constraints (MANIFESTO)
 
 - Each script ≤300 lines (expected ~25-40 lines per template + routing helper)

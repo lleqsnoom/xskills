@@ -77,6 +77,9 @@ xskills/
     └── x-decompose/          # Atomic task decomposition — tasks ≤8h with DOD, test plans, effort estimates
         ├── SKILL.md
         └── scripts/
+    ├── x-skill-lint/         # Validate the repo's own skills — frontmatter, refs, README table
+    │   ├── SKILL.md
+    │   └── scripts/
 ```
 
 ---

@@ -42,3 +42,11 @@ Output: `.x-skills/apis/DD-MM-YYYY-hh:mm-<topic>.md` (relative to CWD).
 Use endpoint-first structure with bullet lists for params/body/status codes. Keep JSON examples minimal — show shape, not exhaustive schemas. Errors documented once at end under `## Errors`.
 
 For full format rules and example template see `references/format.md`.
+
+## Errors & Limits
+
+`save-design.js` only creates the file and prints its absolute path on stdout; the agent fills in the body afterwards.
+
+- Exits **1** with a usage message on stderr when `--topic` is missing (stdout stays empty).
+- Writes a **new timestamped file every run** — it never overwrites an existing draft, so re-running the same topic produces a second file.
+- Timestamps are always JS-generated; there is no `--date` flag. Use `--branch <name>` when git is unavailable (otherwise the branch is auto-detected via `git rev-parse`).

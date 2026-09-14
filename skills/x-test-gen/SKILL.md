@@ -31,7 +31,7 @@ The script detects the test framework from project configuration files:
 
 | Config File | Framework | Test Syntax |
 |-------------|-----------|-------------|
-| `jest.config.js` / `package.json` with `"test"` key | Jest | `describe`, `it`, `expect`, `vi.mock()` |
+| `jest.config.js` / `package.json` with `"test"` key | Jest | `describe`, `it`, `expect`, `jest.mock()` |
 | `vitest.config.ts` / `package.json` with `"vitest"` key | Vitest | `describe`, `it`, `expect`, `vi.mock()` |
 | `.mocharc.yml` / `mocha` in dependencies | Mocha | `describe`, `it`, `should()`, `expect()` |
 | `pytest.ini` / `setup.cfg` with `[tool:pytest]` | Pytest (Python) | `def test_xxx(): assert ...` |

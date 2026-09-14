@@ -60,7 +60,7 @@ Implement tasks in dependency order. When two or more tasks can run independentl
 
 When a task's scope includes UI (HTML/CSS, templates, components, or styles in any framework), apply the x-ui skill to everything you produce:
 
-1. Read `skills/x-ui/SKILL.md` before writing any UI code.
+1. Read the x-ui skill's `SKILL.md` before writing any UI code — `~/.agents/skills/x-ui/SKILL.md` for a global install, `.agents/skills/x-ui/SKILL.md` for a local one.
 2. Follow x-ui's method: state the screen's primary task, then build to its strict rules (element count limits, component selection, row actions, status display, pagination rules).
 3. Run x-ui's Pre-Flight Checklist before VERIFY. A screen that fails any checklist item is not done.
 

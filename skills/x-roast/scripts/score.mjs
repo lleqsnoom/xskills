@@ -76,6 +76,21 @@ export const DIMENSIONS = {
     weight: 1,
     question: "Are the sources current relative to the pace of the topic?",
   },
+  triggers: {
+    label: "Trigger clarity",
+    weight: 3,
+    question: "Does the skill say when to fire — explicit situations and phrases, not just a topic?",
+  },
+  procedure: {
+    label: "Procedure soundness",
+    weight: 3,
+    question: "Are the steps ordered, each ending on a checkable completion criterion?",
+  },
+  verification: {
+    label: "Verification",
+    weight: 3,
+    question: "Can completion be verified by a command or check, rather than by opinion?",
+  },
 };
 
 export const COMMON = [
@@ -96,6 +111,7 @@ export const PROFILES = {
   research: [...COMMON, "method", "recency"],
   epic: [...COMMON, "decomposition", "acceptance"],
   task: [...COMMON, "testability", "estimation"],
+  skill: [...COMMON, "triggers", "procedure", "verification"],
 };
 
 export const BANDS = [
@@ -231,7 +247,7 @@ function usage() {
     "  node score.mjs --input scores.json",
     "",
     "Flags:",
-    "  --profile <type>   Rubric profile: generic, article, analysis, research, epic, task",
+    "  --profile <type>   Rubric profile: generic, article, analysis, research, epic, task, skill",
     "  --type <type>      Alias for --profile",
     "  --input <file>     JSON file: either { profile, scores } or a bare scores object ('-' = stdin)",
     "  --score <k=v>      One dimension score (repeatable)",
