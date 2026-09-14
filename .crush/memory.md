@@ -7,6 +7,5 @@ Skills are NOT MCP servers. Never use `Read Mcp Resource` with a skill name as s
 **Correct pattern:**
 - Read user-installed skill SKILL.md → `view $HOME/.agents/skills/<name>/SKILL.md`
 - Read source repo skill → `view skills/<name>/SKILL.md` (relative to project root)
-- Call MCP tools → use tool name directly: `mcp_xskills_dispatch_dispatch()`, NOT via resource reading
 
-**Connected MCP servers:** chrome-devtools, github, sentry, xskills. Nothing else.
+xskills ships no MCP server. The connected MCP servers are whatever the client configures (e.g. `chrome-devtools`, `github`, `sentry`) — none of them is `xskills`.

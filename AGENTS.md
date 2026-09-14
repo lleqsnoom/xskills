@@ -90,7 +90,7 @@ xskills/
 
 ## Skill Access Patterns
 
-Skills and MCP servers are two different things. Using the wrong access method causes `mcp '<skill>' not available` errors.
+Skills are plain markdown files, not MCP servers. Using the wrong access method causes `mcp '<skill>' not available` errors. **xskills ships no MCP server** — a skill is read as a file with the `view`/`read` tool.
 
 ### How to read a skill's instructions (SKILL.md)
 
@@ -100,23 +100,7 @@ Skills and MCP servers are two different things. Using the wrong access method c
 | **Source repo** (published package) | `<project>/skills/<name>/SKILL.md` | `view` tool with file path | `view skills/x-plan/SKILL.md` |
 | **Builtin** (`jq`, `omarchy`) | Internal to Crush runtime | `crush://skills/<name>/SKILL.md` | `view crush://skills/jq/SKILL.md` |
 
-**Never use `Read Mcp Resource` with a skill name as the MCP server.** There is no MCP server named `x-implement`, `x-commit`, etc. The actual MCP servers are:
-- `chrome-devtools` — Browser automation (29 tools)
-- `github` — GitHub operations (44 tools)
-- `sentry` — Sentry error tracking (8 tools)
-- `xskills` — Skill orchestration tools (dispatch, plan, reproduce, etc.)
-
-### How to invoke a skill's MCP tool
-
-Use the **tool name** directly with its full qualified path (`mcp_<server>_<tool>`). For example:
-```
-# Correct — call the tool directly
-mcp_xskills_dispatch_dispatch()
-mcp_xskills_plan_save_spec()
-mcp_xskills_reproduce_repro_backend()
-```
-
-Any attempt to use `Read Mcp Resource` with a skill name as the server will fail. The four MCP servers above are the only ones available.
+**Never use `Read Mcp Resource` with a skill name as the server.** There is no MCP server named `x-implement`, `x-commit`, etc. Some skills drive *external* MCP servers that the client may have configured (for example `x-browser` attaches to a `chrome-devtools` MCP) — those belong to the environment, not to xskills.
 
 ### When task directories don't exist yet
 

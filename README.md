@@ -81,56 +81,6 @@ xskills <skill-name>
 - **Git** — needed by `x-rollback` and `x-parallel`.
 - **A compatible CLI** — see [Supported CLIs](#supported-clis). A few skills need extra tooling: `x-browser` drives a real Chrome/Chromium through a `chrome-devtools` MCP client.
 
-## MCP Server
-
-For CLIs that support MCP (Model Context Protocol), run the bundled stdio server. Install the skills first, then start the server:
-
-```bash
-# 1. Install all skills locally or globally
-npx @lleqsnoom/x-skills install-all --global
-
-# 2. Start the MCP server
-npx @lleqsnoom/x-skills mcp-server
-```
-
-The server finds installed skills in `.agents/skills/` (local) or `~/.agents/skills/` (global). It exposes them as MCP tools.
-
-### Configure in Client
-
-Add this to your client config (for example `.claude.json` or `cursor.json`):
-
-```json
-{
-  "mcpServers": {
-    "xskills": {
-      "command": "npx",
-      "args": ["@lleqsnoom/x-skills", "mcp-server"]
-    }
-  }
-}
-```
-
-### Configure Globally (Optional)
-
-To use the MCP server across all projects without per-project config:
-
-```bash
-# Install globally so npx can resolve it anywhere
-npm install -g @lleqsnoom/x-skills
-npx xskills mcp-server
-```
-
-Or pin a specific version and install skills separately:
-```bash
-npm install -g @lleqsnoom/x-skills@latest
-xskills install-all --global  # Install skills globally once
-xskills mcp-server            # Start MCP server whenever needed
-```
-
-### Available MCP Tools
-
-The server exposes every installed skill as a tool. Each skill provides its own functions (for example `x_commit_suggest_type`, `x_review_analyze_complexity`). Start the server and your client discovers them.
-
 ## Available Skills
 
 Run `npx xskills list` to see all available skills.
@@ -197,8 +147,6 @@ x-rollback       (standalone)
 1. **Make `xskills` available** — `npm install -g @lleqsnoom/x-skills`, or run it with `npx`. See [Install](#install) for both options.
 2. **Install skills** — `xskills install-all --global` installs everything; `xskills install <skill-name>` installs one.
 3. **Use it with your AI coding agent** — your CLI finds the installed skills and offers them when relevant.
-
-For MCP clients (editors, agents), add the config from [Configure in a client](#configure-in-client).
 
 ## How It Works
 
