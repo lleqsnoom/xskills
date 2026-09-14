@@ -11,26 +11,26 @@
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D18-blue" alt="Node.js >= 18"></a>
 </p>
 
-**Stop writing different instructions for every AI coding tool.** xskills gives you reusable, specialized workflows that work across **45+ AI coding CLIs** — Claude Code, Gemini CLI, Cursor, Aider, and more. One format, install once, use everywhere.
+**Stop writing separate instructions for every AI coding tool.** xskills gives you reusable workflows. They work across **45+ AI coding CLIs** — Claude Code, Gemini CLI, Cursor, Aider, and more. One format, install once, use everywhere.
 
-Agentic tooling built for local models under 40B. Every skill fits in a 4K context window — lean, fast, and tested against the constraints real developers face daily. [Read the manifesto →](MANIFESTO.md)
+It is built for local models under 40B. Every skill fits in a 4K context window: lean, fast, and tested against the limits real developers hit daily. [Read the manifesto →](MANIFESTO.md)
 
 ## Why xskills?
 
-You're using AI coding tools — maybe Claude Code for complex refactors, Gemini CLI for quick questions, Cursor for inline edits. But each tool needs different instructions, different prompt formats, different setup.
+You already use AI coding tools. Maybe Claude Code for complex refactors, Gemini CLI for quick questions, or Cursor for inline edits. But each tool wants its own instructions and setup.
 
-**xskills solves that.** It's a collection of reusable "skills" following the [Agent Skills open standard](https://agentskills.io) — folders with specialized knowledge and workflows that any compatible CLI can use.
+**xskills fixes that.** It is a set of reusable "skills" built on the [Agent Skills open standard](https://agentskills.io). A skill is a folder of knowledge and workflows. Any compatible CLI can use it.
 
-- **One format across all CLIs** — no adapters, no rewriting for each tool
-- **14 production-ready skills** — commit conventions, debugging, code review, API design, task decomposition, and more
-- **Zero dependencies** — pure Node.js built-ins, nothing else
+- **One format for every CLI** — no adapters, no rewriting per tool
+- **26 production-ready skills** — commits, debugging, code review, API design, task decomposition, and more
+- **Zero dependencies** — Node.js built-ins only
 - **Built for local models** — every skill fits in a 4K context window
 
 ### The problem it solves
 
-Without xskills: Write custom instructions for Claude Code. Rewrite them for Gemini CLI. Adapt again for Cursor. Maintain three copies.
+Without xskills, you write instructions for Claude Code. Then you rewrite them for Gemini CLI. Then you adapt them again for Cursor. You keep three copies in sync.
 
-With xskills: Install once. Every compatible CLI discovers and uses the same skills automatically.
+With xskills, you install once. Every compatible CLI finds and uses the same skills.
 
 ## Supported CLIs
 
@@ -51,7 +51,7 @@ With xskills: Install once. Every compatible CLI discovers and uses the same ski
 
 ## Install
 
-**First, make `xskills` available globally or via npx:**
+Make `xskills` available globally, or run it with npx:
 
 ```bash
 # Option A: Global install (recommended for persistent use)
@@ -61,10 +61,10 @@ npm install -g @lleqsnoom/x-skills
 npx @lleqsnoom/x-skills help
 ```
 
-**Then, install skills:**
+Then install the skills:
 
 ```bash
-# Install all 14+ skills at once
+# Install all 26 skills at once
 xskills install-all --global          # Global: ~/.agents/skills/
 xskills install-all                   # Local: .agents/skills/ in current project
 
@@ -77,7 +77,7 @@ xskills <skill-name>
 
 ## MCP Server
 
-For CLIs that support MCP (Model Context Protocol), run the bundled stdio server. **First install skills, then start the server:**
+For CLIs that support MCP (Model Context Protocol), run the bundled stdio server. Install the skills first, then start the server:
 
 ```bash
 # 1. Install all skills locally or globally
@@ -87,11 +87,11 @@ npx @lleqsnoom/x-skills install-all --global
 npx @lleqsnoom/x-skills mcp-server
 ```
 
-The server discovers installed skills from `.agents/skills/` (local) or `~/.agents/skills/` (global) and exposes them as MCP tools.
+The server finds installed skills in `.agents/skills/` (local) or `~/.agents/skills/` (global). It exposes them as MCP tools.
 
 ### Configure in Client
 
-Add to your client config (e.g., `.claude.json`, `cursor.json`, etc.):
+Add this to your client config (for example `.claude.json` or `cursor.json`):
 
 ```json
 {
@@ -123,7 +123,7 @@ xskills mcp-server            # Start MCP server whenever needed
 
 ### Available MCP Tools
 
-The server exposes all installed skills as tools. Each skill provides its own set of functions (e.g., `x_commit_suggest_type`, `x_review_analyze_complexity`). Run the server and your client will auto-discover them.
+The server exposes every installed skill as a tool. Each skill provides its own functions (for example `x_commit_suggest_type`, `x_review_analyze_complexity`). Start the server and your client discovers them.
 
 ## Available Skills
 
@@ -187,47 +187,17 @@ x-rollback       (standalone)
 
 ### Quick Start
 
-**Step 1: Make `xskills` available:**
+1. **Make `xskills` available** — `npm install -g @lleqsnoom/x-skills`, or run it with `npx`. See [Install](#install) for both options.
+2. **Install skills** — `xskills install-all --global` installs everything; `xskills install <skill-name>` installs one.
+3. **Use it with your AI coding agent** — your CLI finds the installed skills and offers them when relevant.
 
-```bash
-# Global install (recommended) — use from anywhere without npx
-npm install -g @lleqsnoom/x-skills
-
-# Or use via npx (still works, no global install needed)
-npx @lleqsnoom/x-skills help
-```
-
-**Step 2: Install skills:**
-
-```bash
-# All skills globally (recommended for most users)
-xskills install-all --global
-
-# Specific skills locally in current project
-xskills install x-plan x-epic x-decompose x-implement
-```
-
-**Step 3: Use with your AI coding agent**
-
-Your CLI will auto-discover installed skills and offer them when relevant. Each skill gates on user approval before executing.
-
-For MCP clients (editors, agents), add to config:
-```json
-{
-  "mcpServers": {
-    "xskills": {
-      "command": "npx",
-      "args": ["@lleqsnoom/x-skills", "mcp-server"]
-    }
-  }
-}
-```
+For MCP clients (editors, agents), add the config from [Configure in a client](#configure-in-client).
 
 ## How It Works
 
-1. Skills live in `.agents/skills/` following the [Agent Skills spec](https://agentskills.io/specification).
-2. Compatible CLIs scan this directory and discover skills automatically.
-3. Skills use **progressive disclosure** — lightweight catalog at startup, full instructions only when needed.
+1. Skills live in `.agents/skills/`, following the [Agent Skills spec](https://agentskills.io/specification).
+2. Compatible CLIs scan that directory and find the skills automatically.
+3. Skills use **progressive disclosure** — a light catalog at startup, full instructions only when needed.
 
 ## Directory Structure After Install
 
@@ -259,8 +229,8 @@ description: What it does and when the agent should use it.
 Step-by-step instructions for the agent...
 ```
 
-3. Optionally add `scripts/`, `references/`, `assets/` subdirectories.
-4. Submit a PR or install locally via `npx xskills install ./path/to/my-skill`.
+3. Optionally add `scripts/`, `references/`, and `assets/` subdirectories.
+4. Submit a PR, or install it locally with `npx xskills install ./path/to/my-skill`.
 
 ## License
 
