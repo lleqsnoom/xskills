@@ -1,3 +1,10 @@
+## [5.18.0] - 2026-09-14
+
+* Merge pull request #46 from lleqsnoom/feat/improve-plan-anal-research-quality (45e82e6)
+* fix(x-roast): only flag standalone template comment lines (129f2b9)
+* feat(x-roast): support skills, gate the report, unify the profile vocabulary (7ebc885)
+* feat(skills): add guarded, research-first scenarios to planning skills (11a7bf0)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
