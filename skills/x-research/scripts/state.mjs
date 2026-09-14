@@ -14,6 +14,16 @@ export const DEFAULT_NOISE_RUNS = 1;
 export const DEFAULT_TIMEOUT_MS = 60000;
 export const DEFAULT_ROOT = ".x-skills/research";
 
+export const GRAPH = {
+  nodes: ["baseline", "iterate", "done", "escalate"],
+  edges: [
+    { from: "baseline", to: "iterate", guard: null },
+    { from: "iterate", to: "iterate", guard: "target_unmet" },
+    { from: "iterate", to: "done", guard: "target_met_and_pass" },
+    { from: "iterate", to: "escalate", guard: "cap_reached" },
+  ],
+};
+
 function round(value, places = 3) {
   const f = 10 ** places;
   return Math.round(value * f) / f;
@@ -111,6 +121,7 @@ export function startState({
   minDelta = DEFAULT_MIN_DELTA,
   cap = DEFAULT_CAP,
   timeoutMs = DEFAULT_TIMEOUT_MS,
+  candidates = null,
   now = new Date(),
 } = {}) {
   if (!slug || typeof slug !== "string") throw new Error("slug is required");
@@ -138,6 +149,10 @@ export function startState({
   }
   if (!label || typeof label !== "string") throw new Error("evaluator command is required");
   if (!Number.isFinite(resolvedTarget)) throw new Error("target must be a number");
+  const candidateList = normalizeList(candidates);
+  if (candidates !== null && candidateList.length < 3) {
+    throw new Error("a run needs at least 3 candidate changes (--candidates)");
+  }
 
   return {
     slug,
@@ -151,6 +166,8 @@ export function startState({
     criteria: resolvedCriteria,
     guard: guard || null,
     search: { allowed: normalizeList(allowed), forbidden: normalizeList(forbidden) },
+    graph: GRAPH,
+    candidates: candidateList,
     noiseRuns,
     minDelta,
     cap,
@@ -372,6 +389,25 @@ function cell(value) {
 
 // --- audit trail files -------------------------------------------------------
 
+export function renderGraphMermaid(state) {
+  const graph = state.graph || GRAPH;
+  const lines = ["```mermaid", "graph LR"];
+  for (const edge of graph.edges) {
+    lines.push(edge.guard ? `  ${edge.from} -->|${edge.guard}| ${edge.to}` : `  ${edge.from} --> ${edge.to}`);
+  }
+  lines.push(`  classDef current stroke-width:3px,stroke:#f60`);
+  lines.push(`  class ${state.phase} current`);
+  lines.push("```");
+  return lines.join("\n");
+}
+
+export function renderMemoryLine(entry) {
+  const parts = [entry.kind, entry.score, entry.decision, entry.change].filter(
+    (part) => part !== null && part !== undefined && part !== ""
+  );
+  return `- [${entry.ts}] ${parts.join(": ")}`;
+}
+
 export function renderResearchMd(state) {
   const dir = state.direction === "minimize" ? "<=" : ">=";
   const lines = [
@@ -403,8 +439,7 @@ export function renderResearchMd(state) {
   return `${lines.join("\n")}\n`;
 }
 
-export function renderResultsTsv(state) {
-  const header = ["iteration", "kind", "score", "pass", "guard_pass", "delta", "decision", "change"].join("\t");
+export function renderResultsTsv(state) {  const header = ["iteration", "kind", "score", "pass", "guard_pass", "delta", "decision", "change"].join("\t");
   const rows = state.history.map((h) =>
     [
       h.iteration,
@@ -447,6 +482,10 @@ export function renderFinalReportMd(state) {
     `- Experiments: ${s.experiments} (${s.kept} kept)`,
     `- Verify: ${v.ok ? "justified (exit 0)" : "not justified (exit 1)"}`,
     "",
+    "## Scenario",
+    "",
+    renderGraphMermaid(state),
+    "",
     "## Evidence",
     "",
     `- \`${state.evaluator}\``,
@@ -488,7 +527,8 @@ function usage() {
     "  node state.mjs start --slug <s> --metric <name> --target <n> --evaluator <cmd>",
     "        [--direction maximize|minimize] [--policy score_improvement|pass_only] [--goal <text>]",
     "        [--guard <cmd>] [--allow g1,g2] [--forbid g1,g2] [--noise-runs <n>] [--min-delta <n>]",
-    "        [--cap <n>] [--timeout <ms>] [--root <dir>]",
+    "        [--cap <n>] [--timeout <ms>] [--root <dir>] [--candidates <file|a,b,c>]",
+    "        # --candidates: at least 3 candidate changes proposed before the first experiment",
     "  node state.mjs start --slug <s> --metric <name> --evaluator agent --criteria <n|file>",
     "        # agent-judged: --target defaults to 1 (all criteria); no shell command runs",
     "  node state.mjs record --dir <dir> --baseline <n|file|-> [--samples a,b,c] [--pass true|false]",
@@ -520,6 +560,24 @@ function persist(dir, state) {
 
 function appendLog(dir, line) {
   fs.appendFileSync(path.join(dir, "research_log.md"), `${line}\n`);
+}
+
+function appendMemory(dir, line) {
+  fs.appendFileSync(path.join(dir, "memory.md"), `${line}\n`);
+}
+
+function writeMemoryHeader(dir, state) {
+  const lines = [`# Memory — ${state.slug}`, "", "- candidates:"];
+  for (const candidate of state.candidates) lines.push(`  - ${candidate}`);
+  fs.writeFileSync(path.join(dir, "memory.md"), `${lines.join("\n")}\n`);
+}
+
+function readCandidates(spec) {
+  const text = fs.existsSync(String(spec)) ? fs.readFileSync(String(spec), "utf8") : String(spec).split(",").join("\n");
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"));
 }
 
 function parseArgs(args) {
@@ -624,9 +682,11 @@ function main() {
         minDelta: args["min-delta"] === undefined ? DEFAULT_MIN_DELTA : num(args["min-delta"], "--min-delta"),
         cap: args.cap === undefined ? DEFAULT_CAP : int(args.cap, "--cap"),
         timeoutMs: args.timeout === undefined ? DEFAULT_TIMEOUT_MS : num(args.timeout, "--timeout"),
+        candidates: args.candidates === undefined || args.candidates === true ? null : readCandidates(args.candidates),
       });
       persist(dir, state);
       fs.writeFileSync(path.join(dir, "research_log.md"), `# Research log — ${state.slug}\n\n`);
+      writeMemoryHeader(dir, state);
       appendLog(dir, `- [${stampTime()}] start: ${state.metric} ${state.direction} target ${state.target}`);
       process.stdout.write(`${JSON.stringify({ dir, state, ...decision(state) }, null, 2)}\n`);
       return;
@@ -663,6 +723,7 @@ function main() {
       }
       persist(args.dir, state);
       for (const entry of state.history.slice(before)) appendLog(args.dir, logLineFor(entry));
+      for (const entry of state.history.slice(before)) appendMemory(args.dir, renderMemoryLine(entry));
       process.stdout.write(`${JSON.stringify(decision(state), null, 2)}\n`);
       return;
     }

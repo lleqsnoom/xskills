@@ -42,6 +42,53 @@ export function refsForSkill(text, skillName) {
   return [...out];
 }
 
+// Scripts that must stay byte-identical across the skills that share them.
+const SHARED_SCRIPTS = ["scripts/check-questions.mjs"];
+
+function scriptFiles(dir) {
+  const scriptsDir = path.join(dir, "scripts");
+  if (!fs.existsSync(scriptsDir)) return [];
+  return fs
+    .readdirSync(scriptsDir)
+    .filter((file) => /\.m?js$/.test(file))
+    .map((file) => path.join("scripts", file));
+}
+
+export function importSpecifiers(text) {
+  const out = [];
+  const re =
+    /(?:import\s[^'"]*?from\s*['"]([^'"]+)['"])|(?:import\s*\(\s*['"]([^'"]+)['"]\s*\))|(?:require\s*\(\s*['"]([^'"]+)['"]\s*\))|(?:import\s*['"]([^'"]+)['"])/g;
+  let m;
+  while ((m = re.exec(text))) out.push(m[1] || m[2] || m[3] || m[4]);
+  return out;
+}
+
+export function crossSkillImports(dir, name) {
+  const hits = [];
+  for (const rel of scriptFiles(dir)) {
+    const text = fs.readFileSync(path.join(dir, rel), "utf8");
+    for (const spec of importSpecifiers(text)) {
+      const named = spec.match(/x-[a-z0-9-]+/g) || [];
+      if (named.some((other) => other !== name)) hits.push({ file: rel, spec });
+    }
+  }
+  return hits;
+}
+
+export function copyDrift(skillsDir, names) {
+  const violations = [];
+  for (const rel of SHARED_SCRIPTS) {
+    const copies = names.filter((name) => fs.existsSync(path.join(skillsDir, name, rel)));
+    if (copies.length < 2) continue;
+    const base = fs.readFileSync(path.join(skillsDir, copies[0], rel), "utf8");
+    const differs = copies.slice(1).filter((name) => fs.readFileSync(path.join(skillsDir, name, rel), "utf8") !== base);
+    if (differs.length) {
+      violations.push({ skill: copies[0], rule: "copy-drift", file: rel, detail: `differs from ${differs.join(", ")}` });
+    }
+  }
+  return violations;
+}
+
 export function readmeSkills(readmeText) {
   const set = new Set();
   const re = /^\|\s*`?(x-[a-z0-9-]+)`?\s*\|/gm;
@@ -88,7 +135,12 @@ export function lintRepo(root = REPO_ROOT) {
       }
     }
     if (!inReadme.has(name)) violations.push({ skill: name, rule: "readme", detail: "not listed in README skills table" });
+    for (const hit of crossSkillImports(dir, name)) {
+      violations.push({ skill: name, rule: "cross-skill-import", file: hit.file, detail: `imports ${hit.spec}` });
+    }
   }
+
+  violations.push(...copyDrift(skillsDir, names));
 
   return { root, skills: names.length, violations };
 }

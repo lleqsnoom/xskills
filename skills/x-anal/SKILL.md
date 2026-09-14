@@ -1,6 +1,6 @@
 ---
 name: x-anal
-description: Interactive analysis skill — understand the user's problem, produce a thesis with evidence, and propose a solution; route to fix or task creation when ready.
+description: Interactive analysis skill — research the project and web first, ask short plain questions until the user is sure, then produce a thesis with cited evidence and a mechanical check, propose three solutions with trade-offs, and route to fix or task creation; graph-driven with guards and a markdown memory.
 version: 1.0.0
 author: Community
 tags: [analysis, troubleshooting, diagnosis, problem-solving, investigation]
@@ -10,6 +10,60 @@ user-invocable: true
 # X-Anal — Interactive Problem Analysis & Solution Proposal
 
 Guide the user through understanding their problem, formulating a thesis with evidence, proposing solutions, and routing to the right action (fix or task creation). This is an interactive conversation skill — it asks questions, clarifies ambiguities, and only proceeds when confident.
+
+## When to use
+
+- "Why does X happen?", "analyze this problem", "what should we do about Y".
+- A bug report or log dump that needs a thesis before a fix.
+- You need evidence-backed options and a route, not a guess.
+
+## Scenario
+
+The run is a guarded graph. `state.json` is the source of truth; `memory.md` records every event;
+the analysis lands at `.x-skills/anal/analysis-<slug>.md`.
+
+```mermaid
+graph LR
+  intake --> confirm_intent
+  confirm_intent -->|intent_confirmed| research
+  research -->|research_recorded| clarify
+  clarify --> clarify
+  clarify -->|no_open_questions,evidence_cited| thesis
+  thesis -->|evidence_cited| mechanical_check
+  mechanical_check -->|check_recorded| confidence_gate
+  confidence_gate --> clarify
+  confidence_gate -->|confidence_ok,three_options| propose
+  propose -->|decision_made| route
+  route -->|route_chosen| fix
+  route -->|route_chosen| tasks
+  route -->|route_chosen| plan
+  route -->|route_chosen| investigate
+  route -->|route_chosen| defer
+```
+
+```bash
+node <skill>/scripts/scenario.mjs start --slug <slug>
+node <skill>/scripts/scenario.mjs record --dir <dir> --event research --data "<finding>"
+node <skill>/scripts/scenario.mjs record --dir <dir> --event evidence --data "<claim>" --target "<file:line|url>"
+node <skill>/scripts/scenario.mjs record --dir <dir> --to <node>
+node <skill>/scripts/scenario.mjs verify --dir <dir>   # exit 0 iff the stop is justified
+```
+
+| Gate | Passes when |
+|------|-------------|
+| `intent_confirmed` | the user confirmed your restatement |
+| `research_recorded` | at least one research finding is recorded |
+| `no_open_questions` | every question is answered |
+| `evidence_cited` | at least one claim cites a `file:line` or URL |
+| `check_recorded` | the mechanical check ran, or is recorded `not-run` with a reason |
+| `confidence_ok` | confidence is high or medium |
+| `three_options` | three distinct solutions are recorded |
+| `decision_made` | the user picked a route |
+| `route_chosen` | the route is recorded and `analysis-<slug>.md` is written |
+
+Research before the first question (`references/research-first.md`), ask in B2 style
+(`references/questions.md`), then let `scripts/check-questions.mjs` check your questions before you ask
+them. Completion: `verify` exits 0 at a route stop.
 
 ## Workflow (5 Phases)
 
@@ -48,10 +102,10 @@ When asking for missing information, suggest concrete types:
 
 ### Phase 3: Analysis & Thesis
 
-Once you have enough information (or the user confirms they want to proceed with what's available), produce an analysis in `.x-skills/anal/analysis-<session-id>.md`:
+Once you have enough information (or the user confirms they want to proceed with what's available), produce an analysis in `.x-skills/anal/analysis-<slug>.md` (created by `scripts/scenario.mjs start`):
 
 ```markdown
-# Analysis — <session-id>
+# Analysis — <slug>
 
 **Date:** YYYY-MM-DD HH:mm
 **User Intent:** <confirmed restatement from Phase 1>
@@ -111,7 +165,7 @@ Based on the analysis scope and user decision:
 | Needs more investigation | Use `x-investigate` + `x-reproduce` pipeline | Hand off with full analysis as context |
 | Not actionable right now | Note for later | Save analysis; don't force a decision |
 
-When routing to another skill, pass `.x-skills/anal/analysis-<session-id>.md` as the input context so the downstream skill has full background.
+When routing to another skill, pass `.x-skills/anal/analysis-<slug>.md` as the input context so the downstream skill has full background.
 
 ## Constraints (MANIFESTO)
 
@@ -131,3 +185,10 @@ When routing to another skill, pass `.x-skills/anal/analysis-<session-id>.md` as
 - Over-engineering: proposing a full spec+epic+task decomposition for a one-line fix
 - Under-investigating: accepting "it's probably X" without checking other possibilities
 - Asking 10 questions when 2 would suffice — be efficient but thorough enough
+
+## Files
+
+- `scripts/scenario.mjs` — the diagnostic graph, guards, memory, and analysis writer.
+- `scripts/check-questions.mjs` — enforces the B2 question rules (`references/questions.md`).
+- `references/questions.md` — how to ask, and when to stop asking.
+- `references/research-first.md` — the research pass before the first question.
