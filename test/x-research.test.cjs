@@ -428,3 +428,121 @@ describe("x-research CLI", async () => {
     assert.match(help.stdout, /x-research evaluate/);
   });
 });
+
+describe("x-research agent-judged evaluator — pure", async () => {
+  const m = await import(STATE);
+
+  it("coverageVerdict maps k/n to { pass, score } and validates", () => {
+    assert.deepEqual(m.coverageVerdict("3/3"), { met: 3, total: 3, score: 1, pass: true });
+    const partial = m.coverageVerdict("2/3");
+    assert.equal(partial.pass, false);
+    assert.equal(partial.score, 0.667);
+    assert.equal(m.coverageVerdict(" 1 / 4 ").score, 0.25);
+    assert.throws(() => m.coverageVerdict("nope"), /k\/n/);
+    assert.throws(() => m.coverageVerdict("1/0"), /denominator/);
+    assert.throws(() => m.coverageVerdict("4/3"), /exceed/);
+  });
+
+  it("countCriteriaEntries counts non-empty, non-comment lines", () => {
+    assert.equal(m.countCriteriaEntries("a\n\nb\n# note\nc\n"), 3);
+    assert.equal(m.countCriteriaEntries(""), 0);
+  });
+
+  it("startState agent kind records the honest evaluator and defaults the target", () => {
+    const s = m.startState({ slug: "topic", metric: "criteria_coverage", evaluator: "agent", criteria: 4 });
+    assert.equal(s.evaluatorKind, "agent");
+    assert.equal(s.criteria, 4);
+    assert.equal(s.evaluator, "agent (coverage of 4 criteria)");
+    assert.equal(s.target, 1);
+    assert.equal(s.direction, "maximize");
+  });
+
+  it("startState agent kind needs a positive criteria count", () => {
+    assert.throws(
+      () => m.startState({ slug: "t", metric: "m", evaluator: "agent" }),
+      /criteria/
+    );
+    assert.throws(
+      () => m.startState({ slug: "t", metric: "m", evaluator: "agent", criteria: 0 }),
+      /criteria/
+    );
+  });
+
+  it("agent coverage drives the same keep/revert/stop machinery", () => {
+    const s = m.startState({ slug: "t", metric: "criteria_coverage", evaluator: "agent", criteria: 3 });
+    m.recordBaseline(s, { score: m.coverageVerdict("1/3").score, pass: m.coverageVerdict("1/3").pass });
+    m.recordCandidate(s, { pass: false, score: m.coverageVerdict("2/3").score, changed: ["notes.md"] });
+    assert.equal(s.history.at(-1).decision, "revert");
+    assert.equal(s.best.score, 0.333);
+    m.recordCandidate(s, { pass: true, score: m.coverageVerdict("3/3").score, changed: ["notes.md"] });
+    assert.equal(s.phase, "done");
+    assert.equal(m.verify(s).ok, true);
+  });
+});
+
+describe("x-research agent-judged evaluator — CLI", async () => {
+  it("start --evaluator agent records the label and a default target of 1", async () => {
+    const root = await fsp.mkdtemp(path.join(os.tmpdir(), "x-research-agent-"));
+    try {
+      const started = JSON.parse(
+        (await run(STATE, ["start", "--slug", "topic", "--metric", "criteria_coverage", "--evaluator", "agent", "--criteria", "3", "--root", root])).stdout
+      );
+      assert.equal(started.state.evaluator, "agent (coverage of 3 criteria)");
+      assert.equal(started.state.evaluatorKind, "agent");
+      assert.equal(started.state.target, 1);
+      assert.equal(started.next, "baseline");
+    } finally {
+      await fsp.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("drives a coverage loop from --coverage to done, and verify exits 0", async () => {
+    const root = await fsp.mkdtemp(path.join(os.tmpdir(), "x-research-agent-"));
+    try {
+      const started = JSON.parse(
+        (await run(STATE, ["start", "--slug", "lit", "--metric", "criteria_coverage", "--evaluator", "agent", "--criteria", "2", "--root", root])).stdout
+      );
+      const dir = started.dir;
+      const base = JSON.parse((await run(STATE, ["record", "--dir", dir, "--baseline", "--coverage", "0/2"])).stdout);
+      assert.equal(base.next, "iterate");
+      assert.equal(base.summary.baselineScore, 0);
+      const rec = JSON.parse(
+        (await run(STATE, ["record", "--dir", dir, "--candidate", "--coverage", "2/2", "--changed", "notes.md", "--change", "cover the second source"])).stdout
+      );
+      assert.equal(rec.phase, "done");
+      assert.equal(rec.stop, true);
+      assert.equal(rec.summary.bestScore, 1);
+      const v = await run(STATE, ["verify", "--dir", dir]);
+      assert.equal(v.code, 0, v.stderr);
+      assert.equal(JSON.parse(v.stdout).ok, true);
+    } finally {
+      await fsp.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts a criteria file and errors on bad agent input", async () => {
+    const root = await fsp.mkdtemp(path.join(os.tmpdir(), "x-research-agent-"));
+    try {
+      const criteria = path.join(root, "criteria.md");
+      await fsp.writeFile(criteria, "- q1\n- q2\n# heading\n\n- q3\n");
+      const started = JSON.parse(
+        (await run(STATE, ["start", "--slug", "file", "--metric", "criteria_coverage", "--evaluator", "agent", "--criteria", criteria, "--root", root])).stdout
+      );
+      assert.equal(started.state.criteria, 3);
+
+      const noCriteria = await run(STATE, ["start", "--slug", "bad", "--metric", "m", "--evaluator", "agent", "--root", root]);
+      assert.equal(noCriteria.code, 1);
+      assert.match(noCriteria.stderr, /criteria/);
+
+      const badCoverage = await run(STATE, ["record", "--dir", started.dir, "--baseline", "--coverage", "nope"]);
+      assert.equal(badCoverage.code, 1);
+      assert.match(badCoverage.stderr, /k\/n/);
+
+      const orphanCoverage = await run(STATE, ["record", "--dir", started.dir, "--coverage", "1/3"]);
+      assert.equal(orphanCoverage.code, 1);
+      assert.match(orphanCoverage.stderr, /--baseline or --candidate/);
+    } finally {
+      await fsp.rm(root, { recursive: true, force: true });
+    }
+  });
+});
