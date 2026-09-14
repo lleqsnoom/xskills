@@ -1,3 +1,8 @@
+## [5.16.1] - 2026-09-14
+
+* Merge pull request #44 from lleqsnoom/refactor/remove-mcp-server (10d7d2d)
+* refactor(mcp): remove the bundled MCP server and its config generator (4619dad)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
