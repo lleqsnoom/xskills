@@ -13,7 +13,7 @@
 
 **Stop writing separate instructions for every AI coding tool.** xskills gives you reusable workflows. They work across **45+ AI coding CLIs** — Claude Code, Gemini CLI, Cursor, Aider, and more. One format, install once, use everywhere.
 
-It is built for local models under 40B. Every skill fits in a 4K context window: lean, fast, and tested against the limits real developers hit daily. [Read the manifesto →](MANIFESTO.md)
+It is built for small local models under 40B. Every skill is tested to fit a 4K context window — the largest `SKILL.md` is about 10 KB, roughly 2.5k tokens. [Read the manifesto →](MANIFESTO.md)
 
 ## Why xskills?
 
@@ -74,6 +74,12 @@ xskills install x-commit x-plan --global
 # Shortcut — just type the skill name
 xskills <skill-name>
 ```
+
+## Requirements
+
+- **Node.js 18 or newer** — the skills use only Node built-ins, so there is nothing to install.
+- **Git** — needed by `x-rollback` and `x-parallel`.
+- **A compatible CLI** — see [Supported CLIs](#supported-clis). A few skills need extra tooling: `x-browser` drives a real Chrome/Chromium through a `chrome-devtools` MCP client.
 
 ## MCP Server
 
@@ -198,6 +204,10 @@ For MCP clients (editors, agents), add the config from [Configure in a client](#
 1. Skills live in `.agents/skills/`, following the [Agent Skills spec](https://agentskills.io/specification).
 2. Compatible CLIs scan that directory and find the skills automatically.
 3. Skills use **progressive disclosure** — a light catalog at startup, full instructions only when needed.
+
+### Deterministic by design
+
+Some skills do not only suggest — they check. `x-roast` scores an artifact against a fixed rubric. `x-humanize` will not finish until its verifier exits 0. `x-essay` loops until the score and the checks both pass. The rules are numbers, not opinions, so two runs agree. That is the difference between a prompt and a workflow.
 
 ## Directory Structure After Install
 
