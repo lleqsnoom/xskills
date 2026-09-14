@@ -37,7 +37,16 @@ node <path-to>/scripts/revert.js --commit abc123def456 --dry-run
 
 ## Definition of Done
 
-- [ ] SKILL.md exists with YAML frontmatter documenting rollback workflow
-- [ ] `scripts/revert.js` accepts `--commit <sha>` or `--last N` flags
-- [ ] Impact analysis outputs affected file list before confirmation
-- [ ] Rollback creates properly formatted revert commit via x-commit integration
+A rollback run is done when `revert.js` delivers:
+
+- **Refuses a dirty tree** — any uncommitted change makes it exit 1 with a "working tree is not clean" message on stderr, before touching anything.
+- **Resolves exactly one target** — `--commit <sha>` or `--last N` selects a single commit; a missing or ambiguous target exits 1 with a usage error.
+- **Shows impact before acting** — `--dry-run` prints a JSON plan to stdout (`dryRun: true` plus `sha`, `message`, `files`, `stats`) and creates **no** revert commit; HEAD is unchanged.
+- **Requires explicit confirmation** — in an interactive terminal it waits for the literal `REVERT`; any other answer cancels with exit 0.
+- **Commits the revert** — on confirmation it creates a `revert: "…"` commit (via x-commit when available, falling back to `git commit`) and prints `{ success: true, revertSha, message }` to stdout.
+
+Failure modes — each prints a message to stderr and exits 1:
+
+- No `--commit` / `--last` target → usage error.
+- Commit SHA not in current history → "not found".
+- Revert fails mid-way → aborts with `git revert --abort` and reports the error.

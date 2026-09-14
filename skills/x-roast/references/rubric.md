@@ -55,6 +55,13 @@ and a band. The same inputs always produce the same output.
 | `testability` | 3 | The definition of done can be verified by a third party with a command or check. A 1 means completion is a matter of opinion. |
 | `estimation` | 2 | Effort/scope estimate is justified against comparable work. A 1 means the estimate is a guess with no basis. |
 
+### `skill` — adds
+| Dimension | Weight | Anchor |
+|-----------|:------:|--------|
+| `triggers` | 3 | The situations and phrases that should fire the skill are stated up front. A 1 means the skill never says when to use it. |
+| `procedure` | 3 | Steps are ordered and each ends on a completion criterion the agent can check. A 1 means the steps are unordered advice with no finish line. |
+| `verification` | 3 | Completion is provable with a command, exit code, or artifact, not a judgement. A 1 means "done" is a matter of opinion. |
+
 ## Profiles (which dimensions apply)
 
 | Profile | Dimensions |
@@ -65,6 +72,7 @@ and a band. The same inputs always produce the same output.
 | `research` | core 8 + `method`, `recency` |
 | `epic` | core 8 + `decomposition`, `acceptance` |
 | `task` | core 8 + `testability`, `estimation` |
+| `skill` | core 8 + `triggers`, `procedure`, `verification` |
 
 ## Computing the total
 

@@ -31,7 +31,7 @@ node <path-to>/scripts/save-plan.js --output .x-skills/review/   # create plan f
 
 1. **Create plan file with all analyses**: `node <path-to>/scripts/save-plan.js --output .x-skills/review/` — this runs complexity analysis (AST-based via tree-sitter), duplication check, AND refactor pattern detection in one step.
 2. The script prints the full path. Open that file with `edit` or `write`, then insert your review content directly into it using the format below.
-3. **Run the comments pass (always, using x-comments)** — apply the rules in `skills/x-comments/SKILL.md` to every reviewed file. Report comment issues under a `[Comments]` heading in the plan: comments that restate code, obvious comments, and paragraph-long explanations that should be a named function. Route comment issues to `x-comments` in Next Steps.
+3. **Run the comments pass (always, using x-comments)** — apply the rules in the x-comments skill's `SKILL.md` (`~/.agents/skills/x-comments/SKILL.md` for a global install, `.agents/skills/x-comments/SKILL.md` for a local one) to every reviewed file. Report comment issues under a `[Comments]` heading in the plan: comments that restate code, obvious comments, and paragraph-long explanations that should be a named function. Route comment issues to `x-comments` in Next Steps.
 
 The complexity script auto-installs tree-sitter if missing (global install). Output is JSON — parse it for function metrics and duplication counts.
 

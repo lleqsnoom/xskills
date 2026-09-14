@@ -33,7 +33,15 @@ node <path-to>/scripts/analyze.js --target react@19 --output migration-plan.md
 
 ## Definition of Done
 
-- [ ] SKILL.md exists with YAML frontmatter documenting migration categories
-- [ ] `scripts/analyze.js` accepts source/target framework arguments
-- [ ] Outputs markdown plan document to working directory or specified path
-- [ ] Includes breaking changes, suggested order, automated fix candidates
+A migration run is done when `analyze.js` produces all three of:
+
+- **Structured plan on stdout** — JSON `{ packagesAnalyzed, plan[] }`; every plan step carries `package`, `fromVersion`, `toVersion`, `change`, `severity`, `fix`, and `automated`.
+- **Human-readable plan on stderr** — grouped by package, each step showing its severity and fix; when `--output <file>` is passed, the same markdown is also written to that file.
+- **Exit 0** — including the legitimate case of an empty plan (no known breaking changes apply).
+
+Failure modes — each prints a message to stderr and exits 1:
+
+- Neither `--target <package@version>` nor `--all` supplied → usage error.
+- No readable `package.json` in the current directory → "No package.json found".
+
+Partial-data contract: an unknown package name, an unparseable `package.json`, or a version string that matches no breaking-change entry never aborts the run — the plan reports the gap (e.g. a single `manual review required` step, or a version marked `unknown`) instead of inventing changes. This lets the caller tell "nothing to do" apart from "could not determine".

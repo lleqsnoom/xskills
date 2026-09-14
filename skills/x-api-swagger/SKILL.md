@@ -34,7 +34,7 @@ Convert a markdown API design draft produced by `x-api-draft` into a valid OpenA
    - `components/securitySchemes` — extracted from the draft's auth definitions
    - `security` array referencing which security schemes apply globally or per-operation
 
-4. **Gate** — Confirm the generated YAML with the user before handing off to implementation. `</gate>` Ask: *"OpenAPI YAML looks good? Shall I proceed?"*
+4. **Gate** — Confirm the generated YAML with the user before handing off to implementation. Ask: *"OpenAPI YAML looks good? Shall I proceed?"*
 
 ## Output Location
 
@@ -73,8 +73,7 @@ paths: {}
 
 components:
   schemas: {}
-
-components/securitySchemes: {}
+  securitySchemes: {}
 ```
 
 ## Open Questions

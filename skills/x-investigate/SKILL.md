@@ -55,7 +55,7 @@ If the repo has no commits (fresh init), note this limitation and proceed with o
 
 ### 3. Route Investigation Tools by Platform
 
-Read the triage brief's **Platform** field and use corresponding tools from `scripts/route.js`:
+Read the triage brief's **Platform** field and use corresponding tools from x-triage's routing table (`<x-triage skill root>/scripts/route.js` — `~/.agents/skills/x-triage/scripts/route.js` for a global install, `.agents/skills/x-triage/scripts/route.js` for a local one):
 
 | Platform | Tools (from triage brief) | Concrete Actions |
 |----------|---------------------------|-----------------|

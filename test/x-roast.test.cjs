@@ -34,6 +34,7 @@ describe("x-roast score — pure scoring", async () => {
     assert.deepEqual(mod.PROFILES.research.slice(-2), ["method", "recency"]);
     assert.deepEqual(mod.PROFILES.epic.slice(-2), ["decomposition", "acceptance"]);
     assert.deepEqual(mod.PROFILES.task.slice(-2), ["testability", "estimation"]);
+    assert.deepEqual(mod.PROFILES.skill.slice(-3), ["triggers", "procedure", "verification"]);
   });
 
   it("dimensionsFor throws on an unknown profile", () => {

@@ -15,6 +15,7 @@ import { spawn, execSync } from "node:child_process";
 import { readdir, readFile, writeFile, mkdir, rm, appendFile } from "node:fs/promises";
 import { existsSync, createWriteStream } from "node:fs";
 import { join, basename, dirname } from "node:path";
+import { pathToFileURL } from "node:url";
 
 function arg(name, def) {
   const eq = process.argv.find((a) => a.startsWith(`--${name}=`));
@@ -43,36 +44,40 @@ const PROMPT = arg("prompt", DEFAULT_PROMPT);
 const run = (cmd) =>
   execSync(cmd, { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 }).trim();
 
-if (!TASK_DIR) {
-  console.error("ERROR: --tasks <dir> is required.");
-  process.exit(2);
-}
-if (!existsSync(TASK_DIR)) {
-  console.error(`ERROR: task directory not found: ${TASK_DIR}`);
-  process.exit(2);
-}
+let repoRoot;
+let curBranch;
+let WT_BASE;
+let LOG_DIR;
 
 // --- Repo sanity -----------------------------------------------------------
-let repoRoot;
-try {
-  repoRoot = run("git rev-parse --show-toplevel");
-} catch {
-  console.error("ERROR: not inside a git repository.");
-  process.exit(2);
+function validateRepo() {
+  if (!TASK_DIR) {
+    console.error("ERROR: --tasks <dir> is required.");
+    process.exit(2);
+  }
+  if (!existsSync(TASK_DIR)) {
+    console.error(`ERROR: task directory not found: ${TASK_DIR}`);
+    process.exit(2);
+  }
+  try {
+    repoRoot = run("git rev-parse --show-toplevel");
+  } catch {
+    console.error("ERROR: not inside a git repository.");
+    process.exit(2);
+  }
+  curBranch = run("git branch --show-current");
+  if (!curBranch) {
+    console.error("ERROR: run from a normal branch, not detached HEAD.");
+    process.exit(2);
+  }
+  const dirty = run("git status --porcelain");
+  if (dirty && !DRY_RUN) {
+    console.error("ERROR: working tree is not clean. Commit or stash first.");
+    process.exit(2);
+  }
+  WT_BASE = join(repoRoot, ".x-skills", "worktrees");
+  LOG_DIR = join(repoRoot, ".x-skills", "parallel-logs");
 }
-const curBranch = run("git branch --show-current");
-if (!curBranch) {
-  console.error("ERROR: run from a normal branch, not detached HEAD.");
-  process.exit(2);
-}
-const dirty = run("git status --porcelain");
-if (dirty && !DRY_RUN) {
-  console.error("ERROR: working tree is not clean. Commit or stash first.");
-  process.exit(2);
-}
-
-const WT_BASE = join(repoRoot, ".x-skills", "worktrees");
-const LOG_DIR = join(repoRoot, ".x-skills", "parallel-logs");
 
 // --- Task discovery --------------------------------------------------------
 async function collectMarkdown(dir, out = []) {
@@ -84,13 +89,26 @@ async function collectMarkdown(dir, out = []) {
   return out;
 }
 
-function parseFiles(content) {
-  const m = content.match(/(?:^|\n)\*\*Files?\*\*:\s*(.+)$/m);
+export function parseFiles(content) {
+  const m = content.match(/(?:^|\n)\*\*Files?:?\*\*:?\s*(.+)$/m);
   if (!m) return [];
   return m[1]
     .split(",")
     .map((s) => s.trim().replace(/\s*\((new|mod)\)/, ""))
     .filter((s) => s.includes("."));
+}
+
+export function detectDependencies(tasks) {
+  const deps = {};
+  for (const t of tasks) {
+    deps[t.id] = [];
+    // A task depends on any sibling task basename appearing in its body.
+    for (const other of tasks) {
+      if (other.id === t.id) continue;
+      if (new RegExp(`\\b${escapeRegExp(other.id)}\\b`).test(t.content)) deps[t.id].push(other.id);
+    }
+  }
+  return deps;
 }
 
 async function loadTasks() {
@@ -103,23 +121,17 @@ async function loadTasks() {
     const title = content.match(/^#\s*.{0,80}/m)?.[0].slice(2).trim() || id;
     tasks.push({ id, title, path: p, content, files: parseFiles(content), deps: [], wave: -1, status: "pending" });
   }
-  const ids = new Set(tasks.map((t) => t.id));
-  for (const t of tasks) {
-    // A task depends on any sibling task basename appearing in its body.
-    for (const other of tasks) {
-      if (other.id === t.id) continue;
-      if (new RegExp(`\\b${escapeRegExp(other.id)}\\b`).test(t.content)) t.deps.push(other.id);
-    }
-  }
+  const depMap = detectDependencies(tasks);
+  for (const t of tasks) t.deps = depMap[t.id];
   return tasks;
 }
 
-function escapeRegExp(s) {
+export function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 // --- Wave scheduling -------------------------------------------------------
-function buildWaves(tasks, limit) {
+export function buildWaves(tasks, limit) {
   const waves = [];
   const done = new Set();
   const remaining = [...tasks];
@@ -152,7 +164,7 @@ function buildWaves(tasks, limit) {
 }
 
 // --- Worktree lifecycle ----------------------------------------------------
-const slugOf = (id) => id.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 60);
+export const slugOf = (id) => id.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 60);
 
 async function createWorktree(task) {
   const slug = slugOf(task.id);
@@ -299,6 +311,7 @@ async function runWithRetries(task, cleanup) {
 
 // --- Main ------------------------------------------------------------------
 async function main() {
+  validateRepo();
   console.log(`\nX-Parallel — ${AGENT} workers, limit ${PARALLEL}, timeout ${TIMEOUT_MIN}m`);
   const tasks = await loadTasks();
   if (tasks.length === 0) {
@@ -360,7 +373,9 @@ async function main() {
 
 const quote = (s) => `"${String(s).replace(/"/g, '\\"')}"`;
 
-main().catch((err) => {
-  console.error("X-Parallel failed:", err);
-  process.exit(1);
-});
+if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
+  main().catch((err) => {
+    console.error("X-Parallel failed:", err);
+    process.exit(1);
+  });
+}
