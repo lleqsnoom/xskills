@@ -1,9 +1,9 @@
 ---
 name: x-research
-description: Metric-driven research loop — name one metric and a target, then iterate one atomic change at a time, evaluating it mechanically and keeping only measured improvements until the target, a guard, or a hard cap stops the run. Use when asked to optimize or tune a measurable value, run an experiment loop, or search a constrained space toward a target.
-version: 1.0.0
+description: Research a topic or tune a metric — define one metric and a target, then iterate one atomic change at a time, evaluating it mechanically (a command, or agent-judged criteria coverage) and keeping only measured improvements until the target, a guard, or a hard cap stops the run. Use for "research X", "compile/summarise sources on Y until N criteria are covered", filling knowledge gaps, literature/topic research with coverage criteria, or optimizing a measurable value.
+version: 1.1.0
 author: Community
-tags: [research, experiment, optimization, metric, loop, iteration, evaluation, tuning, autonomous]
+tags: [research, experiment, optimization, metric, loop, iteration, evaluation, tuning, autonomous, literature, coverage]
 user-invocable: true
 ---
 
@@ -11,13 +11,18 @@ user-invocable: true
 
 Drive a bounded search toward a **number** instead of a feeling. You name one
 metric, a direction, and a target; the loop then makes **one atomic change per
-iteration**, evaluates it mechanically, and keeps it only if the numbers say so:
+iteration**, evaluates it, and keeps it only if the numbers say so:
 
 ```
-baseline → [ propose ONE change → run the evaluator → keep or revert → record ]
+baseline → [ propose ONE change → evaluate → keep or revert → record ]
              stop when the metric meets the target AND the evaluator (and guard) pass
              else loop; at the hard cap, escalate instead of looping forever
 ```
+
+The metric is scored one of two ways, and **the mechanics are identical for both**:
+a **command** printing `{"pass": bool, "score": number}` (preferred when one
+exists), or **agent** judgment of **criteria coverage** — N criteria, marked
+met/unmet, `score = met/total`, `pass = all met`.
 
 This skill is a **loop contract**, not a runner. It ships no scheduler, no daemon,
 and no autonomy doctrine — repetition is owned by the host (see
@@ -28,9 +33,18 @@ stop", and never says "never ask".
 ## When to use
 
 - "Improve / optimize / tune X until it reaches Y", "run an experiment loop on …".
-- You have a **measurable** metric and a command that scores it.
-- **Not** for open-ended exploration with no metric — use `x-anal` /
-  `x-investigate` for that. If a metric cannot be defined, this skill does not fit.
+- **Research a topic toward coverage**: "research X", "compile sources on Y",
+  "summarise the literature on Z", "find the gaps in W", "keep going until every
+  sub-question is answered". Here the metric is **criteria coverage** (see below)
+  and the evaluator is agent-judged.
+- You have a **measurable** metric — either a command that scores it, or a set of
+  criteria an agent can mark met/unmet.
+
+**Bootstrap, never refuse.** If the request names a goal but no metric, target, or
+evaluator, **propose a criteria-coverage metric + target and continue** — do not
+stop. Ask **at most once** if something is genuinely ambiguous, then proceed with
+the proposal. Only a *pure* open-ended question with **no definable metric** belongs
+to `x-anal` / `x-investigate`; this skill *defines* the metric when none exists.
 
 ## Non-negotiable rules (read first)
 
@@ -58,7 +72,8 @@ stop", and never says "never ask".
 | **direction** | `maximize` or `minimize` | `--direction` |
 | **target** | the number that ends the run | `--target` |
 | **policy** | `score_improvement` \| `pass_only` | `--policy` |
-| **evaluator** | a command printing `{"pass": bool, "score": number}` | `--evaluator` |
+| **evaluator** | a command printing `{"pass": bool, "score": number}`, **or** `agent` | `--evaluator` |
+| **criteria** | N sub-questions/requirements (agent mode only) | `--criteria <n\|file>` |
 | **guard** (optional) | a command whose exit 0 gates a keep | `--guard` |
 | **search space** | allowed / forbidden change globs | `--allow`, `--forbid` |
 | **noise** | `noise_runs` samples per evaluation, `min_delta` keep threshold | `--noise-runs`, `--min-delta` |
@@ -66,10 +81,33 @@ stop", and never says "never ask".
 | **cap** | hard experiment limit before escalation | `--cap` |
 | **history** | every experiment, kept or reverted, with its numbers | `results.tsv` + `state.json` |
 
+## Evaluator kinds
+
+### command (preferred when a command exists)
+
+A command that prints `{"pass": bool, "score": number}` (or a bare number). The
+loop runs it with a hard timeout via `scripts/evaluate.mjs`.
+
+### agent (judged — no shell command)
+
+When no command can score the goal — a topic to research, sources to compile, gaps
+to close — score **criteria coverage** instead:
+
+1. Define **N criteria** (sub-questions, requirements, sources). Pass them as
+   `--criteria <n>` or `--criteria <file>` (one per non-empty line).
+2. Each iteration, judge each criterion **met / unmet** and record
+   `--coverage <k/n>` (k of n met): `score = k/n`, `pass = (k === n)`.
+3. The target defaults to `1` (every criterion); the numeric gate compares the
+   coverage ratio to the target, exactly like any other metric.
+
+Record it honestly: the state stores `evaluator: "agent (coverage of N criteria)"`,
+so the audit trail never claims a mechanical score no command produced.
+
 ## Procedure
 
 ### 1. Start — `scripts/state.mjs`
 ```bash
+# command evaluator (preferred when a command exists)
 node <skill>/scripts/state.mjs start \
   --slug reduce-bundle-size --goal "ship the smallest JS bundle" \
   --metric bundle_kb --direction minimize --target 120 \
@@ -77,27 +115,41 @@ node <skill>/scripts/state.mjs start \
   --evaluator "node tools/measure-bundle.mjs --json" \
   --guard "npm test --silent" \
   --allow "src/**,vite.config.*" --forbid "**/*.test.*,package.json"
+
+# agent-judged (no command) — topic research toward coverage
+node <skill>/scripts/state.mjs start \
+  --slug llm-agents-in-2026 --goal "compile a sourced overview of LLM agent frameworks" \
+  --metric criteria_coverage --evaluator agent --criteria criteria.md \
+  --cap 12
 ```
 Creates `.x-skills/research/<ts>-<slug>/` with `state.json`, `research.md`,
-`research_log.md`, `results.tsv`, and prints the first action. Completion:
-`state.json` exists with `phase:"baseline"`.
+`research_log.md`, `results.tsv`, and prints the first action. For the agent mode
+`--target` defaults to `1` and `--direction` to `maximize`. Completion: `state.json`
+exists with `phase:"baseline"`.
 
 ### 2. Baseline
-Measure the current value and record it. Run the evaluator once
-(`scripts/evaluate.mjs` enforces the timeout and validates the JSON), then:
+Measure the current value and record it. For a command evaluator run it once
+(`scripts/evaluate.mjs` enforces the timeout and validates the JSON) and record
+`--baseline <score|file>`; for the agent mode record the starting coverage:
 ```bash
-node <skill>/scripts/state.mjs record --dir <dir> --baseline 180
+node <skill>/scripts/state.mjs record --dir <dir> --baseline 180          # command
+node <skill>/scripts/state.mjs record --dir <dir> --baseline --coverage 1/3   # agent
 ```
 Completion: `phase:"iterate"` (or `done` if the baseline already meets the target).
 
 ### 3. Iterate — one atomic change at a time
-For each experiment: make **one** change, then evaluate it. `evaluate.mjs` runs the
-command with the configured timeout and emits the normalized verdict:
+For each experiment: make **one** change, then evaluate it. For a command
+evaluator, `evaluate.mjs` runs the command with the configured timeout and emits
+the normalized verdict; for the agent mode you supply the coverage verdict yourself:
 ```bash
 node <skill>/scripts/evaluate.mjs --command "<evaluator>" --timeout 30000 --guard "<guard>" \
   > cand.json
 node <skill>/scripts/state.mjs record --dir <dir> --candidate cand.json \
   --changed src/foo.js --change "inline the icon map"
+
+# agent-judged: judge the criteria, then record coverage
+node <skill>/scripts/state.mjs record --dir <dir> --candidate --coverage 2/3 \
+  --changed research.md --change "add source for the third criterion"
 ```
 `record` prints `{ next, stop, phase, iteration, reason, summary }` and decides:
 - `next:"iterate"` — recorded; go make the next atomic change.
@@ -142,6 +194,7 @@ host, its permission and approval gates still apply on every iteration.
 # X-Research — <slug>
 
 **Metric:** <metric> (<direction> → target <target>) · policy <policy>
+**Evaluator:** <command | agent (coverage of N criteria)>
 **Loop:** <n> experiments · baseline <a> → best <b> (+<gain>) · phase <done|escalate> · verify <✅|❌>
 
 ## Change
@@ -165,8 +218,10 @@ host, its permission and approval gates still apply on every iteration.
 - `scripts/state.mjs` — pure, numeric loop state machine + `start` / `record` /
   `status` / `verify` CLI. Zero-dep, standalone: it never imports another skill's
   script, and every transition is a recorded `{ actual, expected, pass }` comparison.
-- `scripts/evaluate.mjs` — runs the evaluator (and optional guard) with a hard
-  timeout and prints the normalized `{ pass, score }`. It is the mechanical
-  evaluator the loop relies on.
-- `references/loop.md` — the state diagram, the gates, and the two policies.
+  It carries both evaluator kinds — a command, or agent-judged criteria coverage.
+- `scripts/evaluate.mjs` — runs the command evaluator (and optional guard) with a
+  hard timeout and prints the normalized `{ pass, score }`. It is the mechanical
+  evaluator the loop relies on; the agent mode needs no command and does not use it.
+- `references/loop.md` — the state diagram, the gates, the two policies, and the two
+  evaluator kinds.
 - `references/running-unattended.md` — how each host owns repetition (no bundled runner).

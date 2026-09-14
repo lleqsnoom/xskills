@@ -16,6 +16,25 @@ done / escalate = STOP_PHASES
 `start` → `baseline`. One `record --baseline` → `iterate`. Each
 `record --candidate` advances one experiment.
 
+## Evaluator kinds
+
+The machine consumes one normalized shape per iteration: `{ pass, score }`. It is
+produced either by a command or by the agent's own judgment.
+
+| Kind | `--evaluator` | Per-iteration input | `score` | `pass` |
+|------|---------------|---------------------|---------|--------|
+| command | `"<cmd>"` | the command's JSON | the command's `score` | the command's `pass` |
+| agent | `agent` (+ `--criteria <n\|file>`) | `--coverage <k/n>` | `k/n` | `k === n` (all met) |
+
+- **command is preferred** whenever a command can score the goal; it runs through
+  `evaluate.mjs` with a hard timeout.
+- **agent** is for goals with no scoreable command — a topic to research, sources
+  to compile, gaps to close. You define N criteria and judge coverage each
+  iteration. The recorded evaluator string is
+  `agent (coverage of N criteria)`, and `--target` defaults to `1`.
+
+Both kinds feed the identical gates below; nothing downstream distinguishes them.
+
 ## Gates (all numbers)
 
 | Gate | Comparison | On fail |

@@ -43,7 +43,7 @@ xskills/
     ├── x-reproduce/          # Creates minimal platform-aware reproducible test cases
     │   ├── SKILL.md
     │   └── scripts/
-    ├── x-research/           # Metric-driven iteration loop — one metric + target, atomic change per iteration, keep/revert by numbers
+    ├── x-research/           # Metric-driven iteration loop — command- or agent-judged (criteria coverage) evaluation, one atomic change per iteration, keep/revert by numbers
     │   ├── SKILL.md
     │   ├── scripts/
     │   └── references/

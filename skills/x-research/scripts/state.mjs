@@ -7,6 +7,7 @@ export const PHASES = ["baseline", "iterate", "done", "escalate"];
 export const STOP_PHASES = new Set(["done", "escalate"]);
 export const DIRECTIONS = ["maximize", "minimize"];
 export const POLICIES = ["score_improvement", "pass_only"];
+export const EVALUATOR_KINDS = ["command", "agent"];
 export const DEFAULT_CAP = 10;
 export const DEFAULT_MIN_DELTA = 0;
 export const DEFAULT_NOISE_RUNS = 1;
@@ -29,6 +30,28 @@ function normalizeSamples(value) {
   const arr = Array.isArray(value) ? value : String(value).split(",");
   const nums = arr.map(Number).filter(Number.isFinite);
   return nums.length ? nums : null;
+}
+
+// Criteria count from a checklist file: every non-empty line that is not a
+// comment counts as one criterion (so a markdown bullet list is 1:1).
+export function countCriteriaEntries(text) {
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#")).length;
+}
+
+// An agent-judged per-iteration verdict, `k/n` met criteria, normalized to the same
+// `{ pass, score }` shape a command evaluator emits. `pass` is all-met; `score` is
+// the coverage ratio.
+export function coverageVerdict(spec) {
+  const m = String(spec).trim().match(/^(\d+)\s*\/\s*(\d+)$/);
+  if (!m) throw new Error("coverage must look like k/n (e.g. 2/3)");
+  const met = Number(m[1]);
+  const total = Number(m[2]);
+  if (total < 1) throw new Error("coverage denominator must be at least 1");
+  if (met > total) throw new Error("coverage numerator cannot exceed the denominator");
+  return { met, total, score: round(met / total), pass: met === total };
 }
 
 // Minimal glob: `**` crosses directories, `*` stays within one path segment.
@@ -79,6 +102,8 @@ export function startState({
   target,
   policy = "score_improvement",
   evaluator,
+  evaluatorKind,
+  criteria,
   guard = null,
   allowed,
   forbidden,
@@ -91,21 +116,39 @@ export function startState({
   if (!slug || typeof slug !== "string") throw new Error("slug is required");
   if (!metric || typeof metric !== "string") throw new Error("metric is required");
   if (!DIRECTIONS.includes(direction)) throw new Error(`direction must be one of ${DIRECTIONS.join(", ")}`);
-  if (!Number.isFinite(target)) throw new Error("target must be a number");
   if (!POLICIES.includes(policy)) throw new Error(`policy must be one of ${POLICIES.join(", ")}`);
-  if (!evaluator || typeof evaluator !== "string") throw new Error("evaluator command is required");
   if (!Number.isInteger(cap) || cap < 1) throw new Error("cap must be a positive integer");
   if (!Number.isInteger(noiseRuns) || noiseRuns < 1) throw new Error("noiseRuns must be a positive integer");
   if (!Number.isFinite(minDelta) || minDelta < 0) throw new Error("minDelta must be a non-negative number");
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error("timeoutMs must be a positive number");
+
+  const kind = evaluatorKind || (evaluator === "agent" ? "agent" : "command");
+  if (!EVALUATOR_KINDS.includes(kind)) throw new Error(`evaluator kind must be one of ${EVALUATOR_KINDS.join(", ")}`);
+
+  // The agent-judged mode needs a criteria count, an evaluator label, and a
+  // coverage target (default: every criterion met → ratio 1).
+  let label = evaluator;
+  let resolvedCriteria = null;
+  let resolvedTarget = target;
+  if (kind === "agent") {
+    if (!Number.isInteger(criteria) || criteria < 1) throw new Error("agent evaluator needs a positive --criteria count");
+    resolvedCriteria = criteria;
+    label = `agent (coverage of ${criteria} criteria)`;
+    if (!Number.isFinite(resolvedTarget)) resolvedTarget = 1;
+  }
+  if (!label || typeof label !== "string") throw new Error("evaluator command is required");
+  if (!Number.isFinite(resolvedTarget)) throw new Error("target must be a number");
+
   return {
     slug,
     goal: goal || null,
     metric,
     direction,
-    target,
+    target: resolvedTarget,
     policy,
-    evaluator,
+    evaluator: label,
+    evaluatorKind: kind,
+    criteria: resolvedCriteria,
     guard: guard || null,
     search: { allowed: normalizeList(allowed), forbidden: normalizeList(forbidden) },
     noiseRuns,
@@ -337,7 +380,7 @@ export function renderResearchMd(state) {
     `**Goal:** ${state.goal || "(not set)"}`,
     `**Metric:** ${state.metric} (${state.direction} → target ${dir} ${state.target})`,
     `**Policy:** ${state.policy}`,
-    `**Evaluator:** \`${state.evaluator}\``,
+    `**Evaluator:** \`${state.evaluator}\`${state.evaluatorKind === "agent" ? " (agent-judged)" : ""}`,
     `**Guard:** ${state.guard ? `\`${state.guard}\`` : "none"}`,
     `**Search space:** allowed [${state.search.allowed.join(", ") || "any"}]; forbidden [${state.search.forbidden.join(", ") || "none"}]`,
     `**Noise:** noise_runs=${state.noiseRuns}, min_delta=${state.minDelta}`,
@@ -446,9 +489,13 @@ function usage() {
     "        [--direction maximize|minimize] [--policy score_improvement|pass_only] [--goal <text>]",
     "        [--guard <cmd>] [--allow g1,g2] [--forbid g1,g2] [--noise-runs <n>] [--min-delta <n>]",
     "        [--cap <n>] [--timeout <ms>] [--root <dir>]",
+    "  node state.mjs start --slug <s> --metric <name> --evaluator agent --criteria <n|file>",
+    "        # agent-judged: --target defaults to 1 (all criteria); no shell command runs",
     "  node state.mjs record --dir <dir> --baseline <n|file|-> [--samples a,b,c] [--pass true|false]",
+    "  node state.mjs record --dir <dir> --baseline --coverage <k/n>",
     "  node state.mjs record --dir <dir> --candidate <file|->   # evaluator JSON: {\"pass\":bool,\"score\":number}",
-    "        [--guard true|false] [--changed path1,path2] [--change <text>]",
+    "  node state.mjs record --dir <dir> --candidate --coverage <k/n> [--changed path1,path2] [--change <text>]",
+    "        [--guard true|false]",
     "  node state.mjs status --dir <dir>",
     "  node state.mjs verify --dir <dir>   # exit 0 iff the stop is justified",
     "",
@@ -513,6 +560,23 @@ function readJsonSource(spec) {
   return JSON.parse(text);
 }
 
+// `--criteria` accepts a positive integer or a path to a checklist file (one
+// criterion per non-empty, non-comment line).
+function resolveCriteria(spec) {
+  const s = String(spec).trim();
+  if (/^\d+$/.test(s)) {
+    const n = Number(s);
+    if (n < 1) throw new Error("--criteria must be at least 1");
+    return n;
+  }
+  if (fs.existsSync(s)) {
+    const n = countCriteriaEntries(fs.readFileSync(s, "utf8"));
+    if (n < 1) throw new Error(`--criteria file ${s} has no criteria`);
+    return n;
+  }
+  throw new Error("--criteria must be a positive integer or a path to a criteria file");
+}
+
 // A numeric literal, a JSON file, or "-" (stdin).
 function scoreSource(spec) {
   if (spec !== "-" && spec !== true && Number.isFinite(Number(spec))) return { score: Number(spec) };
@@ -542,14 +606,17 @@ function main() {
       if (!args.slug || args.slug === true) throw new Error("--slug is required");
       const root = !args.root || args.root === true ? path.resolve(DEFAULT_ROOT) : path.resolve(args.root);
       const dir = path.join(root, `${stamp()}-${args.slug}`);
+      const evaluatorKind = args.evaluator === "agent" || args["evaluator-kind"] === "agent" ? "agent" : undefined;
       const state = startState({
         slug: args.slug,
         goal: args.goal === true ? null : args.goal,
         metric: args.metric === true ? undefined : args.metric,
         direction: args.direction === true ? "maximize" : args.direction || "maximize",
-        target: args.target === true ? undefined : args.target === undefined ? NaN : num(args.target, "--target"),
+        target: args.target === undefined || args.target === true ? undefined : num(args.target, "--target"),
         policy: args.policy === true ? "score_improvement" : args.policy || "score_improvement",
         evaluator: args.evaluator === true ? undefined : args.evaluator,
+        evaluatorKind,
+        criteria: args.criteria === undefined || args.criteria === true ? undefined : resolveCriteria(args.criteria),
         guard: args.guard === true ? null : args.guard || null,
         allowed: args.allow,
         forbidden: args.forbid,
@@ -568,17 +635,21 @@ function main() {
       if (!args.dir || args.dir === true) throw new Error("--dir is required");
       const state = loadState(args.dir);
       const before = state.history.length;
+      const coverage = args.coverage === undefined || args.coverage === true ? null : coverageVerdict(args.coverage);
+      if (coverage && args.baseline === undefined && args.candidate === undefined) {
+        throw new Error("--coverage needs --baseline or --candidate");
+      }
       if (args.baseline !== undefined) {
-        if (args.baseline === true) throw new Error("--baseline needs a score, file, or -");
-        const src = scoreSource(args.baseline);
+        if (!coverage && args.baseline === true) throw new Error("--baseline needs a score, file, or -");
+        const src = coverage ? { score: coverage.score, pass: coverage.pass } : scoreSource(args.baseline);
         recordBaseline(state, {
           score: src.score,
           samples: args.samples,
           pass: src.pass === undefined ? undefined : src.pass === true,
         });
       } else if (args.candidate !== undefined) {
-        if (args.candidate === true) throw new Error("--candidate needs a file or -");
-        const src = readJsonSource(args.candidate);
+        if (!coverage && args.candidate === true) throw new Error("--candidate needs a file or -");
+        const src = coverage ? { score: coverage.score, pass: coverage.pass } : readJsonSource(args.candidate);
         recordCandidate(state, {
           pass: src.pass,
           score: src.score,
