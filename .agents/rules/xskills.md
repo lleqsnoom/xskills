@@ -27,7 +27,6 @@ Before declaring a phase complete: confirm artifact file exists at expected path
 | What to do | Correct approach |
 |------------|-----------------|
 | Read a user-installed skill's SKILL.md | `view $HOME/.agents/skills/<name>/SKILL.md` |
-| Call an xskills MCP tool (dispatch, plan, reproduce) | Use the tool directly: `mcp_xskills_<tool>()` |
 | Access builtin skill docs (jq, omarchy) | `view crush://skills/<name>/SKILL.md` |
 
-The four connected MCP servers are: `chrome-devtools`, `github`, `sentry`, `xskills`. That's it.
+xskills ships no MCP server. Some skills drive *external* MCP servers the client may configure (e.g. `chrome-devtools` via `x-browser`) — those belong to the environment, not to xskills.
