@@ -1,3 +1,8 @@
+## [5.15.0] - 2026-09-14
+
+* Merge pull request #42 from lleqsnoom/fix/skill-audit (b289291)
+* feat(skills): add x-skill-lint and fix broken skill references (8a45f85)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
