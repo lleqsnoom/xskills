@@ -1,3 +1,7 @@
+## [5.15.2] - 2026-09-14
+
+* docs(readme): add development and scope notes (f15c67c)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
