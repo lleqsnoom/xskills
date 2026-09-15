@@ -29,11 +29,21 @@ function write(dir, name, text) {
 
 const GOOD = `## Q1: Which database stores sessions?
 **Why:** this decides the schema and the migration.
-**Examples:** Postgres | SQLite | Redis
+**Panel:** single
+**Options:** Postgres | SQLite | Redis
 
-## Q2: How many users per day?
+## Q2: Which non-functional requirements matter?
+**Why:** this sets the scope of the work.
+**Panel:** multi
+**Options:** performance | security | cost
+
+## Q3: What is the peak request rate?
 **Why:** this sets the sizing target.
-**Examples:** under 100 | 1000 | 10000
+**Panel:** open
+
+## Q4: Should we keep the legacy endpoint?
+**Why:** this decides the migration path.
+**Panel:** confirm
 `;
 
 describe("check-questions", () => {
@@ -42,33 +52,54 @@ describe("check-questions", () => {
     cwd = fs.mkdtempSync(path.join(os.tmpdir(), "check-questions-"));
   });
 
-  it("passes a well-formed file", async () => {
+  it("passes a well-formed file with all four panels", async () => {
     const res = await run(["--file", write(cwd, "questions.md", GOOD)]);
     assert.equal(res.code, 0, res.stderr);
     const out = JSON.parse(res.stdout);
-    assert.equal(out.questions, 2);
+    assert.equal(out.questions, 4);
     assert.deepEqual(out.violations, []);
   });
 
   it("flags an over-long question", async () => {
-    const text = `## Q1: Which of the many possible database backends should this specific application really use here given the expected heavy write traffic plus the long term reporting needs?\n**Why:** decides schema.\n**Examples:** a | b\n`;
+    const text = `## Q1: Which of the many possible database backends should this specific application really use here given the expected heavy write traffic plus the long term reporting needs?\n**Why:** decides schema.\n**Panel:** single\n**Options:** a | b\n`;
     const res = await run(["--file", write(cwd, "q.md", text)]);
     assert.equal(res.code, 1);
     assert.ok(JSON.parse(res.stdout).violations.some((v) => v.rule === "too-long"));
   });
 
-  it("flags a missing example pair", async () => {
-    const text = `## Q1: Which database?\n**Why:** decides schema.\n**Examples:** Postgres\n`;
+  it("flags a counting panel with fewer than two options", async () => {
+    const text = `## Q1: Which database?\n**Why:** decides schema.\n**Panel:** single\n**Options:** Postgres\n`;
     const res = await run(["--file", write(cwd, "q.md", text)]);
     assert.equal(res.code, 1);
-    assert.ok(JSON.parse(res.stdout).violations.some((v) => v.rule === "no-examples"));
+    assert.ok(JSON.parse(res.stdout).violations.some((v) => v.rule === "no-options"));
   });
 
   it("flags a multi-idea question", async () => {
-    const text = `## Q1: Which database and which cache?\n**Why:** decides stack.\n**Examples:** a | b\n`;
+    const text = `## Q1: Which database and which cache?\n**Why:** decides stack.\n**Panel:** single\n**Options:** a | b\n`;
     const res = await run(["--file", write(cwd, "q.md", text)]);
     assert.equal(res.code, 1);
     assert.ok(JSON.parse(res.stdout).violations.some((v) => v.rule === "multi-idea"));
+  });
+
+  it("flags a question with no panel", async () => {
+    const text = `## Q1: Which database?\n**Why:** decides schema.\n`;
+    const res = await run(["--file", write(cwd, "q.md", text)]);
+    assert.equal(res.code, 1);
+    assert.ok(JSON.parse(res.stdout).violations.some((v) => v.rule === "no-panel"));
+  });
+
+  it("flags an unknown panel name", async () => {
+    const text = `## Q1: Which database?\n**Why:** decides schema.\n**Panel:** dropdown\n`;
+    const res = await run(["--file", write(cwd, "q.md", text)]);
+    assert.equal(res.code, 1);
+    assert.ok(JSON.parse(res.stdout).violations.some((v) => v.rule === "bad-panel"));
+  });
+
+  it("flags options on a panel that cannot take them", async () => {
+    const text = `## Q1: Should we ship today?\n**Why:** decides the release.\n**Panel:** confirm\n**Options:** yes | no\n`;
+    const res = await run(["--file", write(cwd, "q.md", text)]);
+    assert.equal(res.code, 1);
+    assert.ok(JSON.parse(res.stdout).violations.some((v) => v.rule === "unexpected-options"));
   });
 
   it("reads questions.md from a run directory", async () => {

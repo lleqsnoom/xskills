@@ -4,6 +4,9 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 export const MAX_WORDS = 20;
+export const PANELS = ["single", "multi", "open", "confirm"];
+export const MIN_OPTIONS = 2;
+export const MAX_OPTIONS = 5;
 
 export function parseQuestions(text) {
   const blocks = [];
@@ -13,7 +16,7 @@ export function parseQuestions(text) {
     const heading = line.match(/^##\s*Q\d*\s*:\s*(.+?)\s*$/);
     if (heading) {
       if (current) blocks.push(current);
-      current = { question: heading[1], why: null, examples: [] };
+      current = { question: heading[1], why: null, panel: null, options: [] };
       continue;
     }
     if (!current) continue;
@@ -22,11 +25,16 @@ export function parseQuestions(text) {
       current.why = why[1];
       continue;
     }
-    const examples = line.match(/^\*\*Examples:\*\*\s*(.+?)\s*$/);
-    if (examples) {
-      current.examples = examples[1]
+    const panel = line.match(/^\*\*Panel:\*\*\s*(.+?)\s*$/);
+    if (panel) {
+      current.panel = panel[1].toLowerCase();
+      continue;
+    }
+    const options = line.match(/^\*\*Options:\*\*\s*(.+?)\s*$/);
+    if (options) {
+      current.options = options[1]
         .split("|")
-        .map((example) => example.trim())
+        .map((option) => option.trim())
         .filter(Boolean);
     }
   }
@@ -36,6 +44,18 @@ export function parseQuestions(text) {
 
 function wordCount(text) {
   return text.split(/\s+/).filter(Boolean).length;
+}
+
+function panelViolations(question) {
+  if (!question.panel) return [{ rule: "no-panel", detail: "missing **Panel:**" }];
+  if (!PANELS.includes(question.panel)) return [{ rule: "bad-panel", detail: question.panel }];
+  const counts = question.panel === "single" || question.panel === "multi";
+  if (counts) {
+    return question.options.length < MIN_OPTIONS || question.options.length > MAX_OPTIONS
+      ? [{ rule: "no-options", detail: `${question.options.length} option(s)` }]
+      : [];
+  }
+  return question.options.length > 0 ? [{ rule: "unexpected-options", detail: question.panel }] : [];
 }
 
 export function lintQuestions(text) {
@@ -49,7 +69,7 @@ export function lintQuestions(text) {
       violations.push({ question: id, rule: "multi-idea", detail: question.question });
     }
     if (!question.why) violations.push({ question: id, rule: "no-why", detail: "missing **Why:**" });
-    if (question.examples.length < 2) violations.push({ question: id, rule: "no-examples", detail: `${question.examples.length} example(s)` });
+    for (const violation of panelViolations(question)) violations.push({ question: id, ...violation });
   });
   if (questions.length === 0) violations.push({ question: null, rule: "empty", detail: "no ## Q blocks" });
   return { questions: questions.length, violations };

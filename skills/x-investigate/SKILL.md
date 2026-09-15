@@ -18,7 +18,7 @@ These files must exist from prior steps in the debugging pipeline:
 - `.x-skills/debug/triage-brief.md` — produced by `x-triage`. Contains Platform + Bug Type + Symptoms + Evidence fields.
 - `.x-skills/debug/repro-<platform>.js` — produced by `x-reproduce` or `x-debug`. The reproduction script that triggers the bug locally.
 
-If either file is missing, stop and ask the user to run `x-triage` / `x-reproduce` first. Do not proceed without them.
+If either file is missing, stop and offer to run them with a `confirm` panel (yes/no). Do not proceed without them.
 
 ## Workflow (5 Steps)
 

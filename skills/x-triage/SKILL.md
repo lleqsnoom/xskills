@@ -13,11 +13,11 @@ Conduct a brief conversation to classify the bug before any investigation begins
 
 ## Conversation Flow
 
-Ask questions one at a time. Stop once you have enough to classify. If all fields are already inferable from the user's initial message, skip directly to writing the brief.
+Ask each question as a panel — never in prose and never buried in a paragraph. A panel is the host's question UI in one of four shapes: `single` (one of 2-5 options + free answer), `multi` (several + open form), `open` (free text only), `confirm` (yes/no). Ask one panel at a time. Stop once you have enough to classify. If all fields are already inferable from the user's initial message, skip directly to writing the brief.
 
 ### 1. Platform Classification
 
-Ask: "What platform is this on?" Classify into exactly one routing key:
+Ask a `single` panel: "What platform is this on?", with the routing keys as options. Classify into exactly one routing key:
 
 | User says | Maps to |
 |-----------|---------|
@@ -27,11 +27,13 @@ Ask: "What platform is this on?" Classify into exactly one routing key:
 | server, API, backend service, microservice, cron job, database | `backend` |
 | game, Unity, Unreal, Godot, graphics, engine, framerate | `gaming` |
 
-If ambiguous (e.g. "it doesn't work"), ask a clarifying question instead of guessing.
+If ambiguous (e.g. "it doesn't work"), ask a clarifying panel instead of guessing.
 
 ### 2. Bug Type & Symptoms
 
-Ask: "Can you describe what happens? Any error messages or stack traces?" Extract two things:
+Ask an `open` panel for the symptoms: "What happens when you trigger the bug?" Then ask a `multi` panel for the evidence: "Which of these can you share?", with `stack-trace`, `logs`, `console-output`, `device-access` as options.
+
+Extract two things:
 
 - **Symptoms**: one-line description of observable behavior
 - **Evidence Available**: classify into `stack-trace`, `logs`, `console-output`, or `device-access` (or combination)
@@ -50,7 +52,7 @@ Map symptoms to bug type:
 
 ### 3. Reproduction Status
 
-Ask: "Does it happen every time, or only sometimes?" Classify into:
+Ask a `single` panel: "Does it happen every time, or only sometimes?", with these as options:
 
 - `reliable` — happens consistently on each attempt
 - `intermittent` — happens sometimes, unpredictably
@@ -88,7 +90,7 @@ Use `scripts/route.js` to look up the reproduce template and investigate tools f
 
 1. **Intake only** — No tool calls, no source reads, no shell commands. Only conversation and brief output.
 2. **No source reading** — Do not use `view`, `read_mcp_resource`, or any file-reading tool on project code during triage.
-3. **One question at a time** — Ask, wait for response, then ask the next one.
+3. **One panel at a time** — Ask a panel, wait for response, then ask the next one.
 4. **Stop when sufficient** — If user provides all info upfront, write brief immediately without asking redundant questions.
 5. **Keep brief small** — Output must be consumable by a local model in one pass (compact markdown, no verbosity).
 
@@ -97,4 +99,5 @@ Use `scripts/route.js` to look up the reproduce template and investigate tools f
 - Guessing the platform from vague descriptions
 - Asking more than 3 questions before writing the brief
 - Reading source files or running tools during triage
+- Asking in prose, or burying a question inside a paragraph — always render a panel
 - Writing verbose output — the brief should be scannable in under 10 seconds

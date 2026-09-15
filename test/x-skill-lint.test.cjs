@@ -148,6 +148,22 @@ describe("x-skill-lint — standalone scripts", async () => {
     assert.ok(result.violations.some((v) => v.rule === "copy-drift"));
   });
 
+  it("flags copy drift between shared references", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "x-skill-lint-ref-drift-"));
+    for (const [name, body] of [["x-one", "one\n"], ["x-two", "two\n"]]) {
+      const references = path.join(root, "skills", name, "references");
+      fs.mkdirSync(references, { recursive: true });
+      fs.writeFileSync(path.join(root, "skills", name, "SKILL.md"), `---\nname: ${name}\ndescription: d\n---\n`);
+      fs.writeFileSync(path.join(references, "questions.md"), body);
+    }
+    fs.writeFileSync(path.join(root, "README.md"), "| `x-one` | d |\n| `x-two` | d |\n");
+
+    const result = mod.lintRepo(root);
+    assert.ok(
+      result.violations.some((v) => v.rule === "copy-drift" && v.file === "references/questions.md"),
+    );
+  });
+
   it("stays clean on the real repo", async () => {
     const res = await runCli([]);
     assert.equal(res.code, 0, res.stderr);

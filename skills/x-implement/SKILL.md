@@ -8,7 +8,7 @@ user-invocable: true
 ---
 
 # X-Implement — Test-Driven Implementation
-**No production code without a failing test first.** Wrote code before the test? Delete it. Rewrite from the test. Exception — ask user first: prototypes, generated code, throwaway scripts.
+**No production code without a failing test first.** Wrote code before the test? Delete it. Rewrite from the test. Exception — confirm with a `confirm` panel (yes/no) first: prototypes, generated code, throwaway scripts.
 
 ## Artifact Location
 
@@ -79,7 +79,7 @@ For each task file in `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>/`:
    - **x-fix** — resolve every issue in the fix plan. Re-run tests after each fix.
    - Repeat x-review + x-fix until the plan has no unresolved issues and all tests are green.
 5. **SYNC DOCS** — Update spec (`.x-skills/plan/*.md`) if it exists; otherwise update living docs (README, comments) directly.
-6. **COMMIT** — Run `node <path-to-commit.mjs> "<message>"` from the x-commit skill for every single commit. This is mandatory and non-negotiable. Never run `git commit` manually. If x-commit exits with an error, stop and ask the user for a corrected message — do not bypass it.
+6. **COMMIT** — Run `node <path-to-commit.mjs> "<message>"` from the x-commit skill for every single commit. This is mandatory and non-negotiable. Never run `git commit` manually. If x-commit exits with an error, stop and ask for a corrected message with an `open` panel (free text only) — do not bypass it.
 7. **UPDATE PLAN** — Change `- [ ]` to `- [x]` for this task. Do not start the next task without this edit.
 
 All tasks `- [x]` and green → `ship`.

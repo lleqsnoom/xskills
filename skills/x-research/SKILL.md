@@ -45,7 +45,7 @@ graph LR
 
 Before the first experiment, propose **three** candidate changes (`--candidates`), research the
 goal first (`references/research-first.md`), and ask only what research cannot settle
-(`references/questions.md`). Machines can only judge coverage or a number; the questions that
+(`references/questions.md`) — as a panel, never in prose. Machines can only judge coverage or a number; the questions that
 remain belong to the user.
 
 ## Memory and report
@@ -69,7 +69,7 @@ Each run directory holds:
 
 **Bootstrap, never refuse.** If the request names a goal but no metric, target, or
 evaluator, **propose a criteria-coverage metric + target and continue** — do not
-stop. Ask **at most once** if something is genuinely ambiguous, then proceed with
+stop. Ask **at most once** with a panel if something is genuinely ambiguous, then proceed with
 the proposal. Only a *pure* open-ended question with **no definable metric** belongs
 to `x-anal` / `x-investigate`; this skill *defines* the metric when none exists.
 
@@ -252,7 +252,7 @@ host, its permission and approval gates still apply on every iteration.
   evaluator the loop relies on; the agent mode needs no command and does not use it.
 - `references/loop.md` — the state diagram, the gates, the two policies, and the two
   evaluator kinds.
-- `references/questions.md` — the B2 question rules for the user-facing choices.
+- `references/questions.md` — the B2 panel rules for the user-facing choices.
 - `references/research-first.md` — the research pass before the first experiment.
-- `scripts/check-questions.mjs` — enforces the B2 question rules.
+- `scripts/check-questions.mjs` — enforces the B2 panel rules.
 - `references/running-unattended.md` — how each host owns repetition (no bundled runner).

@@ -42,8 +42,8 @@ export function refsForSkill(text, skillName) {
   return [...out];
 }
 
-// Scripts that must stay byte-identical across the skills that share them.
-const SHARED_SCRIPTS = ["scripts/check-questions.mjs"];
+// Files that must stay byte-identical across the skills that share them.
+const SHARED_SCRIPTS = ["scripts/check-questions.mjs", "references/questions.md", "references/research-first.md"];
 
 function scriptFiles(dir) {
   const scriptsDir = path.join(dir, "scripts");
@@ -129,7 +129,10 @@ export function lintRepo(root = REPO_ROOT) {
       if (!fm.description) violations.push({ skill: name, rule: "description", detail: "missing description" });
     }
     if (/<\/gate>/.test(text)) violations.push({ skill: name, rule: "stray-token", detail: "contains stray </gate>" });
+    // Shared files are governed by copy-drift, not by per-skill existence, so a skill
+    // may document them without shipping them.
     for (const ref of refsForSkill(text, name)) {
+      if (SHARED_SCRIPTS.includes(ref)) continue;
       if (!fs.existsSync(path.join(dir, ref))) {
         violations.push({ skill: name, rule: "missing-ref", detail: `referenced ${ref} does not exist` });
       }
