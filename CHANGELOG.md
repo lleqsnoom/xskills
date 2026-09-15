@@ -1,3 +1,8 @@
+## [5.20.0] - 2026-09-15
+
+* Merge pull request #48 from lleqsnoom/feat/agane-rights-escalation (7ee03fd)
+* feat(x-parallel): give spawned workers the parent's project rights (f63f2e8)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
