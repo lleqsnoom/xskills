@@ -8,13 +8,13 @@
  *
  * Usage: node parallel.mjs --tasks <dir> [--parallel N] [--timeout-min N]
  *                          [--agent crush] [--keep-worktrees] [--dry-run]
- *                          [--prompt "<text>"]
+ *                          [--rights inherit|none] [--prompt "<text>"]
  */
 
 import { spawn, execSync } from "node:child_process";
-import { readdir, readFile, writeFile, mkdir, rm, appendFile } from "node:fs/promises";
+import { readdir, readFile, writeFile, mkdir, rm, appendFile, copyFile } from "node:fs/promises";
 import { existsSync, createWriteStream } from "node:fs";
-import { join, basename, dirname } from "node:path";
+import { join, basename, dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 function arg(name, def) {
@@ -37,6 +37,13 @@ const AGENT = arg("agent", "crush");
 const KEEP_WORKTREES = hasFlag("keep-worktrees");
 const DRY_RUN = hasFlag("dry-run");
 const RETRIES = parseInt(arg("retries", "1"), 10); // extra attempts after the first failure
+const RIGHTS = hasFlag("no-rights") ? "none" : arg("rights", "inherit");
+const RIGHTS_MODES = ["inherit", "none"];
+const TASK_FILE = "TASK.md";
+// Crush discovers project config by walking up from cwd, never past the git
+// working-tree root. A worktree is its own root, so a worker only sees global
+// config unless these files travel with it.
+const PARENT_CONFIG_NAMES = [".crushrc", "crushrc", ".crush.json", "crush.json"];
 
 const DEFAULT_PROMPT = `You are one parallel coding agent working in an isolated copy of the repository. Read TASK.md at the repository root: it contains your complete task. Implement it fully. Follow the task's own workflow (TDD if it names tests). Do not modify files outside the task's scope. When finished, run the project tests. Then commit all changes with one conventional commit message (type(scope): description). Leave the working tree clean, with no uncommitted changes. If you cannot complete the task, still leave the tree clean and state what is missing in your final answer.`;
 const PROMPT = arg("prompt", DEFAULT_PROMPT);
@@ -68,6 +75,10 @@ function validateRepo() {
   curBranch = run("git branch --show-current");
   if (!curBranch) {
     console.error("ERROR: run from a normal branch, not detached HEAD.");
+    process.exit(2);
+  }
+  if (!RIGHTS_MODES.includes(RIGHTS)) {
+    console.error(`ERROR: --rights must be one of ${RIGHTS_MODES.join(", ")} (got ${RIGHTS}).`);
     process.exit(2);
   }
   const dirty = run("git status --porcelain");
@@ -163,6 +174,76 @@ export function buildWaves(tasks, limit) {
   return waves;
 }
 
+// --- Parent rights ---------------------------------------------------------
+export function configSearchDirs(cwd, root) {
+  const stop = resolve(root);
+  const dirs = [];
+  let dir = resolve(cwd);
+  while (true) {
+    dirs.push(dir);
+    if (dir === stop) break;
+    const parent = dirname(dir);
+    if (parent === dir) break; // filesystem root: root was never an ancestor
+    dir = parent;
+  }
+  return dirs;
+}
+
+// Nearest occurrence wins per file name, mirroring Crush's closer-to-cwd rule.
+export function findProjectConfigs(cwd, root, names = PARENT_CONFIG_NAMES) {
+  const found = new Map();
+  for (const dir of configSearchDirs(cwd, root)) {
+    for (const name of names) {
+      const path = join(dir, name);
+      if (found.has(name) || !existsSync(path)) continue;
+      found.set(name, path);
+    }
+  }
+  return [...found.values()];
+}
+
+export async function ensureExcluded(excludePath, names) {
+  let current = "";
+  try {
+    current = await readFile(excludePath, "utf8");
+  } catch {
+    return [];
+  }
+  const present = new Set(current.split("\n").map((line) => line.trim()));
+  const missing = names.filter((name) => !present.has(name));
+  if (missing.length === 0) return [];
+  const prefix = current === "" || current.endsWith("\n") ? "" : "\n";
+  await appendFile(excludePath, `${prefix}${missing.join("\n")}\n`);
+  return missing;
+}
+
+function gitExcludePath(worktree) {
+  return resolve(worktree, run(`git -C ${quote(worktree)} rev-parse --git-path info/exclude`));
+}
+
+// Give the worker the parent's project config so it holds the same rights:
+// permissions, hooks, MCP servers, options. The copies live in the worktree
+// root, where the worker's own config walk starts, and never reach a commit.
+export async function inheritProjectRights({
+  worktree,
+  cwd,
+  root,
+  mode = "inherit",
+  names = PARENT_CONFIG_NAMES,
+  excludePath = null,
+}) {
+  const copied = [];
+  if (mode !== "none") {
+    for (const source of findProjectConfigs(cwd, root, names)) {
+      const name = basename(source);
+      await copyFile(source, join(worktree, name));
+      copied.push(name);
+    }
+  }
+  await ensureExcluded(excludePath ?? gitExcludePath(worktree), [TASK_FILE, ...copied]);
+  return copied;
+}
+
 // --- Worktree lifecycle ----------------------------------------------------
 export const slugOf = (id) => id.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 60);
 
@@ -183,13 +264,13 @@ async function createWorktree(task) {
       run(`git worktree add ${quote(wt)} ${quote(branch)}`);
     }
     await writeFile(join(wt, "TASK.md"), `# Task: ${task.title}\n\nSource: ${task.id}\n\n---\n\n${task.content}\n`);
-    // Never treat the dispatcher's own TASK.md as agent work.
-    await appendFile(join(repoRoot, ".git", "info", "exclude"), `\nTASK.md\n`);
+    // The dispatcher's own files (task file, inherited config) are never agent work.
+    const inherited = await inheritProjectRights({ worktree: wt, cwd: process.cwd(), root: repoRoot, mode: RIGHTS });
+    return { slug, branch, wt, inherited };
   } catch (err) {
     console.error(`  ✗ worktree creation failed for ${task.id}: ${err.message.split("\n")[0]}`);
     return null;
   }
-  return { slug, branch, wt };
 }
 
 // --- Agent spawn -----------------------------------------------------------
@@ -310,9 +391,16 @@ async function runWithRetries(task, cleanup) {
 }
 
 // --- Main ------------------------------------------------------------------
+function describeRights() {
+  if (RIGHTS === "none") return " (workers keep global config only)";
+  const names = findProjectConfigs(process.cwd(), repoRoot).map((p) => basename(p));
+  return names.length ? ` (${names.join(", ")})` : " (no project config to inherit)";
+}
+
 async function main() {
   validateRepo();
   console.log(`\nX-Parallel — ${AGENT} workers, limit ${PARALLEL}, timeout ${TIMEOUT_MIN}m`);
+  console.log(`Rights: ${RIGHTS}${describeRights()}`);
   const tasks = await loadTasks();
   if (tasks.length === 0) {
     console.error("No *.md task files found under", TASK_DIR);
