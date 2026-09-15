@@ -1,3 +1,8 @@
+## [5.19.0] - 2026-09-15
+
+* Merge pull request #47 from lleqsnoom/lleqsnoom/feature-better-questions (30e1641)
+* feat(skills): ask the user through four-shape question panels (18d14c4)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
