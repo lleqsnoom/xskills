@@ -61,7 +61,7 @@ node <skill>/scripts/scenario.mjs verify --dir <dir>   # exit 0 iff the stop is 
 | `decision_made` | the user picked a route |
 | `route_chosen` | the route is recorded and `analysis-<slug>.md` is written |
 
-Research before the first question (`references/research-first.md`), ask in B2 style
+Research before the first question (`references/research-first.md`), ask every question as a panel
 (`references/questions.md`), then let `scripts/check-questions.mjs` check your questions before you ask
 them. Completion: `verify` exits 0 at a route stop.
 
@@ -69,7 +69,7 @@ them. Completion: `verify` exits 0 at a route stop.
 
 ### Phase 1: Confirm Understanding of Intent
 
-When the user describes a problem (text + logs / error output / screenshots), restate what you believe they want solved in your own words. Show them this restatement and ask for confirmation before proceeding.
+When the user describes a problem (text + logs / error output / screenshots), restate what you believe they want solved in your own words. Show them this restatement and confirm it with a `confirm` panel before proceeding.
 
 ```
 You say something like: "So you're saying that when X happens, Y occurs instead of Z. You want the behavior to be Z. Is that right?"
@@ -79,7 +79,7 @@ If the user corrects you, update your understanding and re-confirm. Do not proce
 
 ### Phase 2: Clarify Ambiguities
 
-For every aspect of the problem you are uncertain about, ask the user a focused question with suggested answers or examples. Group related questions but never ask more than 3 at once.
+For every aspect of the problem you are uncertain about, ask a focused question as a panel (`single`, `multi`, `open`, or `confirm`) — never in prose. Group related questions but never ask more than 3 at once.
 
 Suggested clarification dimensions (ask only what's genuinely unclear):
 
@@ -147,15 +147,15 @@ If the host gives you no shell or web capability, say so plainly, mark the check
 
 Before presenting the analysis:
 
-- **High confidence** → present full thesis + solution proposition (Phase 3), ask user to approve and route.
-- **Medium confidence** → present thesis with caveats, explicitly state what additional information would increase confidence, and ask user if they want to provide more or proceed anyway.
+- **High confidence** → present full thesis + solution proposition (Phase 3), then ask the user to approve and route with a `confirm` panel.
+- **Medium confidence** → present thesis with caveats, explicitly state what additional information would increase confidence, and ask with a panel whether they want to provide more or proceed anyway.
 - **Low confidence** → stop analysis, explain what's missing, request specific additional evidence from the user (logs, schema, screenshots, etc.), and do not propose a solution until confidence improves.
 
 Never present a fix for something you're guessing about — always flag uncertainty clearly.
 
 ### Phase 5: Route to Action
 
-Based on the analysis scope and user decision:
+Based on the analysis scope and user decision, present the routes as a `single` panel and record the pick:
 
 | Scope | Route To | Output |
 |-------|----------|--------|
@@ -170,7 +170,7 @@ When routing to another skill, pass `.x-skills/anal/analysis-<slug>.md` as the i
 ## Constraints (MANIFESTO)
 
 1. **Confirm before proceeding** — never start analyzing until user confirms you understand their intent correctly.
-2. **Ask before assuming** — if anything is unclear, ask with suggestions; don't fill in gaps yourself.
+2. **Ask before assuming** — if anything is unclear, ask as a panel; don't fill in gaps yourself.
 3. **Evidence-based thesis only** — every claim must reference concrete evidence (log lines, code, symptoms). No speculation presented as fact.
 4. **Flag uncertainty explicitly** — never hide low confidence. Use the three-level scale and explain why.
 5. **One path at a time** — present options but guide toward a decision; don't leave user hanging with open choices.
@@ -185,10 +185,11 @@ When routing to another skill, pass `.x-skills/anal/analysis-<slug>.md` as the i
 - Over-engineering: proposing a full spec+epic+task decomposition for a one-line fix
 - Under-investigating: accepting "it's probably X" without checking other possibilities
 - Asking 10 questions when 2 would suffice — be efficient but thorough enough
+- Asking in prose, or burying a question inside a discussion paragraph — always render a panel
 
 ## Files
 
 - `scripts/scenario.mjs` — the diagnostic graph, guards, memory, and analysis writer.
-- `scripts/check-questions.mjs` — enforces the B2 question rules (`references/questions.md`).
-- `references/questions.md` — how to ask, and when to stop asking.
+- `scripts/check-questions.mjs` — enforces the B2 panel rules (`references/questions.md`).
+- `references/questions.md` — how to ask as a panel, and when to stop asking.
 - `references/research-first.md` — the research pass before the first question.

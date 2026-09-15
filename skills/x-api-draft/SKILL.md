@@ -13,11 +13,13 @@ Produce a clean, human-reviewable API design document before implementation begi
 
 ## Workflow
 
-1. **Collect requirements** — Ask user for API requirements (existing docs, rough notes, or verbal description). Summarize back to confirm before proceeding.
+Ask through panels, never in prose. A panel is the host's question UI in one of four shapes: `single` (one of 2-5 options + free answer), `multi` (several + open form), `open` (free text only), `confirm` (yes/no).
 
-2. **Clarify scope** (if incomplete) — Ask one question at a time covering: target audience, core entities, key use cases, auth model, pagination, rate limiting, versioning.
+1. **Collect requirements** — Ask for API requirements with an `open` panel (existing docs, rough notes, or a verbal description). Summarize back to confirm before proceeding.
 
-3. **Summarize** — Present concise summary of understood requirements. Confirm with user before designing.
+2. **Clarify scope** (if incomplete) — Ask one panel at a time (`single`, `multi`, or `open`) covering: target audience, core entities, key use cases, auth model, pagination, rate limiting, versioning. Never ask in prose.
+
+3. **Summarize** — Present concise summary of understood requirements. Confirm with a `confirm` panel before designing.
 
 4. **Design** — Produce API design document covering:
    - **Endpoints** — HTTP method + path + one-line description
@@ -25,7 +27,7 @@ Produce a clean, human-reviewable API design document before implementation begi
    - **Data models** — Entity definitions with relationships
    - **Auth & Authorization** — How each endpoint is secured; RBAC where applicable
 
-5. **Gate** — Confirm design with user before handing off to implementation. Ask: *"Design looks good? Shall I proceed?"*
+5. **Gate** — Confirm the design with a `confirm` panel before handing off to implementation.
 
 ## Output Location
 

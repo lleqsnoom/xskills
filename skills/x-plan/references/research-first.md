@@ -10,12 +10,12 @@ Never ask the user something you can find yourself. Spend the first pass of ever
 3. **For code tasks, GitHub.** Use the GitHub tools to search for reference repositories and real
    implementations of the same pattern; cite the repo and file.
 4. **Record it.** Write each finding as a bullet in `memory.md` with its `file:line` or URL.
-5. **Then ask.** Turn only the still-open items into questions (`references/questions.md`).
+5. **Then ask.** Turn only the still-open items into panels (`references/questions.md`).
 
 ## Propose three solutions
 
 Before you ask the user to choose, propose **three** distinct solutions (not three phrasings of one).
-Record each with `--event option`, each with its trade-off. Then ask which one to take.
+Record each with `--event option`, each with its trade-off. Then ask which one to take with a `single` panel.
 
 ## When a capability is missing
 

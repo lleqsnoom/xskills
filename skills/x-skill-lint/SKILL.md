@@ -41,9 +41,15 @@ violation is found, **2** on a usage error. Each violation names the `skill` and
 | `stray-token` | The body contains a stray authoring token — a leftover closing tag from a template. |
 | `missing-ref` | A same-skill `scripts/…` or `references/…` path does not exist on disk. |
 | `readme` | The skill is missing from the README skills table. |
+| `cross-skill-import` | A skill's script imports another skill's script — skills must stay standalone. |
+| `copy-drift` | A file shared across skills differs byte-for-byte between copies. |
 
 References that name *another* skill (a line mentioning a different `x-…`) are skipped, so
 cross-skill hops are not reported as local breakage.
+
+Shared files that must stay byte-identical wherever they appear: `scripts/check-questions.mjs`,
+`references/questions.md`, `references/research-first.md`. Edit one copy, then copy it over the
+rest before running the lint.
 
 ## Completion
 

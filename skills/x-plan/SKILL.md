@@ -58,7 +58,7 @@ Completion: `verify` exits 0, or the run moved to `abandon`.
 ## Workflow
 
 1. **Research first** — search the project, the web, and (for code) GitHub before asking anything. See `references/research-first.md`.
-2. **Clarify** — ask short plain questions until the open list is empty. See `references/questions.md`.
+2. **Clarify** — ask short plain questions as panels (`single` / `multi` / `open` / `confirm`) until the open list is empty. See `references/questions.md`.
 3. **Propose three approaches** — record each with a trade-off; let the user pick.
 4. **Write the spec** — See Spec Format below. Always include a Layer Roadmap starting with L0 (prototype).
 5. **Gate** — confirm with user before handing off to `x-epic`.
@@ -152,8 +152,8 @@ Artifact must exist on disk with required declarations (contract, invariant, tes
 ## Files
 
 - `scripts/scenario.mjs` — the run graph, guards, memory, and report writer.
-- `scripts/check-questions.mjs` — enforces the B2 question rules (`references/questions.md`).
+- `scripts/check-questions.mjs` — enforces the B2 panel rules (`references/questions.md`).
 - `scripts/save-spec.js` — writes the richer spec skeleton (`contract`/`invariant`/`test` + layers).
-- `references/questions.md` — how to ask, and when to stop asking.
+- `references/questions.md` — how to ask as a panel, and when to stop asking.
 - `references/research-first.md` — the research pass before the first question.
 - `references/examples/design-spec.md` — a worked spec.

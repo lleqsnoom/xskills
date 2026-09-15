@@ -267,6 +267,23 @@ Instructions for the agent...
 
 The `description` field is auto-extracted by `listSkills()`. The frontmatter parser uses a simple regex — no YAML library is used. Keep frontmatter simple: only top-level scalar fields, avoid nested objects or multi-line values.
 
+### Asking the user (question panels)
+
+A skill must **never** ask the user a question in prose or bury one in a discussion paragraph. Every question is a **panel** built from the host's structured question tool, in exactly one of four shapes:
+
+| Panel | Shape | Options |
+|-------|-------|---------|
+| `single` | single select with multiple options, plus a free-answer field | 2-5 required |
+| `multi` | multi select with options, plus an open form | 2-5 required |
+| `open` | open form only (free text) | none |
+| `confirm` | yes/no | none |
+
+The skills that ask questions (`x-anal`, `x-plan`, `x-research`) ship the canonical rules in `references/questions.md` and enforce them with `scripts/check-questions.mjs`. Skills without that file (`x-triage`, `x-api-draft`, `x-api-swagger`, `x-browser`, `x-implement`, `x-investigate`) define the four shapes inline at first use.
+
+**Known limits.** The Agent Skills specification (agentskills.io/specification) defines no question or interaction primitive, so there is no portable panel: a host may have no structured question tool, in which case the skill prints the four shapes as a numbered prompt. And `check-questions.mjs` validates only the authored questions file — nothing verifies that a session actually rendered a panel. The rule is a contract on the skill, not a runtime guarantee.
+
+**Shared files.** `scripts/check-questions.mjs`, `references/questions.md`, and `references/research-first.md` must stay byte-identical across the skills that carry them; x-skill-lint's `copy-drift` rule fails the build when they diverge.
+
 ### Skill Scripts
 
 - Scripts inside skills use **ES modules** (`import` syntax) even though the project itself is CommonJS.

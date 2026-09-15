@@ -51,7 +51,7 @@ Output:
 { "url": "http://localhost:5173", "source": "README.md", "candidates": [ ... ] }
 ```
 
-If `url` is `null`, read `README.md` and `package.json` yourself and pick the dev-server URL. If still unknown, ask the user once — do not guess a wrong port.
+If `url` is `null`, read `README.md` and `package.json` yourself and pick the dev-server URL. If still unknown, ask once with an `open` panel (free text only) — do not guess a wrong port.
 
 ### 2. Make sure the dev server is running
 
