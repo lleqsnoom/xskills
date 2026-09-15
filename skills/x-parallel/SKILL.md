@@ -1,7 +1,7 @@
 ---
 name: x-parallel
-description: Run multiple coding tasks in parallel — each task gets an isolated git worktree and its own background agent process with full tools, then committed results merge back into your branch
-version: 1.0.0
+description: Run multiple coding tasks in parallel — each task gets an isolated git worktree and its own background agent process with full tools and the parent's project rights, then committed results merge back into your branch
+version: 1.1.0
 author: Community
 tags: [parallel, agents, background, worktree, concurrency, dispatch]
 user-invocable: true
@@ -9,7 +9,7 @@ user-invocable: true
 
 # X-Parallel — Parallel Background Coding Agents
 
-Runs independent coding tasks concurrently. Each task is executed in an isolated git worktree by a full `crush run` agent process (read + edit + bash tools, not the read-only in-session agent tool). Committed results are merged back into your current branch. Use it to parallelize x-decompose output, batch fixes, or multi-file refactors.
+Runs independent coding tasks concurrently. Each task is executed in an isolated git worktree by a full `crush run` agent process (read + edit + bash tools, not the read-only in-session agent tool), holding the same project rights as you. Committed results are merged back into your current branch. Use it to parallelize x-decompose output, batch fixes, or multi-file refactors.
 
 ## Requirements
 
@@ -30,6 +30,7 @@ node <path-to>/scripts/parallel.mjs --tasks <task-dir> [options]
 | `--retries N` | 1 | Extra attempts per task after the first failure (each starts from a clean worktree, with escalating backoff) |
 | `--timeout-min N` | 30 | Kill an agent (and its whole process group) after N minutes. Every agent run is time-bounded; never run unbounded. |
 | `--agent <bin>` | crush | Worker CLI; called as `<bin> run`, prompt on stdin |
+| `--rights inherit\|none` (alias `--no-rights`) | inherit | `inherit` copies your project config into each worktree so the worker holds the same rights as you; `none` leaves the worker on global config only |
 | `--keep-worktrees` | off | Keep worktrees after run for inspection |
 | `--dry-run` | off | Print the wave plan, spawn nothing |
 | `--prompt "<text>"` | default | Override the worker instruction (default below) |
@@ -43,6 +44,7 @@ node <path-to>/scripts/parallel.mjs --tasks <task-dir> [options]
    - attempt the task (worktree + agent run). If it fails, retry up to `--retries` more times, each retry starting from a clean worktree and branch, with escalating backoff
    - `git worktree add <repo>/.x-skills/worktrees/<slug> -b xp/<slug>`
    - write the task file to `<worktree>/TASK.md` (ignored via `.git/info/exclude`, never merged)
+   - inherit your rights: copy each project config file (`.crushrc`, `crushrc`, `.crush.json`, `crush.json`) found between the repo root and your cwd into the worktree root, and exclude them from git so they never reach a commit
    - spawn `<agent> run` with `cwd = <worktree>`, prompt as the CLI argument, stdout to `.x-skills/parallel-logs/<slug>.log`
    - success = exit code 0 AND `git status --porcelain` empty in the worktree (uncommitted leftovers are auto-committed as `feat: <slug> (auto)`)
    - a task only counts as failed after all attempts are exhausted
@@ -65,6 +67,7 @@ state what is missing in your final answer.
 ## Rules
 
 - The working tree must be clean before dispatch; the script refuses to run otherwise.
+- **Workers hold your rights by default.** A worktree is its own git working-tree root, so Crush's config walk stops there: without the copied project config a worker would run on global config alone, missing your permissions, hooks, MCP servers, and options. Pass `--rights none` only when you want a deliberately isolated worker.
 - Two tasks that write the same file must not run concurrently. If the script cannot detect overlap, a merge conflict results; resolve it manually.
 - Do not edit files inside another task's worktree.
 - **Always time-bound agent runs.** Every spawned agent is killed (process group) after `--timeout-min`. Do not change this to "wait forever".
