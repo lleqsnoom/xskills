@@ -1,3 +1,8 @@
+## [5.24.1] - 2026-09-16
+
+* Merge pull request #56 from lleqsnoom/fix/ci-stale-version-base (8d822b8)
+* fix(ci): base the release version on the newest tag as well as npm (b15b20a)
+
 ## [5.24.0] - 2026-09-16
 
 * Merge pull request #55 from lleqsnoom/feat/run-flags-everywhere (2b3030e)
