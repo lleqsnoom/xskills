@@ -1,3 +1,8 @@
+## [5.21.1] - 2026-09-16
+
+* Merge pull request #51 from lleqsnoom/fix/ci-push-release-commit (9a7794e)
+* fix(ci): keep release tags on main and stop releasing docs-only pushes (15285cc)
+
 ## [2.0.2] - 2026-07-19
 
 # Changelog
