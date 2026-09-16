@@ -67,13 +67,14 @@ describe("analyze.js CLI", () => {
     assert.strictEqual(json.reproduction, null, "No reproduction when --no-reproduce");
   });
 
-  it("--session-id is accepted and used in filenames", () => {
+  it("--session-id is accepted and recorded", () => {
     const output = runAnalyze(
       ["--error", "TypeError: Cannot read property 'x' of undefined", "--session-id", "my-test-session", "--no-reproduce"],
       { cwd: tmpDir },
     );
     const json = JSON.parse(output);
-    assert.ok(json.sessionId === "my-test-session" || json.reportPath.includes("my-test-session"));
+    assert.match(json.reportPath, /E\d{2}-debug\.md$/);
+    assert.equal(json.sessionId, path.basename(json.reportPath, ".md"));
   });
 
   it("--file flag is accepted and stored in output", () => {
@@ -166,22 +167,27 @@ describe("analyze.js pattern matching", () => {
     assert.strictEqual(typeof json.rootCauseConfirmed, "boolean", "rootCauseConfirmed required");
   });
 
-  it("generates debug session file in .x-skills/debug/", () => {
+  it("generates the debug session file inside a run folder", () => {
     runAnalyze(
-      ["--error", "TypeError: Cannot read property 'x' of undefined", "--no-reproduce"],
+      ["--error", "TypeError: Cannot read property 'x' of undefined", "--no-reproduce", "--slug", "sess"],
       { cwd: tmpDir },
     );
-    const debugFiles = fs.readdirSync(path.join(tmpDir, ".x-skills", "debug"));
-    assert.ok(debugFiles.some((f) => f.endsWith(".md")), `Expected markdown session file in ${JSON.stringify(debugFiles)}`);
+    const runsRoot = path.join(tmpDir, ".x-skills", "runs");
+    const runs = fs.readdirSync(runsRoot).filter((name) => name.endsWith("-sess"));
+    assert.equal(runs.length, 1, "one run folder for the slug");
+    const artifacts = fs.readdirSync(path.join(runsRoot, runs[0]));
+    assert.ok(artifacts.some((f) => /^E\d{2}-debug\.md$/.test(f)), `Expected a numbered session file in ${JSON.stringify(artifacts)}`);
   });
 
-  it("generates fix plan file in .x-skills/review/", () => {
-    runAnalyze(
-      ["--error", "TypeError: Cannot read property 'x' of undefined", "--no-reproduce"],
+  it("generates the fix plan inside the same run folder", () => {
+    const output = runAnalyze(
+      ["--error", "TypeError: Cannot read property 'x' of undefined", "--no-reproduce", "--slug", "sess"],
       { cwd: tmpDir },
     );
-    const reviewFiles = fs.readdirSync(path.join(tmpDir, ".x-skills", "review"));
-    assert.ok(reviewFiles.some((f) => f.endsWith(".md")), `Expected markdown fix plan in ${JSON.stringify(reviewFiles)}`);
+    const json = JSON.parse(output);
+    assert.match(path.basename(json.fixPlanPath), /^E\d{2}-fix-plan\.md$/);
+    assert.equal(path.dirname(json.fixPlanPath), path.dirname(json.reportPath));
+    assert.ok(fs.existsSync(json.fixPlanPath));
   });
 
   it("fix plan contains hypothesis testing section when root cause not confirmed", () => {
@@ -261,16 +267,16 @@ describe("analyze.js local reproduction", () => {
 
     it(`generates verification script for "${msg}"`, () => {
       runAnalyze(
-        ["--error", msg],
+        ["--error", msg, "--slug", "repro"],
         { cwd: tmpDir },
       );
-      const debugDir = path.join(tmpDir, ".x-skills", "debug");
-      const files = fs.readdirSync(debugDir);
-      const verifyFile = files.find((f) => f.startsWith("verify-") && f.endsWith(".js"));
+      const runsRoot = path.join(tmpDir, ".x-skills", "runs");
+      const runDir = path.join(runsRoot, fs.readdirSync(runsRoot)[0]);
+      const files = fs.readdirSync(runDir);
+      const verifyFile = files.find((f) => /^E\d{2}-verify\.js$/.test(f));
       assert.ok(verifyFile, `Expected verification script for ${msg}, found: ${JSON.stringify(files)}`);
 
-      // Verify script should have PASS/FAIL structure
-      const content = fs.readFileSync(path.join(debugDir, verifyFile), "utf-8");
+      const content = fs.readFileSync(path.join(runDir, verifyFile), "utf-8");
       assert.ok(content.includes("PASS"), "Verify script should contain PASS message");
       assert.ok(content.includes("FAIL"), "Verify script should contain FAIL message");
     });
@@ -297,10 +303,10 @@ describe("analyze.js local reproduction", () => {
   });
 
   it("--no-reproduce skips reproduction step entirely", () => {
-    // Clean up any leftover repro/verify files from earlier tests in this suite
-    const debugDir = path.join(tmpDir, ".x-skills", "debug");
-    if (fs.existsSync(debugDir)) {
-      fs.rmSync(debugDir, { recursive: true, force: true });
+    // Clean up any leftover artifacts from earlier tests in this suite
+    const runsRoot = path.join(tmpDir, ".x-skills", "runs");
+    if (fs.existsSync(runsRoot)) {
+      fs.rmSync(runsRoot, { recursive: true, force: true });
     }
 
     const output = runAnalyze(
@@ -310,11 +316,11 @@ describe("analyze.js local reproduction", () => {
     const json = JSON.parse(output);
     assert.strictEqual(json.reproduction, null, "No reproduction when --no-reproduce is set");
 
-    // No repro or verify files should be created in debug dir (only session)
-    const debugFiles = fs.readdirSync(path.join(tmpDir, ".x-skills", "debug"));
-    for (const f of debugFiles) {
+    // No repro or verify files should be created when reproduction is skipped
+    const artifacts = fs.readdirSync(path.join(runsRoot, fs.readdirSync(runsRoot)[0]));
+    for (const f of artifacts) {
       assert.ok(
-        !f.startsWith("repro-") && !f.startsWith("verify-"),
+        !f.endsWith("-repro-debug.js") && !f.endsWith("-verify.js"),
         `Unexpected repro/verify file with --no-reproduce: ${f}`,
       );
     }
@@ -456,23 +462,28 @@ describe("analyze.js edge cases", () => {
     assert.doesNotThrow(() => JSON.parse(output));
   });
 
-  it("produces idempotent output on repeated runs (same session-id)", () => {
+  it("appends a new numbered session on repeated runs", () => {
     const sessionId = "idempotent-test";
     runAnalyze(
-      ["--error", "TypeError: Cannot read property 'foo' of undefined", "--session-id", sessionId, "--no-reproduce"],
+      ["--error", "TypeError: Cannot read property 'foo' of undefined", "--session-id", sessionId, "--slug", sessionId, "--no-reproduce"],
       { cwd: tmpDir },
     );
-    // Running again with same session id should overwrite (not duplicate)
     const output2 = runAnalyze(
-      ["--error", "TypeError: Cannot read property 'foo' of undefined", "--session-id", sessionId, "--no-reproduce"],
+      ["--error", "TypeError: Cannot read property 'foo' of undefined", "--session-id", sessionId, "--slug", sessionId, "--no-reproduce"],
       { cwd: tmpDir },
     );
     assert.doesNotThrow(() => JSON.parse(output2));
 
-    // Only one session file with that name should exist
-    const debugFiles = fs.readdirSync(path.join(tmpDir, ".x-skills", "debug"));
-    const matching = debugFiles.filter((f) => f.includes(sessionId));
-    assert.strictEqual(matching.length, 1);
+    const runsRoot = path.join(tmpDir, ".x-skills", "runs");
+    const run = fs.readdirSync(runsRoot).filter((name) => name.endsWith(`-${sessionId}`));
+    assert.equal(run.length, 1, "one run for the slug");
+    const sessions = fs.readdirSync(path.join(runsRoot, run[0])).sort();
+    assert.deepEqual(sessions, [
+      "E00-debug.md",
+      "E01-fix-plan.md",
+      "E02-debug.md",
+      "E03-fix-plan.md",
+    ]);
   });
 
   it("respects existing .x-skills directory structure", () => {

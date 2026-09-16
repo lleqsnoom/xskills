@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Create .x-skills/apis/ directory and return the full YAML spec file path.
+ * Create <run folder>/E<nn>-api-spec.yaml and return its full path.
  * Auto-detects branch name from git if not provided. Generates timestamp.
  * Logs each step to stderr for verification.
  *
@@ -50,8 +50,81 @@ function getBranch() {
 function getTimestamp() {
   const now = new Date();
   const pad = (n) => String(n).padStart(2, "0");
-  return `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}-${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
 }
+
+// ── Run folders ──────────────────────────────────────────────────────
+
+// #region run-folder
+// Two digits, not more: a wider counter would sort E100 before E99.
+const RUNS_ROOT = ".x-skills/runs";
+const MAX_COUNTER = 99;
+
+function padRunCounter(value) {
+  return String(value).padStart(2, "0");
+}
+
+function runFolders(rootAbs, slug) {
+  if (!fs.existsSync(rootAbs)) return [];
+  return fs
+    .readdirSync(rootAbs)
+    .filter((name) => name.endsWith(`-${slug}`))
+    .sort();
+}
+
+function highestRun(rootAbs) {
+  if (!fs.existsSync(rootAbs)) return 0;
+  return fs.readdirSync(rootAbs).reduce((max, name) => {
+    const match = name.match(/-R(\d+)-/);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+}
+
+function mintRunDir(rootAbs, slug, now) {
+  const run = highestRun(rootAbs) + 1;
+  if (run > MAX_COUNTER) throw new Error(`run counter would exceed R${MAX_COUNTER}`);
+  const stamp = `${now.getFullYear()}-${padRunCounter(now.getMonth() + 1)}-${padRunCounter(now.getDate())}-${padRunCounter(now.getHours())}${padRunCounter(now.getMinutes())}`;
+  const dir = path.join(rootAbs, `${stamp}-R${padRunCounter(run)}-${slug}`);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/**
+ * Return the run folder for a slug: the folder holding `marker` when given,
+ * the sole match when only one exists, or a newly minted R<nn>.
+ */
+function resolveRunDir(slug, { root = RUNS_ROOT, now = new Date(), marker = null } = {}) {
+  if (!slug || typeof slug !== "string") throw new Error("slug is required");
+  const rootAbs = path.resolve(root);
+  fs.mkdirSync(rootAbs, { recursive: true });
+
+  const folders = runFolders(rootAbs, slug);
+  if (marker) {
+    const holding = folders.filter((name) => fs.existsSync(path.join(rootAbs, name, marker)));
+    if (holding.length) return path.join(rootAbs, holding[holding.length - 1]);
+  }
+  if (folders.length > 1) {
+    throw new Error(`${folders.length} runs match "${slug}"; resolve the run explicitly`);
+  }
+  if (folders.length) return path.join(rootAbs, folders[0]);
+  return mintRunDir(rootAbs, slug, now);
+}
+
+function nextE(runDir) {
+  const used = fs.existsSync(runDir)
+    ? fs
+        .readdirSync(runDir)
+        .map((name) => {
+          const match = name.match(/^E(\d{2})-/);
+          return match ? Number(match[1]) : null;
+        })
+        .filter((value) => value !== null)
+    : [];
+  const next = used.length ? Math.max(...used) + 1 : 0;
+  if (next > MAX_COUNTER) throw new Error(`artifact counter would exceed E${MAX_COUNTER}`);
+  return `E${String(next).padStart(2, "0")}`;
+}
+// #endregion run-folder
 
 // ── Self-discovery ────────────────────────────────────────────────────
 // __dirname resolves to wherever the script actually lives, whether invoked
@@ -87,12 +160,11 @@ function main() {
   const date = getTimestamp();
   log(`using date stamp: ${date}`);
 
-  const dir = path.resolve(".x-skills/apis");
-  const filename = `${args.topic}-openapi.yaml`;
-  const fullPath = path.join(dir, filename);
+  const runDir = resolveRunDir(args.topic);
+  const fullPath = path.join(runDir, `${nextE(runDir)}-api-spec.yaml`);
 
-  log(`creating directory: ${dir}`);
-  fs.mkdirSync(dir, { recursive: true });
+  log(`creating directory: ${runDir}`);
+  fs.mkdirSync(runDir, { recursive: true });
 
   const header = `# OpenAPI — ${args.topic}\n\n**Date:** ${date}\n**Branch:** ${branch}\n**Scope:** \n**Status:** Draft — awaiting user approval\n\n---\n\n`;
   log(`writing YAML spec file: ${fullPath} (${header.length} bytes)`);

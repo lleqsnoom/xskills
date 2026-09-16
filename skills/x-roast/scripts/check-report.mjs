@@ -52,20 +52,32 @@ function parseArgs(args) {
   return out;
 }
 
-function newestReport(dir) {
+function newestReport(dir, suffix = ".md") {
   if (!fs.existsSync(dir)) return null;
   const files = fs
     .readdirSync(dir)
-    .filter((file) => file.endsWith(".md"))
+    .filter((file) => file.endsWith(suffix))
     .map((file) => ({ file, mtime: fs.statSync(path.join(dir, file)).mtimeMs }))
     .sort((a, b) => b.mtime - a.mtime);
   return files.length ? path.join(dir, files[0].file) : null;
 }
 
+function newestAcrossRuns(root = ".x-skills/runs") {
+  if (!fs.existsSync(root)) return null;
+  const found = fs
+    .readdirSync(root)
+    .map((name) => newestReport(path.join(root, name), "-critique.md"))
+    .filter(Boolean);
+  if (!found.length) return null;
+  return found.sort(
+    (a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs
+  )[0];
+}
+
 function resolveFile(args) {
   if (typeof args.file === "string") return args.file;
   if (typeof args.dir === "string") return newestReport(args.dir);
-  return newestReport(".x-skills/critique");
+  return newestAcrossRuns();
 }
 
 function main() {

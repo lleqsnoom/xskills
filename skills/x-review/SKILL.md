@@ -22,14 +22,14 @@ All scripts self-resolve via `__dirname` — run from any working directory by p
 # Run from anywhere (use whichever script path is available):
 node <path-to>/scripts/analyze-complexity.js --all       # AST-based complexity, length, params per function
 node <path-to>/scripts/check-duplication.js --all         # duplicated blocks (>5 lines)
-node <path-to>/scripts/save-plan.js --output .x-skills/review/   # create plan file with all analysis results
+node <path-to>/scripts/save-plan.js --slug <topic>   # create plan file with all analysis results
 ```
 
 **Auto-discovery**: Scripts resolve config and sibling scripts relative to `__dirname`, so they work whether installed globally (`~/.agents/skills/x-review/scripts/`) or locally (`.agents/skills/<project>/x-review/scripts/`).
 
 **What To Do:** When invoked, determine the user's scope (single file, directory, or full project) and execute these commands. Do not ask the user what to do.
 
-1. **Create plan file with all analyses**: `node <path-to>/scripts/save-plan.js --output .x-skills/review/` — this runs complexity analysis (AST-based via tree-sitter), duplication check, AND refactor pattern detection in one step.
+1. **Create plan file with all analyses**: `node <path-to>/scripts/save-plan.js --slug <topic>` — this runs complexity analysis (AST-based via tree-sitter), duplication check, AND refactor pattern detection in one step. It writes `E<nn>-review-plan.md` into the run folder.
 2. The script prints the full path. Open that file with `edit` or `write`, then insert your review content directly into it using the format below.
 3. **Run the comments pass (always, using x-comments)** — apply the rules in the x-comments skill's `SKILL.md` (`~/.agents/skills/x-comments/SKILL.md` for a global install, `.agents/skills/x-comments/SKILL.md` for a local one) to every reviewed file. Report comment issues under a `[Comments]` heading in the plan: comments that restate code, obvious comments, and paragraph-long explanations that should be a named function. Route comment issues to `x-comments` in Next Steps.
 
@@ -57,10 +57,10 @@ For engineering principles definitions and violation patterns, see `references/p
 
 ## Output Format
 
-Produce a review and save it under `.x-skills/review/`. Use `save-plan.js` to create the directory and generate a timestamped plan file:
+Produce a review and save it into the run folder. Use `save-plan.js` to create the directory and generate a numbered plan file:
 
 ```bash
-node <path-to>/scripts/save-plan.js --output .x-skills/review/
+node <path-to>/scripts/save-plan.js --slug <topic>
 ```
 
 The script prints the full path. Open that file with `edit` or `write`, then insert your review content using this format:
@@ -68,7 +68,7 @@ The script prints the full path. Open that file with `edit` or `write`, then ins
 ```markdown
 # Code Review — Fix Plan
 
-**Date:** DD-MM-YYYY-hh:mm
+**Date:** YYYY-MM-DD-hhmm
 **Files analyzed:** N
 **Functions with complexity > 5:** N
 **Functions longer than 20 lines:** N

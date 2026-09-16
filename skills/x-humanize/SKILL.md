@@ -83,7 +83,7 @@ On failure, edit and re-run. Completion: exit 0.
 ```bash
 node <skill>/scripts/save-report.mjs --slug my-article --level B2
 ```
-Fill `.x-skills/humanize/<ts>-<slug>.md` with the before/after JSON, the
+Fill `<run folder>/E<nn>-humanize.md` with the before/after JSON, the
 verification result, the rewrites, and the noise removed.
 
 ### 7. Deliver
@@ -123,7 +123,7 @@ unverified rewrite.
 - `scripts/analyze.mjs` — measure + flag (pure; JSON out).
 - `scripts/rewrite-brief.mjs` — ranked edit list + plain-word swaps.
 - `scripts/verify.mjs` — target + meaning + noise checks; exit 0/1.
-- `scripts/save-report.mjs` — timestamped report under `.x-skills/humanize/`.
+- `scripts/save-report.mjs` — writes a numbered humanize report into the run folder.
 - `scripts/utils/metrics.mjs` — pure metrics (formulas, syllables, noise).
 - `scripts/utils/io.mjs` — input resolution (file / stdin / commit / PR).
 - `references/metrics.md` — formula definitions, thresholds, CEFR map.

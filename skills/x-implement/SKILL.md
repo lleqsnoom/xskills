@@ -46,11 +46,11 @@ Prefer a functional approach for readability. Side effects make code hard to rea
 
 Implement tasks in dependency order. When two or more tasks can run independently, dispatch them to background agents with x-parallel instead of doing them one by one.
 
-1. Read every task file under `.x-skills/tasks/<epic>/`.
+1. Read every task file under `<run folder>/E<nn>-tasks/`.
 2. A task is **independent** when no other pending task modifies the same files and no other task requires its output (check each file's `Preconditions` and `Files:`).
 3. Independent tasks run concurrently:
    ```bash
-   node <path-to-x-parallel>/scripts/parallel.mjs --tasks .x-skills/tasks/<epic> --parallel 4
+   node <path-to-x-parallel>/scripts/parallel.mjs --tasks <run folder>/E<nn>-tasks --parallel 4
    ```
    x-parallel gives each task an isolated worktree and a full background agent, retries failures, and merges committed results back into your branch.
 4. Tasks that depend on one another stay in the inline TDD loop below, in dependency order.
@@ -66,7 +66,7 @@ When a task's scope includes UI (HTML/CSS, templates, components, or styles in a
 
 ## Workflow
 
-For each task file in `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>/`:
+For each task file in `<run folder>/E<nn>-tasks/`:
 
 1. **RED** — Write the minimal failing test for the task's acceptance criterion. It must fail for the *right reason*.
 2. **GREEN** — Write the minimum implementation to pass that test. Nothing more.
@@ -78,11 +78,17 @@ For each task file in `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>/`:
    - **x-review** — run the review skill on the changed files. It produces a fix plan under `.x-skills/review/`.
    - **x-fix** — resolve every issue in the fix plan. Re-run tests after each fix.
    - Repeat x-review + x-fix until the plan has no unresolved issues and all tests are green.
-5. **SYNC DOCS** — Update spec (`.x-skills/plan/*.md`) if it exists; otherwise update living docs (README, comments) directly.
+5. **SYNC DOCS** — Update the spec (`<run folder>/E00-plan.md`) if it exists; otherwise update living docs (README, comments) directly.
 6. **COMMIT** — Run `node <path-to-commit.mjs> "<message>"` from the x-commit skill for every single commit. This is mandatory and non-negotiable. Never run `git commit` manually. If x-commit exits with an error, stop and ask for a corrected message with an `open` panel (free text only) — do not bypass it.
 7. **UPDATE PLAN** — Change `- [ ]` to `- [x]` for this task. Do not start the next task without this edit.
 
-All tasks `- [x]` and green → `ship`.
+All tasks `- [x]` and green → close the run:
+
+8. **CLOSE THE RUN** — With every task `[x]`:
+   - Write `<run folder>/E<nn>-summary.md`: the epic's `goal:`, one line per completed task, and the test results.
+   - Run `x-roast` on the summary, then `x-humanize` on it; each appends its own `E<nn>` artifact beside it.
+   - Rewrite the summary from the humanized text.
+   - If the epic carries an `issue:` and the repo has an `origin` remote, offer to post the summary with a `confirm` panel (yes/no); on yes run `gh issue comment <n> -F <summary>`. Never invent an issue number, and never post without the panel.
 
 ## Gate
 

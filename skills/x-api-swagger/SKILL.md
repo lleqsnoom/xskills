@@ -13,7 +13,7 @@ Convert a markdown API design draft produced by `x-api-draft` into a valid OpenA
 
 ## Workflow
 
-1. **Read the draft** — Read the approved API design from `.x-skills/apis/DD-MM-YYYY-hh:mm-<topic>.md` produced by `x-api-draft`. If multiple drafts exist, ask which one with a `single` panel (one pick from options, plus a free-answer field).
+1. **Read the draft** — Read the approved API design from `<run folder>/E<nn>-api-design.md` produced by `x-api-draft`. If multiple drafts exist, ask which one with a `single` panel (one pick from options, plus a free-answer field).
 
 2. **Parse endpoints & schemas** — Extract from the draft:
    - All endpoint paths with HTTP methods, descriptions, and auth requirements
@@ -51,7 +51,7 @@ node ./.agents/skills/x-api-swagger/scripts/save-spec.js --topic <slug>
 node /absolute/path/to/save-spec.js --topic <slug>
 ```
 
-Output: `.x-skills/apis/<topic>-openapi.yaml` (relative to CWD).
+Output: `<run folder>/E<nn>-api-spec.yaml` (relative to CWD).
 
 ## OpenAPI YAML Format
 

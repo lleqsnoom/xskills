@@ -124,7 +124,7 @@ Create the report file and write into it:
 node <skill>/scripts/save-report.mjs --slug "my-article" --type article
 ```
 
-The script prints `{ "path": ".x-skills/critique/<timestamp>-my-article.md", "created": true }`.
+The script prints `{ "path": "<run folder>/E<nn>-critique.md", "created": true }`.
 Open it with `edit`/`write` and fill in: central claim, score JSON, findings (one bullet per
 dimension), creative alternatives, improvement proposals, and sources consulted.
 
@@ -182,7 +182,7 @@ node <skill>/scripts/check-report.mjs --file <report.md>   # exit 0 iff filled i
 ## Files
 
 - `scripts/score.mjs` — weighted, anchored scorer (pure, importable, CLI at bottom).
-- `scripts/save-report.mjs` — creates a timestamped report under `.x-skills/critique/`.
+- `scripts/save-report.mjs` — writes a numbered critique into the run folder (`.x-skills/runs/<stamp>-R<nn>-<slug>/`).
 - `scripts/check-report.mjs` — fails while the report is still the empty template.
 - `references/rubric.md` — the anchored 1–5 definitions and profile map.
 - `references/example-roast.md` — a worked roast to match tone and depth against.

@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 
 /**
- * Create .x-skills/plan/<timestamp>-<topic>.md with a header skeleton.
+ * Create .x-skills/runs/<stamp>-R<nn>-<topic>/E00-plan.md with a header skeleton.
  * Usage: node save-spec.js --topic <slug> [--branch <name>] 
  * Output (stdout): path to the created spec file.
  */
 
-const path = require("node:path");
 const shared = require("./shared");
 
 function main() {
@@ -26,12 +25,12 @@ function main() {
   const branch = args.branch || shared.getBranch();
   shared.log("x-plan", `resolved branch: ${branch}`);
 
-  const date = shared.getTimestamp();
+  const date = shared.formatStamp();
   shared.log("x-plan", `using date stamp: ${date}`);
 
-  const dir = path.resolve(".x-skills/plan");
-  const filename = `${date}-${slug}.md`;
-  const fullPath = path.join(dir, filename);
+  const runDir = shared.resolveRunDir(slug);
+  const fullPath = shared.resolveArtifact(runDir, "plan", "md");
+  shared.log("x-plan", `resolved run folder: ${runDir}`);
 
   try {
     const header = `# Plan — ${args.topic}
@@ -69,8 +68,8 @@ constraint:   <non-functional requirements>
 <scratch space for hypotheses and edge cases>
 `;
 
-    shared.log("x-plan", `creating directory: ${dir}`);
-    shared.ensureDir(dir);
+    shared.log("x-plan", `creating directory: ${runDir}`);
+    shared.ensureDir(runDir);
 
     shared.log("x-plan", `writing spec file: ${fullPath} (${header.length} bytes)`);
     shared.writeFile(fullPath, header);

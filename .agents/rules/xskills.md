@@ -4,10 +4,14 @@
 `x-plan → x-epic → x-decompose → x-implement`. Never skip a phase.
 
 ## Artifact Convention
-All artifacts under `.x-skills/` relative to CWD:
-- Design specs:    `.x-skills/plan/DD-MM-YYYY-hh:mm-<topic>.md`
-- Epics:           `.x-skills/epics/DD-MM-YYYY-hh:mm-<topic>.md`
-- Tasks:           `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>/US*-*.md`
+All artifacts live in one folder per run, relative to CWD:
+`.x-skills/runs/<YYYY-MM-DD-hhmm>-R<nn>-<slug>/`
+
+- The folder holds `state.json`, `memory.md`, and every artifact of that run.
+- Artifacts are `E<nn>-<kind>.md` or `E<nn>-<kind>/`, numbered in execution order (`E00` plan, `E01` epic, `E02` tasks, and so on).
+- Both counters are exactly two digits: `E100` would sort before `E99`.
+- The stamp has leading zeros and no colon, so a plain name sort runs oldest to newest on every OS.
+- A skill writes into the folder that holds the artifact it read; only the first skill of a run mints `R<nn>` (highest existing plus one).
 
 ## Phase Boundaries
 - **x-plan**: No code. Only spec files and working notes.

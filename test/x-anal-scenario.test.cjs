@@ -46,9 +46,10 @@ function evidence(cwd, dir) {
 describe("x-anal scenario — pure", async () => {
   const m = await import(SCENARIO);
 
-  it("reports the slug-based analysis path", () => {
+  it("reports the numbered analysis path inside a run folder", () => {
     const s = m.createState({ slug: "leak" });
-    assert.equal(s.report, ".x-skills/anal/analysis-leak.md");
+    assert.match(s.report, /\.x-skills\/runs\/[^/]+-leak\/E00-analysis\.md$/);
+    assert.match(s.runDir, /-leak$/);
     assert.equal(s.node, "intake");
   });
 
@@ -96,7 +97,7 @@ describe("x-anal scenario — CLI", () => {
     const dir = await start(cwd);
     assert.ok(fs.existsSync(path.join(cwd, dir, "state.json")));
     assert.ok(fs.existsSync(path.join(cwd, dir, "memory.md")));
-    assert.ok(fs.existsSync(path.join(cwd, ".x-skills", "anal", "analysis-demo.md")));
+    assert.ok(fs.existsSync(path.join(cwd, dir, "E00-analysis.md")));
   });
 
   it("rejects thesis without evidence and leaves state unchanged", async () => {
@@ -135,7 +136,7 @@ describe("x-anal scenario — CLI", () => {
     res = await record(cwd, dir, ["--to", "route"]);
     assert.equal(res.code, 0, res.stderr);
     await record(cwd, dir, ["--event", "route", "--data", "fix"]);
-    const report = path.join(cwd, ".x-skills", "anal", "analysis-demo.md");
+    const report = path.join(cwd, dir, "E00-analysis.md");
     fs.appendFileSync(report, "\n## Thesis\nleak\n");
     res = await record(cwd, dir, ["--to", "fix"]);
     assert.equal(res.code, 0, res.stderr);
@@ -148,7 +149,7 @@ describe("x-anal scenario — CLI", () => {
     const dir = await start(cwd);
     await record(cwd, dir, ["--event", "confirm", "--data", "yes"]);
     const state = readJson(path.join(cwd, dir, "state.json"));
-    assert.match(state.report, /analysis-demo\.md/);
+    assert.match(state.report, /-demo\/E00-analysis\.md$/);
     const res = await record(cwd, dir, ["--to", "propose"]);
     assert.equal(res.code, 1);
   });

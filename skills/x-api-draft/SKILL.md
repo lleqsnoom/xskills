@@ -37,7 +37,7 @@ Save the design document using the script:
 node <path-to-save-design.js> --topic <slug>
 ```
 
-Output: `.x-skills/apis/DD-MM-YYYY-hh:mm-<topic>.md` (relative to CWD).
+Output: `<run folder>/E<nn>-api-design.md` (relative to CWD).
 
 ## Design Document Format
 

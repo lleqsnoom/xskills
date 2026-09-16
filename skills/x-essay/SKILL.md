@@ -57,18 +57,18 @@ matters. For papers/research use `x-roast --profile research` (a later `--type`)
 ```bash
 node <skill>/scripts/state.mjs start --slug my-article --min-score 75 --coverage-gate 1 --cap 3
 ```
-Creates `.x-skills/article/<ts>-<slug>/state.json` and prints the first action plus
+Creates `<run folder>/E<nn>-article/state.json` and prints the first action plus
 a numeric summary. Defaults: score gate **75** ("strong" band), coverage gate
 **1.0** (all facts/markers survive), cap **3**. Completion: `state.json` exists
 with `phase:"draft"` and `gates` recorded.
 
 ### 2. Analyse — run `x-anal`
-Pose the claim; use `x-anal` to produce `.x-skills/anal/analysis-<id>.md`
+Pose the claim; use `x-anal` to produce `<run folder>/E<nn>-analysis.md`
 (thesis, evidence, confidence, options). Completion: you have a one-sentence
 central claim and the load-bearing evidence for it.
 
 ### 3. Draft
-Write the draft to `.x-skills/article/<dir>/draft-v<n>.md`. Meet the article
+Write the draft to `<run folder>/E<nn>-article/draft-v<n>.md`. Meet the article
 checklist in `references/best-practices-article.md` before moving on: one `h1`,
 claim first, evidence per section, counterargument handled, references listed.
 Completion: a complete draft file, not an outline.
@@ -109,7 +109,7 @@ node <skill>/scripts/state.mjs verify --dir <dir>   # exit 0 iff the stop is jus
 ### 7. Deliver
 Present the article, the numeric summary
 (`iterations`, `firstRoastTotal → bestRoastTotal`, `scoreGain`, `lastCoverage`), and
-the report paths (`.x-skills/anal/`, `.x-skills/critique/`, `.x-skills/humanize/`).
+the report paths (the `E<nn>-analysis.md`, `E<nn>-critique.md`, and `E<nn>-humanize.md` artifacts in the run folder).
 Hand the text to `blog-post-authoring` when the user wants it published, and
 `x-commit` to commit.
 
@@ -125,8 +125,8 @@ Hand the text to `blog-post-authoring` when the user wants it published, and
 <the finished text>
 
 ## Trail
-- .x-skills/anal/<analysis> · .x-skills/critique/<roast> · .x-skills/humanize/<report>
-- .x-skills/article/<dir>/state.json · verify exit 0
+- <run folder>/E<nn>-analysis.md · E<nn>-critique.md · E<nn>-humanize.md
+- <run folder>/E<nn>-article/state.json · verify exit 0
 ```
 
 ## Next steps — which skill to use

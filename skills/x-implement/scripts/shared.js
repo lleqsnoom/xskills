@@ -46,12 +46,101 @@ function getBranch() {
   }
 }
 
-// ── Timestamp (JS-generated only — never LLM-determined) ─────────────
+// ── Timestamp (JS-generated only - never LLM-determined) ─────────────
 
-function getTimestamp() {
-  const now = new Date();
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}-${pad(now.getHours())}:${pad(now.getMinutes())}`;
+function pad2(value) {
+  return String(value).padStart(2, "0");
+}
+
+function formatStamp(date = new Date()) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}-${pad2(date.getHours())}${pad2(date.getMinutes())}`;
+}
+
+// #region run-folder
+// Two digits, not more: a wider counter would sort E100 before E99.
+const RUNS_ROOT = ".x-skills/runs";
+const MAX_COUNTER = 99;
+
+function padRunCounter(value) {
+  return String(value).padStart(2, "0");
+}
+
+function runFolders(rootAbs, slug) {
+  if (!fs.existsSync(rootAbs)) return [];
+  return fs
+    .readdirSync(rootAbs)
+    .filter((name) => name.endsWith(`-${slug}`))
+    .sort();
+}
+
+function highestRun(rootAbs) {
+  if (!fs.existsSync(rootAbs)) return 0;
+  return fs.readdirSync(rootAbs).reduce((max, name) => {
+    const match = name.match(/-R(\d+)-/);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+}
+
+function mintRunDir(rootAbs, slug, now) {
+  const run = highestRun(rootAbs) + 1;
+  if (run > MAX_COUNTER) throw new Error(`run counter would exceed R${MAX_COUNTER}`);
+  const stamp = `${now.getFullYear()}-${padRunCounter(now.getMonth() + 1)}-${padRunCounter(now.getDate())}-${padRunCounter(now.getHours())}${padRunCounter(now.getMinutes())}`;
+  const dir = path.join(rootAbs, `${stamp}-R${padRunCounter(run)}-${slug}`);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/**
+ * Return the run folder for a slug: the folder holding `marker` when given,
+ * the sole match when only one exists, or a newly minted R<nn>.
+ */
+function resolveRunDir(slug, { root = RUNS_ROOT, now = new Date(), marker = null } = {}) {
+  if (!slug || typeof slug !== "string") throw new Error("slug is required");
+  const rootAbs = path.resolve(root);
+  fs.mkdirSync(rootAbs, { recursive: true });
+
+  const folders = runFolders(rootAbs, slug);
+  if (marker) {
+    const holding = folders.filter((name) => fs.existsSync(path.join(rootAbs, name, marker)));
+    if (holding.length) return path.join(rootAbs, holding[holding.length - 1]);
+  }
+  if (folders.length > 1) {
+    throw new Error(`${folders.length} runs match "${slug}"; resolve the run explicitly`);
+  }
+  if (folders.length) return path.join(rootAbs, folders[0]);
+  return mintRunDir(rootAbs, slug, now);
+}
+
+function nextE(runDir) {
+  const used = fs.existsSync(runDir)
+    ? fs
+        .readdirSync(runDir)
+        .map((name) => {
+          const match = name.match(/^E(\d{2})-/);
+          return match ? Number(match[1]) : null;
+        })
+        .filter((value) => value !== null)
+    : [];
+  const next = used.length ? Math.max(...used) + 1 : 0;
+  if (next > MAX_COUNTER) throw new Error(`artifact counter would exceed E${MAX_COUNTER}`);
+  return `E${String(next).padStart(2, "0")}`;
+}
+// #endregion run-folder
+
+/**
+ * Path for a single-instance artifact: the lowest existing match, else the
+ * next free number. Repeatable kinds call `nextE` directly instead.
+ */
+function resolveArtifact(runDir, kind, ext = "md") {
+  const suffix = ext ? `${kind}.${ext}` : kind;
+  if (fs.existsSync(runDir)) {
+    const matches = fs
+      .readdirSync(runDir)
+      .filter((name) => /^E\d{2}-/.test(name) && name.endsWith(`-${suffix}`))
+      .sort();
+    if (matches.length) return path.join(runDir, matches[0]);
+  }
+  return path.join(runDir, `${nextE(runDir)}-${suffix}`);
 }
 
 // ── Slug sanitization ────────────────────────────────────────────────
@@ -60,28 +149,6 @@ function getTimestamp() {
 
 function sanitizeSlug(slug) {
   return slug.replace(/[^a-zA-Z0-9_-]/g, "-").replace(/-{2,}/g, "-").replace(/^-|-$/g, "");
-}
-
-// ── File discovery by topic slug ──────────────────────────────────────
-
-/**
- * Find the most recently modified .md file in a directory whose name
- * contains the given topic slug. Returns null if no match found or dir missing.
- */
-function findFileByTopic(dirPath, slug) {
-  const absDir = path.isAbsolute(dirPath) ? dirPath : path.resolve(dirPath);
-  try {
-    if (!fs.existsSync(absDir)) return null;
-    const files = fs.readdirSync(absDir).filter((f) => f.endsWith(".md") && f.includes(slug));
-    if (files.length === 0) return null;
-    files.sort(
-      (a, b) =>
-        fs.statSync(path.join(absDir, b)).mtimeMs - fs.statSync(path.join(absDir, a)).mtimeMs
-    );
-    return path.join(absDir, files[0]);
-  } catch {
-    return null;
-  }
 }
 
 // ── Directory creation ───────────────────────────────────────────────
@@ -99,4 +166,15 @@ function writeFile(filePath, content) {
   fs.writeFileSync(filePath, content, "utf8");
 }
 
-module.exports = { log, parseArgs, getBranch, getTimestamp, sanitizeSlug, ensureDir, writeFile, findFileByTopic };
+module.exports = {
+  log,
+  parseArgs,
+  getBranch,
+  formatStamp,
+  resolveRunDir,
+  nextE,
+  resolveArtifact,
+  sanitizeSlug,
+  ensureDir,
+  writeFile,
+};

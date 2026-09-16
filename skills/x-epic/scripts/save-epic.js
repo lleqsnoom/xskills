@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 
 /**
- * Create .x-skills/epics/<timestamp>-<topic>.md with a resolved header skeleton.
+ * Create .x-skills/runs/<stamp>-R<nn>-<topic>/E01-epic.md with a resolved header skeleton.
  * Auto-finds the matching design spec by topic slug and fills in the path.
  * Usage: node save-epic.js --topic <slug> [--branch <name>] 
  * Output (stdout): path to the created epic file.
  */
 
+const fs = require("node:fs");
 const path = require("node:path");
 const shared = require("./shared");
 
@@ -14,37 +15,37 @@ function main() {
   const args = shared.parseArgs(process.argv.slice(2), {
     "--topic": "topic", "-t": "topic",
     "--branch": "branch",
+    "--issue": "issue",
   });
 
   shared.log("x-epic", "parsing arguments");
 
   if (!args.topic) {
-    process.stderr.write("Usage: node save-epic.js --topic <slug> [--branch <name>]\n");
+    process.stderr.write("Usage: node save-epic.js --topic <slug> [--branch <name>] [--issue <n>]\n");
     process.exit(1);
   }
 
   const slug = shared.sanitizeSlug(args.topic);
   const branch = args.branch || shared.getBranch();
-  const date = shared.getTimestamp();
+  const date = shared.formatStamp();
+  const issue = args.issue === undefined ? "" : args.issue;
 
-  // Auto-resolve the plan spec path from disk (single call)
-  const specFullPath = shared.findFileByTopic(".x-skills/plan", slug);
-  const specPath = specFullPath ? path.relative(process.cwd(), specFullPath) : null;
+  const runDir = shared.resolveRunDir(slug);
+  const planFullPath = shared.resolveArtifact(runDir, "plan", "md");
+  const specPath = fs.existsSync(planFullPath) ? path.relative(process.cwd(), planFullPath) : null;
 
-  const dir = path.resolve(".x-skills/epics");
-  const filename = `${date}-${slug}.md`;
-  const fullPath = path.join(dir, filename);
+  const fullPath = shared.resolveArtifact(runDir, "epic", "md");
 
   try {
-    shared.ensureDir(dir);
+    shared.ensureDir(runDir);
 
     let header = `# Epic — ${args.topic}\n\n**Date:** ${date}\n**Branch:** ${branch}\n\n---\n\n`;
 
     if (specPath) {
-      header += `goal:         <outcome in one sentence>\nspec:         ${specPath}\n\n`;
+      header += `goal:         <outcome in one sentence>\nspec:         ${specPath}\nissue:        ${issue}\n\n`;
       shared.log("x-epic", `resolved spec path: ${specPath}`);
     } else {
-      header += `goal:         <outcome in one sentence>\nspec:         .x-skills/plan/<timestamp>-<topic>.md\n\n`;
+      header += `goal:         <outcome in one sentence>\nspec:         <run folder>/E00-plan.md\nissue:        ${issue}\n\n`;
       shared.log("x-epic", "no plan spec found for topic — placeholder left");
     }
 

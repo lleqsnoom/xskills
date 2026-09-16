@@ -10,7 +10,9 @@
     "access": "public"
   },
   "scripts": {
-    "test": "node --test test/*.test.cjs"
+    "test": "node --test test/*.test.cjs",
+    "sync:run-folders": "node scripts/sync-run-folders.js",
+    "check:run-folders": "node scripts/sync-run-folders.js --check"
   },
   "keywords": [
     "agentic",

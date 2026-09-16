@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
 /**
- * Create .x-skills/tasks/<timestamp>-<epic>.md with a resolved header skeleton.
+ * Create .x-skills/runs/<stamp>-R<nn>-<epic>/E<nn>-implement.md with a resolved header skeleton.
  * Auto-finds the matching epic by topic slug and fills in the path.
  * Usage: node save-plan.js --epic <slug> [--branch <name>]
  * Output (stdout): path to the created plan file.
  * NOTE: Timestamps are always JS-generated. No --date flag is accepted.
  */
 
+const fs = require("node:fs");
 const path = require("node:path");
 const shared = require("./shared");
 
@@ -26,19 +27,16 @@ function main() {
 
   const slug = shared.sanitizeSlug(args.epic);
   const branch = args.branch || shared.getBranch();
-  const date = shared.getTimestamp();
+  const date = shared.formatStamp();
 
-  // Auto-resolve the epic file path from disk
-  const epicPath = shared.findFileByTopic(".x-skills/epics", slug)
-    ? path.relative(process.cwd(), shared.findFileByTopic(".x-skills/epics", slug))
-    : null;
+  const runDir = shared.resolveRunDir(slug);
+  const epicFullPath = shared.resolveArtifact(runDir, "epic", "md");
+  const epicPath = fs.existsSync(epicFullPath) ? path.relative(process.cwd(), epicFullPath) : null;
 
-  const dir = path.resolve(".x-skills/tasks");
-  const filename = `${date}-${slug}.md`;
-  const fullPath = path.join(dir, filename);
+  const fullPath = shared.resolveArtifact(runDir, "implement", "md");
 
   try {
-    shared.ensureDir(dir);
+    shared.ensureDir(runDir);
 
     let header = `# Tasks — ${args.epic}\n\n**Date:** ${date}\n**Branch:** ${branch}\n\n---\n\n`;
 
@@ -46,7 +44,7 @@ function main() {
       header += `epic:         ${epicPath}\n\n`;
       shared.log("x-implement", `resolved epic path: ${epicPath}`);
     } else {
-      header += `epic:         .x-skills/epics/<timestamp>-<topic>.md\n\n`;
+      header += `epic:         <run folder>/E01-epic.md\n\n`;
       shared.log("x-implement", "no epic file found for slug — placeholder left");
     }
 
