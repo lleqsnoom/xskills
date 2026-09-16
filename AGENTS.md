@@ -32,6 +32,8 @@ xskills/
 ├── package.json              # Node >= 18, name: "xskills", MIT
 ├── bin/install.js            # CLI entry point (CommonJS)
 ├── lib/install.js            # Core logic — install, globalInstall, listSkills
+├── automation/               # Scheduled maintenance (not published in the npm package)
+│   └── daily-reflection/     # 05:00 Orca job: collect last 24h sessions from every CLI, write a digest
 └── skills/                   # Skill packages (published as part of the npm package)
     ├── x-commit/             # Conventional commit message helper
     │   ├── SKILL.md          # Required: YAML frontmatter + instructions
@@ -195,6 +197,84 @@ Independent of the planning pipeline, debugging uses a multi-skill scientific me
 - **x-anal** — Interactive analysis: confirms user intent, clarifies ambiguities with suggestions, produces thesis with evidence and solution proposition, routes to fix or task creation
 - **x-investigate** — Hypothesis-driven root cause analysis using git bisect/blame, Chrome DevTools, debuggers, or engine profilers depending on platform
 - **x-autoreflection** — Session retrospective: exports the transcript of this or an earlier session, scans it mechanically for friction (failed commands, repeats, user corrections, prose questions, unused skills), verifies each signal against the real skill files, and writes evidence-backed improvement proposals to `<run folder>/E<nn>-reflection.md`
+
+## Daily Reflection Automation
+
+An Orca automation named **x-skills-daily-reflection** runs every day at **05:00 Europe/Warsaw** in this
+repository and leaves a digest for review. It never edits a skill — it proposes, and the review decides.
+
+| Piece | Path | Role |
+|-------|------|------|
+| Collector | `automation/daily-reflection/collect-sessions.mjs` | Finds every session of the last 24h across all detected CLIs, scans each for x-skill friction, writes the evidence pack |
+| Hosts | `skills/x-autoreflection/scripts/hosts/` | One adapter per CLI (`crush`, `codex`, `opencode`, `goose`): detect, list, read |
+| Precheck | `automation/daily-reflection/precheck.sh` | Skips the run when `skills/` is dirty or no session in the window used an x-skill |
+| Runbook | `automation/daily-reflection/runbook.md` | The agent's instructions: reflect on at most 4 sessions, then write the digest |
+
+The collector imports `skills/x-autoreflection/scripts/hosts/` and `{read-session,scan-session}.mjs`, so
+the pack, the sessions a review can pick from and the scanner that judges them all come from one place.
+Nothing under `automation/` ships in the npm package (`package.json` `files` excludes it).
+
+### Session hosts
+
+Reading a session is not tied to one CLI. Each adapter declares `id`, `label`, `store`, `detect(ctx)`,
+`list(ctx)` and `read(session, ctx)`; `ctx` carries the window and a `run(command, args, { cwd })` seam,
+so an adapter is a mapping from a CLI's own output and a test can drive it by stubbing `run` alone.
+
+| Host | Store | Evidence |
+|------|-------|----------|
+| `opencode` | `opencode db "<sql>" --format json` for the list, `opencode export <id>` for a transcript | read from a live store |
+| `claude` | `<claude root>/projects/<encoded-cwd>/<session-uuid>.jsonl` (`CLAUDE_CONFIG_DIR` moves the root) | spec only |
+| `codex` | `<codex home>/sessions/YYYY/MM/DD/rollout-*.jsonl`, named by `<codex home>/session_index.jsonl` | read from a live store |
+| `gemini` | `<gemini root>/tmp/<project-id>/chats/session-*.jsonl`, or the older single `session-*.json` | spec only |
+| `cursor` | `<cursor home>/projects/<project-slug>/agent-transcripts/**/*.jsonl` | read from a live store |
+| `cline`, `roo`, `kilo` | `<editor> User/globalStorage/<extension-id>/tasks/<task-id>/{api_conversation_history,ui_messages}.json` | spec only |
+| `goose` | `<goose data dir>/sessions/sessions.db` (SQLite, read with the `node:sqlite` built-in) | read from a live store |
+| `crush` | `crush session list\|show --json`, one call per project in `<crush data dir>/projects.json` | read from a live store |
+| `qwen` | `<qwen root>/tmp/<project-id>/chats/*.jsonl` (older trees: `projects/<project-id>/chats/`) | spec only |
+| `copilot` | `<copilot home>/session-state/<session-id>/events.jsonl` | spec only |
+
+**Verified and spec-built are different claims.** A host marked "read from a live store" was written
+against real bytes on the machine it was added on; a "spec only" host was written from published
+documentation, each header citing it, and has never seen a real store. That is allowed, but it is
+paying a debt: the fixtures in `test/daily-reflection.test.cjs` restate the spec, so a real store that
+disagrees will show up as a `warnings` entry ("the store is there but no … matched its layout") rather
+than as a session that scans to nothing. When such a warning appears, fix that adapter against the
+bytes — do not widen the scan until something matches.
+
+`--host a,b` narrows a run. A CLI that is not installed reports `absent`, so an empty window still says
+which stores were read. A CLI whose sessions live only in SQLite needs either a command that prints JSON
+(OpenCode has one) or the built-in driver Goose uses; `hosts/sqlite.mjs` opens such a store read-only and
+reports the reason when the Node runtime is too old to have `node:sqlite` (22.5+). Never reach for a
+dependency: the package has none, and a store this cannot read should fail loudly rather than silently.
+
+### How a day is reviewed
+
+```
+.x-skills/daily/<YYYY-MM-DD>/
+├── DIGEST.md                     # the morning read: proposals with Signal / Target / Change / Check
+├── summary.md                    # usage + signals per session
+├── summary.json                  # the same, machine-readable (the only source of numbers)
+├── sessions/<uuid>.signals.json  # scan per session, small enough to keep
+└── reflections/<session>/E00-reflection.md   # one gated reflection per chosen session
+```
+
+Transcripts stay in `/tmp/xskills-reflection/<date>/` (megabytes each). Packs older than 14 days are
+pruned, and so is the transcript root.
+
+### Running it by hand
+
+```bash
+node automation/daily-reflection/collect-sessions.mjs            # collect the pack, print one JSON line
+node automation/daily-reflection/collect-sessions.mjs --check    # probe only; exit 1 = no x-skill, 3 = no host readable
+node automation/daily-reflection/collect-sessions.mjs --host crush,codex            # narrow the CLIs read
+node automation/daily-reflection/collect-sessions.mjs --hours 168 --out /tmp/week   # a wider window
+bash automation/daily-reflection/precheck.sh                     # what the scheduler runs first
+orca automations list                                            # confirm the schedule
+```
+
+Sessions are scoped per project directory and per CLI, so discovery walks every detected host and unions
+what it finds by host and uuid — the same uuid under two CLIs is two sessions. Crush's own walk is
+per project in `projects.json` (newest first, `--project-lookback-hours`, default 72).
 
 ## Release Workflow
 
