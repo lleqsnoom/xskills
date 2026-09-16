@@ -1,3 +1,11 @@
+## [5.25.0] - 2026-09-16
+
+* Merge pull request #57 from lleqsnoom/feat/x-autoreflection (48293b6)
+* fix(skills): name the legal moves when a scenario transition is refused (7924c3f)
+* fix(x-commit): read changed paths from git instead of the diff header (04053a7)
+* fix(x-review): stop the analyser crashing or silently reporting zero (11b476e)
+* feat(skills): add x-autoreflection to turn a session into skill fixes (a78531a)
+
 ## [5.24.1] - 2026-09-16
 
 * Merge pull request #56 from lleqsnoom/fix/ci-stale-version-base (8d822b8)
