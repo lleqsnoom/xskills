@@ -13,6 +13,8 @@ The package has **zero dependencies** — it uses only Node.js built-ins (`fs/pr
 | Command | Description |
 |---------|-------------|
 | `npm test` | Runs all tests (install, version-bump, etc.) |
+| `npm run check:run-folders` | Fails if the run-folder helpers have drifted between skills |
+| `npm run sync:run-folders` | Rewrites the run-folder helpers in every skill from the one canonical block |
 | `npm run release -- --dry-run` | Dry-run semantic-release locally to preview bump type |
 | `node bin/install.js list` | Lists available skills with descriptions |
 | `node bin/install.js install <name>` | Installs a skill into the current project's `.agents/skills/` |
@@ -104,11 +106,11 @@ Skills are plain markdown files, not MCP servers. Using the wrong access method 
 
 ### When task directories don't exist yet
 
-Directories like `.x-skills/tasks/`, `.x-skills/debug/`, etc. are **created by the skills themselves** during workflow execution. If a glob or read fails because these paths don't exist, that means the prior pipeline step hasn't run yet:
-- `.x-skills/plan/` → created when `x-plan` runs (before `x-epic`)
-- `.x-skills/epics/` → created when `x-epic` runs (before `x-decompose`)
-- `.x-skills/tasks/` → created when `x-decompose` runs (before `x-implement`)
-- `.x-skills/debug/` → created when `x-triage` + `x-reproduce` run
+Directories like `.x-skills/runs/` are **created by the skills themselves** during workflow execution. If a glob or read fails because these paths don't exist, that means the prior pipeline step hasn't run yet:
+- `<run folder>/E00-plan.md` → created when `x-plan` runs (before `x-epic`)
+- `<run folder>/E01-epic.md` → created when `x-epic` runs (before `x-decompose`)
+- `<run folder>/E02-tasks/` → created when `x-decompose` runs (before `x-implement`)
+- `<run folder>/E<nn>-triage.md` → created when `x-triage` runs (before `x-reproduce`)
 
 If you need content at one of these paths, first execute the skill that creates it.
 
@@ -120,9 +122,9 @@ The planning workflow follows a three-phase handoff chain using **layer-based de
 
 | Phase | Skill | Input | Output | Gate |
 |-------|-------|-------|--------|------|
-| 1. Plan | `x-plan` | Vague goal or requirement | `.x-skills/plan/DD-MM-YYYY-hh:mm-<topic>.md` (spec + layer roadmap) | User approves spec |
-| 2. Epic | `x-epic` | Approved spec | `.x-skills/epics/DD-MM-YYYY-hh:mm-<topic>.md` (layers with scope + DOD) | User approves epic |
-| 3. Decompose | `x-decompose` | Approved epic | `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>/` (layer-organized tasks, each independently testable) | User approves tasks |
+| 1. Plan | `x-plan` | Vague goal or requirement | `<run folder>/E00-plan.md` (spec + layer roadmap) | User approves spec |
+| 2. Epic | `x-epic` | Approved spec | `<run folder>/E01-epic.md` (layers with scope + DOD) | User approves epic |
+| 3. Decompose | `x-decompose` | Approved epic | `<run folder>/E02-tasks/` (layer-organized tasks, each independently testable) | User approves tasks |
 
 After task approval → `x-implement` executes tasks layer by layer (L0 first, then L1, etc.).
 
@@ -174,9 +176,9 @@ Independent of the planning pipeline, debugging uses a multi-skill scientific me
 
 | Phase | Skill | Input | Output | Gate |
 |-------|-------|-------|--------|------|
-| 1. Triage | `x-triage` | Bug report (error message, symptoms) | `.x-skills/debug/triage-brief.md` | User confirms classification |
-| 2. Reproduce | `x-reproduce` | Triage brief → Platform field | `.x-skills/debug/repro-<platform>.js` | Reproduction triggers same error locally |
-| 3. Investigate | `x-investigate` | Triage brief + repro script | `.x-skills/review/debug-<session>.md` (fix plan) | Root cause confirmed, hypotheses eliminated |
+| 1. Triage | `x-triage` | Bug report (error message, symptoms) | `<run folder>/E<nn>-triage.md` | User confirms classification |
+| 2. Reproduce | `x-reproduce` | Triage brief → Platform field | `<run folder>/E<nn>-repro-<platform>.js` | Reproduction triggers same error locally |
+| 3. Investigate | `x-investigate` | Triage brief + repro script | `<run folder>/E<nn>-investigate.md` (fix plan) | Root cause confirmed, hypotheses eliminated |
 | 4. Fix | `x-fix` (existing) | Fix plan from investigate | Updated source files + verification passes | Verification script exits 0 |
 
 **Critical rule:** never silence errors — always fix the root cause and verify with reproduction.
@@ -290,6 +292,10 @@ The skills that ask questions (`x-anal`, `x-plan`, `x-research`) ship the canoni
 - Scripts are standalone — they don't import from `lib/install.js` or each other.
 - Use `node:child_process` for shell commands (e.g., `git diff`).
 - Output JSON to stdout for structured data; errors go to stderr with `process.exit(1)`.
+
+### The run-folder helpers are generated
+
+Every skill that writes a `.x-skills/runs/` artifact carries the same run-folder helpers (`resolveRunDir`, `nextE`, …) because skills cannot import from each other. Edit them **once** in `scripts/sync-run-folders.js` and run `npm run sync:run-folders`, which pastes the canonical block between the `// #region run-folder` markers in all 13 files. `test/run-helpers-drift.test.cjs` fails if a copy diverges, so never edit a region by hand.
 
 #### x-commit Scripts
 

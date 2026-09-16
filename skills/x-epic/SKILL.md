@@ -1,6 +1,6 @@
 ---
 name: x-epic
-description: Convert approved spec into a layer-based epic — each layer is a coherent, testable increment from prototype to polished product; outputs .x-skills/epics/DD-MM-YYYY-hh:mm-<topic>.md for handoff to x-decompose
+description: Convert approved spec into a layer-based epic — each layer is a coherent, testable increment from prototype to polished product; outputs <run folder>/E<nn>-epic.md for handoff to x-decompose
 version: 2.0.0
 author: Community
 tags: [epic, layers, definition-of-done, scope, prototype, incremental]
@@ -9,7 +9,7 @@ user-invocable: true
 
 # X-Epic — Layer-Based Epic Definition
 
-`.x-skills/epics/DD-MM-YYYY-hh:mm-<topic>.md`. One file per topic. Reference the spec; don't repeat it. Follow pipeline order from `.agents/rules/xskills.md`.
+`<run folder>/E<nn>-epic.md`, where the run folder is `.x-skills/runs/YYYY-MM-DD-hhmm-R<nn>-<topic>/`. One epic per topic. Reference the spec; don't repeat it. Follow pipeline order from `.agents/rules/xskills.md`.
 
 ## Workflow
 
@@ -69,13 +69,14 @@ Implementation order is fixed: L0 skeleton, then L1 real logic, then L2 resilien
 ```markdown
 # Epic — <Topic>
 
-**Date:** DD-MM-YYYY-hh:mm
+**Date:** YYYY-MM-DD-hhmm
 **Branch:** <branch>
 **Scope:** <one sentence covering this epic>
 ---
 
 goal:         <outcome in one sentence>
-spec:         .x-skills/plan/DD-MM-YYYY-hh:mm-<topic>.md
+spec:         <run folder>/E00-plan.md
+issue:        <github issue number, or empty>
 ```
 
 ## Epic-Level Definition of Done

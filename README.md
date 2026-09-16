@@ -94,8 +94,8 @@ Run `npx xskills list` to see all available skills.
 | `x-comments` | Comment management — add only precise, meaningful comments and remove noisy or obvious ones; refactor overly commented code into self-explanatory functions instead of describing it |
 | `x-commit` | Write single-line conventional commit messages — one authoritative type map, imperative mood, no description body |
 | `x-debug` | Evidence-based debugging — reproduce, hypothesize, fix root cause, verify |
-| `x-decompose` | Decompose approved epic into layer-based tasks — each task is an independent, testable increment that builds on the previous; outputs .x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>/ for handoff to x-implement |
-| `x-epic` | Convert approved spec into a layer-based epic — each layer is a coherent, testable increment from prototype to polished product; outputs .x-skills/epics/DD-MM-YYYY-hh:mm-<topic>.md for handoff to x-decompose |
+| `x-decompose` | Decompose approved epic into layer-based tasks — each task is an independent, testable increment that builds on the previous; outputs `<run folder>/E02-tasks/` for handoff to x-implement |
+| `x-epic` | Convert approved spec into a layer-based epic — each layer is a coherent, testable increment from prototype to polished product; outputs `<run folder>/E01-epic.md` for handoff to x-decompose |
 | `x-essay` | Write an article end-to-end on a fixed loop — x-anal thesis, x-roast critique, x-humanize rewrite — repeating until it scores strong and reads clean. Use when asked to write or draft an article, blog post, or essay that must defend a claim. |
 | `x-fix` | Resolve issues from fix plans — read, edit, verify, mark complete |
 | `x-humanize` | Simplify text, an article, a commit or PR to a B2 reading level — measure sentence length and complexity, cut noise, rewrite, then verify no meaning was lost. Use when asked to humanize, simplify, make easy to read, or plain-language a piece of prose. |
@@ -112,7 +112,7 @@ Run `npx xskills list` to see all available skills.
 | `x-rollback` | Automated git revert with multi-step confirmation — identifies target commits, analyzes impact, requires approval, creates properly formatted revert commits via x-commit integration |
 | `x-skill-lint` | Validate this repo’s own skills — frontmatter parses and `name` matches the folder, every referenced `scripts/*` and `references/*` exists, no stray template tokens, and the README skills table lists every skill |
 | `x-test-gen` | Generate test stubs from implementation — analyzes source code and creates scaffolded tests with happy path, error cases, and edge case placeholders |
-| `x-triage` | Structured intake conversation — ask targeted panels (single / multi / open / confirm) to classify a bug’s platform, type, and evidence before touching any tools. Outputs .x-skills/debug/triage-brief.md. |
+| `x-triage` | Structured intake conversation — ask targeted panels (single / multi / open / confirm) to classify a bug’s platform, type, and evidence before touching any tools. Outputs `<run folder>/E<nn>-triage.md`. |
 | `x-ui` | Design and audit app UIs to be clean, clear, and effective — framework-agnostic method (Vue/React/HTML) with component-selection, row-action, and pre-flight rules. |
 
 ## Workflow

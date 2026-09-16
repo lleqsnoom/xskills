@@ -15,8 +15,8 @@ Generate hypotheses, test them with platform tools and git history, and eliminat
 
 These files must exist from prior steps in the debugging pipeline:
 
-- `.x-skills/debug/triage-brief.md` — produced by `x-triage`. Contains Platform + Bug Type + Symptoms + Evidence fields.
-- `.x-skills/debug/repro-<platform>.js` — produced by `x-reproduce` or `x-debug`. The reproduction script that triggers the bug locally.
+- `<run folder>/E<nn>-triage.md` — produced by `x-triage`. Contains Platform + Bug Type + Symptoms + Evidence fields.
+- `<run folder>/E<nn>-repro-<platform>.js` — produced by `x-reproduce` or `x-debug`. The reproduction script that triggers the bug locally.
 
 If either file is missing, stop and offer to run them with a `confirm` panel (yes/no). Do not proceed without them.
 
@@ -24,7 +24,7 @@ If either file is missing, stop and offer to run them with a `confirm` panel (ye
 
 ### 0. Read Input Context
 
-Read `.x-skills/debug/triage-brief.md` to extract:
+Read `<run folder>/E<nn>-triage.md` to extract:
 - **Platform** — determines which investigation tools to use
 - **Bug Type** — guides hypothesis categories
 - **Evidence Available** — stack-trace, logs, console-output, device-access
@@ -70,14 +70,14 @@ Read the triage brief's **Platform** field and use corresponding tools from x-tr
 For each ranked hypothesis:
 1. Run the designed isolation test from `hypothesize.js` output
 2. Observe results against the reproduction script behavior
-3. Mark `[x] Confirmed` or `[ ] Rejected` in `.x-skills/review/debug-<session>.md`
+3. Mark `[x] Confirmed` or `[ ] Rejected` in `<run folder>/E<nn>-investigate.md`
 4. Eliminate candidates until exactly one root cause remains
 
 If a hypothesis cannot be tested without additional information, mark it as `[ ] Not testable — requires: <what's needed>` and continue to next.
 
 ### 5. Write Fix Plan for x-fix
 
-Produce `.x-skills/review/debug-<session>.md` in this exact format (compatible with `x-fix` parser):
+Produce `<run folder>/E<nn>-investigate.md` in this exact format (compatible with `x-fix` parser):
 
 ```markdown
 # Debug Fix Plan — <session-id>

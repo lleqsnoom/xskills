@@ -1,6 +1,6 @@
 ---
 name: x-decompose
-description: Decompose approved epic into layer-based tasks — each task is an independent, testable increment that builds on the previous; outputs .x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>/ for handoff to x-implement
+description: Decompose approved epic into layer-based tasks — each task is an independent, testable increment that builds on the previous; outputs <run folder>/E<nn>-tasks/ for handoff to x-implement
 version: 2.0.0
 author: Community
 tags: [decompose, tasks, layers, definition-of-done, DOD, test-plan, atomic, estimation, self-contained, incremental]
@@ -29,7 +29,7 @@ Layer 3 (Polish)       → Task 3.1: add monitoring + documentation
 ## Workflow
 
 1. **Create staging directory** — run the script: `node <path-to-save-tasks.js> --epic <slug>`
-2. **Read the epic** — path: `.x-skills/epics/DD-MM-YYYY-hh:mm-<topic>.md`. Extract every layer with its scope and DOD.
+2. **Read the epic** — path: `<run folder>/E<nn>-epic.md`. Extract every layer with its scope and DOD.
 3. **Decompose each layer into tasks** — See Task Format below. Each layer becomes 1-3 task files.
 4. **Gate** — confirm task list with user before handing off to implementation.
 
@@ -115,4 +115,4 @@ Layer 3 — Observability (1 task):
 
 ## Handoff Flow
 
-Confirm `.x-skills/tasks/DD-MM-YYYY-hh:mm-<epic>/` exists with task files organized by layer before handing off to implementation. x-implement reads these files and executes tasks in order: L0 first, then L1, etc.
+Confirm `<run folder>/E<nn>-tasks/` exists with task files organized by layer before handing off to implementation. x-implement reads these files and executes tasks in order: L0 first, then L1, etc.

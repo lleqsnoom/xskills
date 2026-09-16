@@ -4,6 +4,7 @@ const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const { spawn } = require("node:child_process");
 const fsp = require("node:fs/promises");
+const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
@@ -134,14 +135,20 @@ describe("x-roast save-report — pure helpers", async () => {
     assert.equal(mod.slugify(""), "artifact");
   });
 
-  it("timestamp uses DD-MM-YYYY-hh:mm", () => {
+  it("timestamp uses YYYY-MM-DD-hhmm", () => {
     const date = new Date(2026, 0, 5, 9, 7);
-    assert.equal(mod.timestamp(date), "05-01-2026-09:07");
+    assert.equal(mod.timestamp(date), "2026-01-05-0907");
   });
 
-  it("reportPath combines directory, timestamp, and slug", () => {
-    const date = new Date(2026, 0, 5, 9, 7);
-    assert.equal(mod.reportPath("out", "My Article", date), path.join("out", "05-01-2026-09:07-my-article.md"));
+  it("reportPath numbers the critique artifact in the run folder", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "xskills-roast-path-"));
+    try {
+      assert.equal(mod.reportPath(dir), path.join(dir, "E00-critique.md"));
+      fs.writeFileSync(path.join(dir, "E00-critique.md"), "");
+      assert.equal(mod.reportPath(dir), path.join(dir, "E01-critique.md"));
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("renderHeader includes type and slug", () => {
@@ -154,18 +161,20 @@ describe("x-roast save-report — pure helpers", async () => {
 describe("x-roast save-report — filesystem", async () => {
   const mod = await import(SAVE);
 
-  it("createReport writes the file once and is idempotent", async () => {
+  it("createReport appends a new numbered report each time", async () => {
     const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "xskills-roast-"));
     try {
       const date = new Date(2026, 0, 5, 9, 7);
       const first = mod.createReport({ dir, slug: "Doc One", type: "analysis", date });
       assert.equal(first.created, true);
+      assert.equal(path.basename(first.path), "E00-critique.md");
       const content = await fsp.readFile(first.path, "utf8");
       assert.match(content, /# Roast — Doc One/);
 
       const second = mod.createReport({ dir, slug: "Doc One", type: "analysis", date });
-      assert.equal(second.created, false);
-      assert.equal(second.path, first.path);
+      assert.equal(second.created, true);
+      assert.equal(path.basename(second.path), "E01-critique.md");
+      assert.equal(await fsp.readFile(first.path, "utf8"), content, "the earlier report is untouched");
     } finally {
       await fsp.rm(dir, { recursive: true, force: true });
     }
@@ -240,7 +249,7 @@ describe("x-roast CLI", async () => {
       assert.equal(res.code, 0);
       const parsed = JSON.parse(res.stdout);
       assert.equal(parsed.created, true);
-      assert.match(parsed.path, /cli-doc\.md$/);
+      assert.match(parsed.path, /E\d{2}-critique\.md$/);
     } finally {
       await fsp.rm(dir, { recursive: true, force: true });
     }

@@ -2,9 +2,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { formatStamp, resolveRunDir, resolveArtifact } from "./shared.js";
 
 export const SKILL = "x-plan";
-export const REPORT_ROOT = ".x-skills/plan";
+export const REPORT_ROOT = ".x-skills/runs";
 export const START_NODE = "intake";
 export const STOPS = ["handoff", "abandon"];
 
@@ -34,7 +35,7 @@ function pad(value) {
 }
 
 export function stamp(now = new Date()) {
-  return `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}-${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  return formatStamp(now);
 }
 
 function gate(pass, expected, actual) {
@@ -48,6 +49,8 @@ function hasSpec(text) {
 export function createState({ slug, goal = null, root = REPORT_ROOT, now = new Date() } = {}) {
   if (!slug || typeof slug !== "string") throw new Error("slug is required");
   const when = now.toISOString();
+  const runDirAbs = resolveRunDir(slug, { now, root });
+  const planAbs = resolveArtifact(runDirAbs, "plan", "md");
   return {
     skill: SKILL,
     slug,
@@ -61,7 +64,8 @@ export function createState({ slug, goal = null, root = REPORT_ROOT, now = new D
     openQuestions: [],
     options: [],
     decision: null,
-    report: path.posix.join(root, `${stamp(now)}-${slug}.md`),
+    runDir: path.relative(process.cwd(), runDirAbs) || runDirAbs,
+    report: path.relative(process.cwd(), planAbs) || planAbs,
     events: [],
   };
 }
@@ -216,7 +220,7 @@ function commandStart(args) {
   if (!args.slug || args.slug === true) throw new Error("--slug is required");
   const root = args.root === true || !args.root ? REPORT_ROOT : args.root;
   const state = createState({ slug: args.slug, goal: args.goal === true ? null : args.goal, root });
-  const dir = state.report.replace(/\.md$/, "");
+  const dir = state.runDir;
   persist(dir, state, { fromIndex: 0, writeReport: true });
   return { dir, state, node: state.node };
 }

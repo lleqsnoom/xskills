@@ -20,7 +20,7 @@ Do not write any code until the spec is approved by the user. Pipeline order: `x
 ## Scenario
 
 The run is a guarded graph. `state.json` is the single source of truth; `memory.md` records every
-event; the spec lands at the legacy path so `x-epic` still finds it.
+event; both sit at the root of the run folder, beside the numbered artifacts.
 
 ```mermaid
 graph LR
@@ -138,8 +138,9 @@ Every spec **must** include a `## Layers` section. Define layers from prototype 
 node <skill>/scripts/scenario.mjs start --slug <topic>
 ```
 
-- Run folder (state + memory): `.x-skills/plan/DD-MM-YYYY-hh:mm-<topic>/` with `state.json` and `memory.md`.
-- Spec report (handoff): `.x-skills/plan/DD-MM-YYYY-hh:mm-<topic>.md` — the path `x-epic` reads.
+- Run folder: `.x-skills/runs/YYYY-MM-DD-hhmm-R<nn>-<topic>/` — one folder per run, holding `state.json`, `memory.md`, and every artifact of the run.
+- Artifacts are numbered `E<nn>-<kind>.md` or `E<nn>-<kind>/` in execution order, so a plain name sort lists the run in the order it was built.
+- Spec report (handoff): `<run folder>/E00-plan.md` — the path `x-epic` reads.
 
 ## Abandon
 

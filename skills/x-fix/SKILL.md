@@ -9,18 +9,18 @@ user-invocable: true
 
 # X-Fix — Resolve Issues Iteratively
 
-**Prerequisites:** Fix plan in `.x-skills/review/` from x-debug (after reproduction + hypothesis testing) or manual creation.
+**Prerequisites:** A fix plan in the run folder under `.x-skills/runs/<stamp>-R<nn>-<slug>/`, from x-debug (`E<nn>-fix-plan.md`), x-review (`E<nn>-review-plan.md`), or manual creation.
 
 ## Workflow
 
-1. Read the most recent file under `.x-skills/review/`.
+1. Read the most recent `E<nn>-fix-plan.md` or `E<nn>-review-plan.md` in the run folder (`.x-skills/runs/<stamp>-R<nn>-<slug>/`). x-debug writes the first kind; x-review writes the second.
 2. Find next unchecked `[ ]` issue (CRITICAL → MAJOR → MINOR).
 3. For each issue:
    - **Reset**: `git checkout -- <file>` for clean baseline
    - Read ±20 lines around reported location
    - Apply fix using `edit` only (never `multiedit`)
    - Run syntax check (`node -c <file>`) and tests
-   - **Verify**: Run `.x-skills/debug/verify-*.js` if available — issue NOT resolved until exit 0
+   - **Verify**: Run the run folder's `E<nn>-verify.js` if available — issue NOT resolved until exit 0
    - Mark `[ ]` → `[x]` in plan file
 4. Print one-line summary per fix. Repeat until all done.
 

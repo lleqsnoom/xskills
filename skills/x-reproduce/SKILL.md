@@ -9,7 +9,7 @@ user-invocable: true
 
 # X-Reproduce — Platform-Aware Reproduction
 
-**Read `.x-skills/debug/triage-brief.md` to determine platform and generate minimal reproducible test case.**
+**Read `<run folder>/E<nn>-triage.md` to determine platform and generate minimal reproducible test case.**
 
 ## Artifact Location
 
@@ -19,12 +19,12 @@ node <path-to-x-reproduce-skill>/scripts/<repro-<platform>.js> '<error descripti
 
 ## Workflow
 
-1. **READ** `.x-skills/debug/triage-brief.md` for the `Platform:` field
+1. **READ** `<run folder>/E<nn>-triage.md` for the `Platform:` field
 2. **SELECT** appropriate template script based on platform:
    - `backend` → `repro-backend.js` (Node.js standalone script using built-in modules)
    - `web` → `repro-web.js` (browser console script or Puppeteer-style repro snippet)
    - `mobile` → `repro-mobile.js` (documented ADB/Logcat steps)
-3. **GENERATE** `.x-skills/debug/repro-<platform>.js` with the template content customized for the specific bug pattern
+3. **GENERATE** `<run folder>/E<nn>-repro-<platform>.js` with the template content customized for the specific bug pattern
 4. **RUN** reproduction: exits 1 when bug is present, exits 0 after fix
 
 ## Platform Templates
@@ -119,4 +119,4 @@ reason* (and 0 once fixed) is a reproduction.
 
 - Unknown platform value → report error to user and ask for re-classification
 - Missing error description → usage message appears, exits 1
-- No `.x-skills/debug/triage-brief.md` found → generate template with placeholder text
+- No `<run folder>/E<nn>-triage.md` found → generate template with placeholder text

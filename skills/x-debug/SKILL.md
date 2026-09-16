@@ -20,8 +20,8 @@ node <path-to>/scripts/analyze.js --error "<user's bug description>" --context .
 ```
 
 This creates:
-- `.x-skills/debug/<session-id>.md` — debug session doc (required for x-fix handoff)
-- `.x-skills/review/debug-*.md` — fix plan (required input for x-fix skill)
+- `<run folder>/E<nn>-debug.md` — debug session doc (required for x-fix handoff)
+- `<run folder>/E<nn>-fix-plan.md` — fix plan (required input for x-fix skill)
 
 **Never skip this step.** It is required even for behavioral bugs with no stack trace (e.g., "SSE event not triggered", "wrong value displayed"). analyze.js will create empty hypothesis lists in that case, but the docs MUST exist before any further work.
 
@@ -33,7 +33,7 @@ node <path-to>/scripts/analyze.js --context . [--session-id my-session]
 node <path-to>/scripts/analyze.js --no-reproduce --error "..."  # skip auto-reproduction
 ```
 
-**Output**: Debug session in `.x-skills/debug/`, fix plan in `.x-skills/review/`.
+**Output**: Debug session and fix plan as `E<nn>-` artifacts in one run folder under `.x-skills/runs/`.
 
 ## Workflow (4 Steps)
 
@@ -44,7 +44,7 @@ Execute `analyze.js` with the bug description. This is mandatory and must comple
 `analyze.js` generates `repro-*.js` for known error patterns. Run it to confirm the error triggers locally. If auto-reproduction fails, write one manually — never proceed without it.
 
 ### 2. Hypothesize & Test
-The script lists hypotheses ranked by likelihood. For each, run the proposed test and mark `[ ]` → `[x] Confirmed` or `[ ] Rejected` in `.x-skills/debug/`. Eliminate until one cause remains.
+The script lists hypotheses ranked by likelihood. For each, run the proposed test and mark `[ ]` → `[x] Confirmed` or `[ ] Rejected` in the run's `E<nn>-debug.md`. Eliminate until one cause remains.
 
 ### 3. Fix Root Cause (NOT Silence)
 Apply a targeted fix that eliminates the error condition:
@@ -54,11 +54,11 @@ Apply a targeted fix that eliminates the error condition:
 - **DO NOT** use `console.error` as a substitute for fixing
 
 ### 4. Verify
-Run `.x-skills/debug/verify-*.js` after applying the fix. Issue is NOT resolved until verification exits 0. If it fails, go back to Step 2.
+Run the run folder's `E<nn>-verify.js` after applying the fix. Issue is NOT resolved until verification exits 0. If it fails, go back to Step 2.
 
 ## Related Skills
 
-- **x-fix** — Reads fix plans from `.x-skills/review/` and applies fixes with verification
+- **x-fix** — Reads fix plans from the run folder and applies fixes with verification
 - **x-review** — Static code quality analysis (complexity, SOLID violations), not runtime errors
 
 ## Definition of Done

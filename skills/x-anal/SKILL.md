@@ -20,7 +20,7 @@ Guide the user through understanding their problem, formulating a thesis with ev
 ## Scenario
 
 The run is a guarded graph. `state.json` is the source of truth; `memory.md` records every event;
-the analysis lands at `.x-skills/anal/analysis-<slug>.md`.
+the analysis lands as `E<nn>-analysis.md` inside the run folder.
 
 ```mermaid
 graph LR
@@ -102,7 +102,7 @@ When asking for missing information, suggest concrete types:
 
 ### Phase 3: Analysis & Thesis
 
-Once you have enough information (or the user confirms they want to proceed with what's available), produce an analysis in `.x-skills/anal/analysis-<slug>.md` (created by `scripts/scenario.mjs start`):
+Once you have enough information (or the user confirms they want to proceed with what's available), produce an analysis as `<run folder>/E<nn>-analysis.md` (created by `scripts/scenario.mjs start`):
 
 ```markdown
 # Analysis — <slug>
@@ -165,7 +165,7 @@ Based on the analysis scope and user decision, present the routes as a `single` 
 | Needs more investigation | Use `x-investigate` + `x-reproduce` pipeline | Hand off with full analysis as context |
 | Not actionable right now | Note for later | Save analysis; don't force a decision |
 
-When routing to another skill, pass `.x-skills/anal/analysis-<slug>.md` as the input context so the downstream skill has full background.
+When routing to another skill, pass `<run folder>/E<nn>-analysis.md` as the input context so the downstream skill has full background.
 
 ## Constraints (MANIFESTO)
 

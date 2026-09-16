@@ -135,24 +135,35 @@ describe("x-humanize save-report — pure helpers", async () => {
     assert.equal(mod.slugify(""), "document");
   });
 
-  it("timestamp uses DD-MM-YYYY-hh:mm", () => {
-    assert.equal(mod.timestamp(new Date(2026, 0, 5, 9, 7)), "05-01-2026-09:07");
+  it("timestamp uses YYYY-MM-DD-hhmm", () => {
+    assert.equal(mod.timestamp(new Date(2026, 0, 5, 9, 7)), "2026-01-05-0907");
   });
 
-  it("reportPath combines directory, timestamp, and slug", () => {
-    assert.equal(mod.reportPath("out", "My Doc", new Date(2026, 0, 5, 9, 7)), path.join("out", "05-01-2026-09:07-my-doc.md"));
+  it("reportPath numbers the humanize artifact in the run folder", async () => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "xskills-humanize-path-"));
+    try {
+      assert.equal(mod.reportPath(dir), path.join(dir, "E00-humanize.md"));
+      await fsp.writeFile(path.join(dir, "E00-humanize.md"), "");
+      assert.equal(mod.reportPath(dir), path.join(dir, "E01-humanize.md"));
+    } finally {
+      await fsp.rm(dir, { recursive: true, force: true });
+    }
   });
 
-  it("createReport writes once and is idempotent", async () => {
+  it("createReport appends a new numbered report each time", async () => {
     const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "xskills-humanize-"));
     try {
       const date = new Date(2026, 0, 5, 9, 7);
       const first = mod.createReport({ dir, slug: "Doc One", level: "B2", date });
       assert.equal(first.created, true);
+      assert.equal(path.basename(first.path), "E00-humanize.md");
       const content = await fsp.readFile(first.path, "utf8");
       assert.match(content, /# Humanize — Doc One/);
+
       const second = mod.createReport({ dir, slug: "Doc One", level: "B2", date });
-      assert.equal(second.created, false);
+      assert.equal(second.created, true);
+      assert.equal(path.basename(second.path), "E01-humanize.md");
+      assert.equal(await fsp.readFile(first.path, "utf8"), content, "the earlier report is untouched");
     } finally {
       await fsp.rm(dir, { recursive: true, force: true });
     }
@@ -244,7 +255,7 @@ describe("x-humanize CLI", async () => {
       assert.equal(res.code, 0);
       const parsed = JSON.parse(res.stdout);
       assert.equal(parsed.created, true);
-      assert.match(parsed.path, /cli-doc\.md$/);
+      assert.match(parsed.path, /E\d{2}-humanize\.md$/);
     } finally {
       await fsp.rm(dir, { recursive: true, force: true });
     }

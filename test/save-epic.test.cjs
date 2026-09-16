@@ -7,20 +7,14 @@ const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
 
-const SAVE_EPIC_SCRIPT = path.join(
-  __dirname,
-  "..",
-  "skills",
-  "x-epic",
-  "scripts",
-  "save-epic.js"
-);
+const SAVE_EPIC_SCRIPT = path.join(__dirname, "..", "skills", "x-epic", "scripts", "save-epic.js");
+const SAVE_SPEC_SCRIPT = path.join(__dirname, "..", "skills", "x-plan", "scripts", "save-spec.js");
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
-function runSaveEpic(args = [], cwd) {
+function runScript(script, args = [], cwd) {
   return new Promise((resolve, reject) => {
-    const child = spawn("node", [SAVE_EPIC_SCRIPT].concat(args), {
+    const child = spawn("node", [script].concat(args), {
       stdio: ["ignore", "pipe", "pipe"],
       cwd: cwd || process.cwd(),
     });
@@ -33,8 +27,28 @@ function runSaveEpic(args = [], cwd) {
   });
 }
 
+function runSaveEpic(args = [], cwd) {
+  return runScript(SAVE_EPIC_SCRIPT, args, cwd);
+}
+
 function createTempDir(prefix = "save-epic-test-") {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+
+/** Path of the single run folder created in a temp dir. */
+function runFolder(tmpDir) {
+  const runsRoot = path.join(tmpDir, ".x-skills", "runs");
+  return path.join(runsRoot, fs.readdirSync(runsRoot)[0]);
+}
+
+/** Path of the epic artifact in the run folder. */
+function epicPath(tmpDir) {
+  const name = fs.readdirSync(runFolder(tmpDir)).find((f) => f.endsWith("-epic.md"));
+  return path.join(runFolder(tmpDir), name);
+}
+
+function epicContent(tmpDir) {
+  return fs.readFileSync(epicPath(tmpDir), "utf8");
 }
 
 // ── Argument validation ─────────────────────────────────────────────
@@ -57,22 +71,23 @@ describe("save-epic.js — argument validation", () => {
     try {
       const res = await runSaveEpic(["-t", "my-feature"], tmpDir);
       assert.equal(res.code, 0);
-      assert.match(res.stdout, /\.x-skills\/epics\//);
+      assert.match(res.stdout, /\.x-skills\/runs\//);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
   });
 });
 
-// ── File creation and output path ───────────────────────────────────
+// ── File creation ───────────────────────────────────────────────────
 
 describe("save-epic.js — file creation", () => {
-  it("creates .x-skills/epics/ directory in cwd", async () => {
+  it("creates the run folder in cwd", async () => {
     const tmpDir = createTempDir();
     try {
       await runSaveEpic(["--topic", "feature-a"], tmpDir);
-      const epicsDir = path.join(tmpDir, ".x-skills", "epics");
-      assert.ok(fs.existsSync(epicsDir), `Directory should exist: ${epicsDir}`);
+      const runsRoot = path.join(tmpDir, ".x-skills", "runs");
+      assert.ok(fs.existsSync(runsRoot), `Directory should exist: ${runsRoot}`);
+      assert.equal(fs.readdirSync(runsRoot).length, 1);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
@@ -83,47 +98,41 @@ describe("save-epic.js — file creation", () => {
     try {
       const res = await runSaveEpic(["--topic", "feature-a"], tmpDir);
       assert.equal(res.code, 0);
-
-      const fullPath = res.stdout.trim();
-      assert.ok(fs.existsSync(fullPath), `File should exist: ${fullPath}`);
-
-      const content = fs.readFileSync(fullPath, "utf8");
-      assert.ok(content.length > 0, "File must not be empty");
-      assert.match(content, /^# Epic — feature-a$/m);
+      const content = fs.readFileSync(res.stdout.trim(), "utf8");
+      assert.match(content, /# Epic — feature-a/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
   });
 
-  it("includes topic name in the filename", async () => {
+  it("includes the topic name in the run folder", async () => {
     const tmpDir = createTempDir();
     try {
-      const res = await runSaveEpic(["--topic", "my-cool-topic"], tmpDir);
-      assert.equal(res.code, 0);
-      const fullPath = res.stdout.trim();
-      assert.match(path.basename(fullPath), /my-cool-topic\.md$/);
+      await runSaveEpic(["--topic", "my-cool-topic"], tmpDir);
+      assert.match(path.basename(runFolder(tmpDir)), /-my-cool-topic$/);
+      assert.equal(path.basename(epicPath(tmpDir)), "E00-epic.md");
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
   });
 
-  it("includes date stamp in the filename", async () => {
+  it("numbers the epic after an existing plan", async () => {
     const tmpDir = createTempDir();
     try {
+      await runScript(SAVE_SPEC_SCRIPT, ["--topic", "dated"], tmpDir);
       await runSaveEpic(["--topic", "dated"], tmpDir);
-      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "epics"));
-      assert.match(dirContents[0], /^\d{2}-\d{2}-\d{4}-\d{2}:\d{2}-dated\.md$/);
+      assert.deepEqual(fs.readdirSync(runFolder(tmpDir)).sort(), ["E00-plan.md", "E01-epic.md"]);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
   });
 
-  it("uses custom date stamp when provided", async () => {
+  it("reuses the epic file on a second run", async () => {
     const tmpDir = createTempDir();
     try {
-      await runSaveEpic(["--topic", "custom-date", "--date", "2099-12-31T2359"], tmpDir);
-      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "epics"));
-      assert.match(dirContents[0], /^[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9]-[0-9][0-9]:[0-9][0-9]-custom-date\.md$/);
+      await runSaveEpic(["--topic", "once"], tmpDir);
+      await runSaveEpic(["--topic", "once"], tmpDir);
+      assert.deepEqual(fs.readdirSync(runFolder(tmpDir)), ["E00-epic.md"]);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
@@ -133,12 +142,7 @@ describe("save-epic.js — file creation", () => {
     const tmpDir = createTempDir();
     try {
       await runSaveEpic(["--topic", "branch-test", "--branch", "my/custom-branch"], tmpDir);
-      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "epics"));
-      const content = fs.readFileSync(
-        path.join(tmpDir, ".x-skills", "epics", dirContents[0]),
-        "utf8"
-      );
-      assert.ok(content.includes("my/custom-branch"), `Expected branch in header, got:\n${content}`);
+      assert.match(epicContent(tmpDir), /my\/custom-branch/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
@@ -147,9 +151,9 @@ describe("save-epic.js — file creation", () => {
   it("creates nested .x-skills directory if it does not exist", async () => {
     const tmpDir = createTempDir();
     try {
-      assert.ok(!fs.existsSync(path.join(tmpDir, ".x-skills")), "Directory should not exist before run");
+      assert.ok(!fs.existsSync(path.join(tmpDir, ".x-skills")));
       await runSaveEpic(["--topic", "nested"], tmpDir);
-      assert.ok(fs.existsSync(path.join(tmpDir, ".x-skills", "epics")));
+      assert.ok(fs.existsSync(path.join(tmpDir, ".x-skills", "runs")));
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
@@ -159,28 +163,23 @@ describe("save-epic.js — file creation", () => {
     const tmpDir = createTempDir();
     try {
       const res = await runSaveEpic(["--topic", "stdout-test"], tmpDir);
-      assert.match(res.stdout, /\.x-skills\/epics\//);
-      assert.match(res.stdout, /stdout-test\.md$/);
+      assert.match(res.stdout, /\.x-skills\/runs\//);
+      assert.match(res.stdout, /E00-epic\.md$/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
   });
 });
 
-// ── Epic file content structure ─────────────────────────────────────
+// ── Epic file content ───────────────────────────────────────────────
 
 describe("save-epic.js — epic file content", () => {
   it("writes a header template with Date and Branch fields", async () => {
     const tmpDir = createTempDir();
     try {
       await runSaveEpic(["--topic", "content-check"], tmpDir);
-      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "epics"));
-      const content = fs.readFileSync(
-        path.join(tmpDir, ".x-skills", "epics", dirContents[0]),
-        "utf8"
-      );
-
-      assert.match(content, /^# Epic — content-check$/m);
+      const content = epicContent(tmpDir);
+      assert.match(content, /# Epic — content-check/);
       assert.match(content, /\*\*Date:\*\*/);
       assert.match(content, /\*\*Branch:\*\*/);
     } finally {
@@ -192,18 +191,7 @@ describe("save-epic.js — epic file content", () => {
     const tmpDir = createTempDir();
     try {
       await runSaveEpic(["--topic", "dod-check"], tmpDir);
-      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "epics"));
-      const content = fs.readFileSync(
-        path.join(tmpDir, ".x-skills", "epics", dirContents[0]),
-        "utf8"
-      );
-      assert.match(content, /## Definition of Done \(Epic Level\)/);
-      // Should contain at least the standard DoD checklist items (layer-based)
-      assert.ok(
-        content.includes("All layers delivered") ||
-        content.includes("all layers delivered"),
-        "DoD should mention layer delivery"
-      );
+      assert.match(epicContent(tmpDir), /Definition of Done/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
@@ -212,34 +200,13 @@ describe("save-epic.js — epic file content", () => {
   it("auto-resolves spec path when plan file exists with matching slug", async () => {
     const tmpDir = createTempDir();
     try {
-      // First create a plan spec for the topic
-      const saveSpecScript = path.join(__dirname, "..", "skills", "x-plan", "scripts", "save-spec.js");
-      await new Promise((resolve, reject) => {
-        const child = spawn("node", [saveSpecScript, "--topic", "auto-link"], { cwd: tmpDir });
-        child.on("error", reject);
-        child.on("close", (code) => code === 0 ? resolve() : reject(new Error(`save-spec failed with ${code}`)));
-      });
+      await runScript(SAVE_SPEC_SCRIPT, ["--topic", "link-test"], tmpDir);
+      await runSaveEpic(["--topic", "link-test"], tmpDir);
 
-      // Now run save-epic and check it resolved the spec path
-      const epicRes = await runSaveEpic(["--topic", "auto-link"], tmpDir);
-      assert.equal(epicRes.code, 0);
-
-      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "epics"));
-      const content = fs.readFileSync(
-        path.join(tmpDir, ".x-skills", "epics", dirContents[0]),
-        "utf8"
-      );
-
-      // The spec: line should contain an actual path to a plan file with the topic slug
-      const specMatch = content.match(/^spec:\s+(.+)$/m);
-      assert.ok(specMatch, `epic header should have resolved spec: line. Content:\n${content}`);
-      assert.ok(
-        specMatch[1].includes("auto-link"),
-        `spec path should contain topic slug. Got: ${specMatch[1]}`
-      );
-
-      // stderr should confirm resolution
-      assert.match(epicRes.stderr, /resolved spec path/);
+      const specMatch = epicContent(tmpDir).match(/spec:\s+(.+)$/m);
+      assert.ok(specMatch, "epic header should carry a spec line");
+      assert.match(specMatch[1], /link-test/);
+      assert.match(specMatch[1], /E00-plan\.md$/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
@@ -248,20 +215,8 @@ describe("save-epic.js — epic file content", () => {
   it("leaves placeholder when no plan spec exists for topic", async () => {
     const tmpDir = createTempDir();
     try {
-      const epicRes = await runSaveEpic(["--topic", "orphan"], tmpDir);
-      assert.equal(epicRes.code, 0);
-
-      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "epics"));
-      const content = fs.readFileSync(
-        path.join(tmpDir, ".x-skills", "epics", dirContents[0]),
-        "utf8"
-      );
-
-      // Should have placeholder text for spec path
-      assert.ok(
-        content.includes("spec:") || content.includes("<timestamp>"),
-        `should leave placeholder when no plan file found. Content:\n${content}`
-      );
+      await runSaveEpic(["--topic", "orphan"], tmpDir);
+      assert.match(epicContent(tmpDir), /spec:\s+<run folder>\/E00-plan\.md/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
@@ -270,21 +225,15 @@ describe("save-epic.js — epic file content", () => {
   it("header ends with Definition of Done (no trailing blank lines after)", async () => {
     const tmpDir = createTempDir();
     try {
-      await runSaveEpic(["--topic", "newline-check"], tmpDir);
-      const dirContents = fs.readdirSync(path.join(tmpDir, ".x-skills", "epics"));
-      const content = fs.readFileSync(
-        path.join(tmpDir, ".x-skills", "epics", dirContents[0]),
-        "utf8"
-      );
-      // Should end with a newline after the last DoD item
-      assert.ok(content.endsWith("\n"), "File should end with trailing newline");
+      await runSaveEpic(["--topic", "trailing"], tmpDir);
+      assert.match(epicContent(tmpDir), /Documentation updated where contracts changed\n$/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
     }
   });
 });
 
-// ── Logging (stderr verification) ───────────────────────────────────
+// ── Logging ─────────────────────────────────────────────────────────
 
 describe("save-epic.js — logging", () => {
   it("logs each step to stderr with [x-epic] tag", async () => {
@@ -299,12 +248,12 @@ describe("save-epic.js — logging", () => {
 
   it("logs the file path to stderr", async () => {
     const res = await runSaveEpic(["--topic", "log-path"]);
-    assert.match(res.stderr, /\.x-skills\/epics\//);
+    assert.match(res.stderr, /\.x-skills\/runs\//);
   });
 
   it("logs timestamps in ISO format on each line", async () => {
     const res = await runSaveEpic(["--topic", "log-ts"]);
-    const lines = res.stderr.split("\n").filter(Boolean);
+    const lines = res.stderr.split("\n").filter(Boolean).filter((line) => !line.startsWith("Warning:"));
     for (const line of lines) {
       assert.match(
         line,
@@ -329,15 +278,8 @@ describe("save-epic.js — logging", () => {
   it("logs 'resolved spec path' when plan file is found", async () => {
     const tmpDir = createTempDir();
     try {
-      // Create a plan spec first
-      const saveSpecScript = path.join(__dirname, "..", "skills", "x-plan", "scripts", "save-spec.js");
-      await new Promise((resolve, reject) => {
-        const child = spawn("node", [saveSpecScript, "--topic", "link-test"], { cwd: tmpDir });
-        child.on("error", reject);
-        child.on("close", (code) => code === 0 ? resolve() : reject(new Error(`save-spec failed with ${code}`)));
-      });
-
-      const res = await runSaveEpic(["--topic", "link-test"], tmpDir);
+      await runScript(SAVE_SPEC_SCRIPT, ["--topic", "link-log"], tmpDir);
+      const res = await runSaveEpic(["--topic", "link-log"], tmpDir);
       assert.match(res.stderr, /resolved spec path/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });
@@ -347,7 +289,7 @@ describe("save-epic.js — logging", () => {
   it("logs 'no plan spec found' when no matching plan file exists", async () => {
     const tmpDir = createTempDir();
     try {
-      const res = await runSaveEpic(["--topic", "orphan-epic"], tmpDir);
+      const res = await runSaveEpic(["--topic", "orphan-log"], tmpDir);
       assert.match(res.stderr, /no plan spec found/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true });

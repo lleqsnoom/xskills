@@ -31,7 +31,8 @@ describe("x-api-swagger save-spec.js", () => {
       const res = await run(["--topic", "auth"], dir);
       assert.equal(res.code, 0);
       assert.ok(path.isAbsolute(res.stdout), "stdout should be an absolute path");
-      assert.ok(res.stdout.endsWith("auth-openapi.yaml"), "filename should be <topic>-openapi.yaml");
+      assert.ok(path.basename(res.stdout).endsWith("-api-spec.yaml"), "filename should be E<nn>-api-spec.yaml");
+      assert.match(res.stdout, /\.x-skills\/runs\/[^/]+-auth\/E\d{2}-api-spec\.yaml$/);
       assert.ok(fs.existsSync(res.stdout), "spec file should exist");
       const content = fs.readFileSync(res.stdout, "utf8");
       assert.match(content, /# OpenAPI — auth/);

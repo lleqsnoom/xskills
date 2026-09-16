@@ -3,12 +3,85 @@
 
 /**
  * x-debug analyzer — evidence-based root cause analysis.
- * Usage: node analyze.js --error "msg" [--file src.js] [--no-reproduce]
+ * Usage: node analyze.js --error "msg" [--file src.js] [--slug topic] [--no-reproduce]
+ * Writes every artifact into .x-skills/runs/<stamp>-R<nn>-<slug>/.
  */
 
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
+
+// ── Run folders ──────────────────────────────────────────────────────
+// #region run-folder
+// Two digits, not more: a wider counter would sort E100 before E99.
+const RUNS_ROOT = ".x-skills/runs";
+const MAX_COUNTER = 99;
+
+function padRunCounter(value) {
+  return String(value).padStart(2, "0");
+}
+
+function runFolders(rootAbs, slug) {
+  if (!fs.existsSync(rootAbs)) return [];
+  return fs
+    .readdirSync(rootAbs)
+    .filter((name) => name.endsWith(`-${slug}`))
+    .sort();
+}
+
+function highestRun(rootAbs) {
+  if (!fs.existsSync(rootAbs)) return 0;
+  return fs.readdirSync(rootAbs).reduce((max, name) => {
+    const match = name.match(/-R(\d+)-/);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+}
+
+function mintRunDir(rootAbs, slug, now) {
+  const run = highestRun(rootAbs) + 1;
+  if (run > MAX_COUNTER) throw new Error(`run counter would exceed R${MAX_COUNTER}`);
+  const stamp = `${now.getFullYear()}-${padRunCounter(now.getMonth() + 1)}-${padRunCounter(now.getDate())}-${padRunCounter(now.getHours())}${padRunCounter(now.getMinutes())}`;
+  const dir = path.join(rootAbs, `${stamp}-R${padRunCounter(run)}-${slug}`);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/**
+ * Return the run folder for a slug: the folder holding `marker` when given,
+ * the sole match when only one exists, or a newly minted R<nn>.
+ */
+function resolveRunDir(slug, { root = RUNS_ROOT, now = new Date(), marker = null } = {}) {
+  if (!slug || typeof slug !== "string") throw new Error("slug is required");
+  const rootAbs = path.resolve(root);
+  fs.mkdirSync(rootAbs, { recursive: true });
+
+  const folders = runFolders(rootAbs, slug);
+  if (marker) {
+    const holding = folders.filter((name) => fs.existsSync(path.join(rootAbs, name, marker)));
+    if (holding.length) return path.join(rootAbs, holding[holding.length - 1]);
+  }
+  if (folders.length > 1) {
+    throw new Error(`${folders.length} runs match "${slug}"; resolve the run explicitly`);
+  }
+  if (folders.length) return path.join(rootAbs, folders[0]);
+  return mintRunDir(rootAbs, slug, now);
+}
+
+function nextE(runDir) {
+  const used = fs.existsSync(runDir)
+    ? fs
+        .readdirSync(runDir)
+        .map((name) => {
+          const match = name.match(/^E(\d{2})-/);
+          return match ? Number(match[1]) : null;
+        })
+        .filter((value) => value !== null)
+    : [];
+  const next = used.length ? Math.max(...used) + 1 : 0;
+  if (next > MAX_COUNTER) throw new Error(`artifact counter would exceed E${MAX_COUNTER}`);
+  return `E${String(next).padStart(2, "0")}`;
+}
+// #endregion run-folder
 
 const PATTERNS = [
   [/Cannot read propert(ies|y) '(\w+)' of undefined/, "undefined-reference", "Accessing property on undefined value"],
@@ -36,16 +109,17 @@ const REPRO_TEMPLATES = {
 
 function parseArgs(argv) {
   const args = argv.slice(2);
-  let errorText = null, targetFile = null, contextDir = ".", sessionId = null, reproduce = true;
+  let errorText = null, targetFile = null, contextDir = ".", sessionId = null, slug = null, reproduce = true;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--error" && i + 1 < args.length) errorText = args[++i];
     else if (args[i] === "--file" && i + 1 < args.length) targetFile = args[++i];
     else if (args[i] === "--context" && i + 1 < args.length) contextDir = args[++i];
     else if (args[i] === "--session-id" && i + 1 < args.length) sessionId = args[++i];
+    else if (args[i] === "--slug" && i + 1 < args.length) slug = args[++i];
     else if (args[i] === "--no-reproduce") reproduce = false;
     else if (!args[i].startsWith("--")) targetFile = args[i];
   }
-  return { errorText, targetFile, contextDir, sessionId, reproduce };
+  return { errorText, targetFile, contextDir, sessionId, slug, reproduce };
 }
 
 function matchPatterns(errorText) {
@@ -56,9 +130,8 @@ function matchPatterns(errorText) {
   return matches;
 }
 
-function reproduceLocally(errorText, targetFile) {
-  const debugDir = path.join(process.cwd(), ".x-skills", "debug");
-  fs.mkdirSync(debugDir, { recursive: true });
+function reproduceLocally(errorText, targetFile, runDir) {
+  fs.mkdirSync(runDir, { recursive: true });
 
   const matched = matchPatterns(errorText)[0];
   if (!matched) return null;
@@ -69,7 +142,7 @@ function reproduceLocally(errorText, targetFile) {
     return null;
   }
 
-  const reproPath = path.join(debugDir, "repro-" + Date.now() + ".js");
+  const reproPath = path.join(runDir, nextE(runDir) + "-repro-debug.js");
   const lines = ["// Reproduction for: " + errorText].concat(template).concat(["try { /* run */ } catch(e) { process.exit(1); }"]);
   fs.writeFileSync(reproPath, lines.join("\n"));
 
@@ -77,7 +150,7 @@ function reproduceLocally(errorText, targetFile) {
     execFileSync(process.execPath, [reproPath], { timeout: 10000, stdio: ["ignore", "pipe", "pipe"] });
     return null; // didn't fail as expected
   } catch (_e) {
-    const verifyPath = path.join(debugDir, "verify-" + Date.now() + ".js");
+    const verifyPath = path.join(runDir, nextE(runDir) + "-verify.js");
     const verifyCode = [
       "const { execSync } = require('child_process');",
       "try {",
@@ -90,11 +163,11 @@ function reproduceLocally(errorText, targetFile) {
   }
 }
 
-function generateSession(errorText, matches, targetFile, sessionId) {
-  const sessionDir = path.join(process.cwd(), ".x-skills", "debug");
-  fs.mkdirSync(sessionDir, { recursive: true });
-  const fileName = sessionId || "debug-" + Date.now();
-  const filePath = path.join(sessionDir, fileName + ".md");
+function generateSession(errorText, matches, targetFile, sessionId, runDir) {
+  fs.mkdirSync(runDir, { recursive: true });
+  const prefix = nextE(runDir);
+  const fileName = `${prefix}-debug`;
+  const filePath = path.join(runDir, fileName + ".md");
 
   let md = "# Debug Session\n\n**Error:** `" + errorText + "`\n";
   if (targetFile) md += "**File:** " + path.relative(process.cwd(), targetFile) + "\n";
@@ -106,13 +179,10 @@ function generateSession(errorText, matches, targetFile, sessionId) {
   return { sessionId: fileName, reportPath: filePath, errorText, matches };
 }
 
-function exportFixPlan(errorText, matches, targetFile, sessionId, confirmed) {
+function exportFixPlan(errorText, matches, targetFile, sessionId, confirmed, runDir) {
   if (confirmed === undefined) confirmed = false;
-  const reviewDir = path.join(process.cwd(), ".x-skills", "review");
-  fs.mkdirSync(reviewDir, { recursive: true });
-  const ts = new Date();
-  const dateStr = String(ts.getDate()).padStart(2,'0') + "-" + String(ts.getMonth()+1).padStart(2,'0') + "-" + ts.getFullYear() + "-" + String(ts.getHours()).padStart(2,'0') + ":" + String(ts.getMinutes()).padStart(2,'0');
-  const filePath = path.join(reviewDir, "debug-" + (sessionId || dateStr.replace(/[:\s]/g,'-')) + ".md");
+  fs.mkdirSync(runDir, { recursive: true });
+  const filePath = path.join(runDir, nextE(runDir) + "-fix-plan.md");
 
   let plan = "# Fix Plan\n\n**Error:** `" + errorText + "`\n\n";
   if (!confirmed) {
@@ -141,6 +211,7 @@ async function main() {
   if (!errorText) { console.error("Error: --error required"); process.exit(1); }
 
   const matches = matchPatterns(errorText);
+  const runDir = resolveRunDir(args.slug || "debug");
   let targetResolved = targetFile ? path.resolve(targetFile) : null;
   if (!targetResolved && contextDir) {
     for (const c of ["index.js","app.js","server.js","main.js"]) {
@@ -152,7 +223,7 @@ async function main() {
   let reproResult = null;
   if (reproduce !== false) {
     process.stderr.write("\n[Step 1/3] Attempting local reproduction...\n\n");
-    reproResult = reproduceLocally(errorText, targetResolved);
+    reproResult = reproduceLocally(errorText, targetResolved, runDir);
     if (reproResult) {
       process.stderr.write("Reproduction: " + reproResult.category + "\n");
       process.stderr.write("Verify script: " + reproResult.verificationPath + "\n");
@@ -162,8 +233,8 @@ async function main() {
     }
   }
 
-  const session = generateSession(errorText, matches, targetResolved, sessionId);
-  const fixPlan = exportFixPlan(errorText, matches, targetResolved, sessionId, false);
+  const session = generateSession(errorText, matches, targetResolved, sessionId, runDir);
+  const fixPlan = exportFixPlan(errorText, matches, targetResolved, sessionId, false, runDir);
 
   console.log(JSON.stringify(Object.assign({}, session, { fixPlanPath: fixPlan.filePath, rootCauseConfirmed: false, reproduction: reproResult }), null, 2));
   process.stderr.write("\nDebug session: " + session.reportPath + "\nFix plan: " + fixPlan.filePath + "\n");

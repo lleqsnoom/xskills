@@ -149,7 +149,7 @@ node <skill>/scripts/state.mjs start \
   --metric criteria_coverage --evaluator agent --criteria criteria.md \
   --candidates candidates.md --cap 12
 ```
-Creates `.x-skills/research/<ts>-<slug>/` with `state.json`, `memory.md`,
+Creates `<run folder>/E<nn>-research/` with `state.json`, `memory.md`,
 `research.md`, `research_log.md`, `results.tsv`, and prints the first action. For
 the agent mode `--target` defaults to `1` and `--direction` to `maximize`.
 `--candidates <file|a,b,c>` requires at least 3 candidate changes. Completion:
@@ -229,7 +229,7 @@ host, its permission and approval gates still apply on every iteration.
 <what was held as the best state>
 
 ## Trail
-- .x-skills/research/<dir>/state.json · research.md · research_log.md · results.tsv · final_report.md
+- <run folder>/E<nn>-research/state.json · research.md · research_log.md · results.tsv · final_report.md
 ```
 
 ## Next steps — which skill to use

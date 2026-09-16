@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 
 /**
- * Create .x-skills/tasks/<timestamp>-<epic>/ staging directory.
+ * Create .x-skills/runs/<stamp>-R<nn>-<epic>/E02-tasks/ staging directory.
  * Auto-finds the matching epic by topic slug for logging.
  * Usage: node save-tasks.js --epic <slug> 
  * Output (stdout): path to the created tasks directory.
  */
 
+const fs = require("node:fs");
 const path = require("node:path");
 const shared = require("./shared");
 
@@ -23,11 +24,10 @@ function main() {
   }
 
   const slug = shared.sanitizeSlug(args.epic);
-  const date = shared.getTimestamp();
 
-  // Auto-resolve the epic file path from disk (for logging)
-  const epicFullPath = shared.findFileByTopic(".x-skills/epics", slug);
-  const epicPath = epicFullPath ? path.relative(process.cwd(), epicFullPath) : null;
+  const runDir = shared.resolveRunDir(slug);
+  const epicFullPath = shared.resolveArtifact(runDir, "epic", "md");
+  const epicPath = fs.existsSync(epicFullPath) ? path.relative(process.cwd(), epicFullPath) : null;
 
   if (epicPath) {
     shared.log("x-decompose", `resolved epic path: ${epicPath}`);
@@ -35,7 +35,7 @@ function main() {
     shared.log("x-decompose", "no epic file found for slug");
   }
 
-  const taskDir = path.resolve(".x-skills/tasks", `${date}-${slug}`);
+  const taskDir = shared.resolveArtifact(runDir, "tasks", "");
 
   try {
     shared.ensureDir(taskDir);

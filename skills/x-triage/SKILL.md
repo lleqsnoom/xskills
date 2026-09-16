@@ -1,6 +1,6 @@
 ---
 name: x-triage
-description: Structured intake conversation — ask targeted questions to classify a bug's platform, type, and evidence before touching any tools. Outputs .x-skills/debug/triage-brief.md.
+description: Structured intake conversation — ask targeted questions to classify a bug's platform, type, and evidence before touching any tools. Outputs <run folder>/E<nn>-triage.md.
 version: 1.0.0
 author: Community
 tags: [triage, classification, debugging, intake, diagnostic]
@@ -60,7 +60,7 @@ Ask a `single` panel: "Does it happen every time, or only sometimes?", with thes
 
 ### 4. Write Triage Brief
 
-When all fields are populated, write `.x-skills/debug/triage-brief.md`:
+When all fields are populated, write `<run folder>/E<nn>-triage.md`:
 
 ```markdown
 # Triage Brief — <session-id>
