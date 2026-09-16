@@ -62,14 +62,30 @@ jobs:
           echo "type=$BUMP_TYPE" >> "$GITHUB_OUTPUT"
           echo "::notice::Commit analysis suggests: $BUMP_TYPE"
 
-      # Step 2: Get authoritative latest version from npm (not git tags)
-      - name: Get latest version from npm registry
+      # Step 2: Work out the version to bump from.
+      # npm is authoritative, but its read replica lags: a release published a
+      # minute ago can still report the version before it. Two merges in quick
+      # succession then both compute the same next version and the second gets a
+      # 403 for publishing over an existing one. The newest git tag cannot lag,
+      # so the base is whichever is higher.
+      - name: Get latest version from npm registry and git tags
         id: npm-latest
         run: |
           PACKAGE_NAME=$(node -p "require('./package.json').name")
           LATEST_NPM=$(npm view "$PACKAGE_NAME" version 2>/dev/null || echo "0.0.0")
-          echo "version=$LATEST_NPM" >> "$GITHUB_OUTPUT"
-          echo "::notice::Latest on npm: $LATEST_NPM"
+          LATEST_TAG=$(git tag --list 'v*' | sort -V | tail -1 | sed 's/^v//')
+          BASE=$(node -e '
+            const [a, b] = process.argv.slice(1);
+            const parts = (v) => String(v).split(".").map(Number);
+            const cmp = (x, y) => {
+              const [xa, xb, xc] = parts(x);
+              const [ya, yb, yc] = parts(y);
+              return (xa - ya) || (xb - yb) || (xc - yc);
+            };
+            console.log(cmp(a, b) >= 0 ? a : b);
+          ' "$LATEST_NPM" "${LATEST_TAG:-0.0.0}")
+          echo "version=$BASE" >> "$GITHUB_OUTPUT"
+          echo "::notice::Latest on npm: $LATEST_NPM | newest git tag: ${LATEST_TAG:-none} | using: $BASE"
 
       # Step 3: Calculate new version based on npm latest + commit bump type
       - name: Calculate and apply new version
@@ -91,7 +107,14 @@ jobs:
           
           node -e "const p=require('./package.json'); p.version='$NEW_VERSION'; require('fs').writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n')"
           
-          echo "::notice::Bumping from npm $LATEST_NPM → $NEW_VERSION ($BUMP_TYPE)"
+          # Fail here with a clear reason rather than letting npm reject the
+          # publish with a 403 halfway through.
+          if git rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
+            echo "::error::v$NEW_VERSION is already tagged; the version base ($LATEST_NPM) is stale"
+            exit 1
+          fi
+
+          echo "::notice::Bumping from $LATEST_NPM → $NEW_VERSION ($BUMP_TYPE)"
 
       # Step 4: Generate CHANGELOG
       - name: Generate CHANGELOG entry
