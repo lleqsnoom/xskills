@@ -74,9 +74,10 @@ node <skill>/scripts/read-session.mjs --list          # host, id, title, modifie
 ```
 
 `--list` asks every CLI that keeps sessions on this machine, through the adapters in `scripts/hosts/`:
-Crush (its own `session list|show --json`), Codex (`sessions/**/rollout-*.jsonl`) and OpenCode
-(`opencode db` and `opencode export`). Narrow it with `--host crush,codex`. A store that is missing is
-reported as `absent` rather than left out, so an empty list says which CLIs were looked at.
+OpenCode, Claude Code, Codex, Gemini CLI, Cursor, Cline, Roo Code, Kilo Code, Goose, Crush, Qwen Code and
+GitHub Copilot CLI. Narrow it with `--host crush,codex`. A store that is missing is reported as `absent`
+rather than left out, so an empty list says which CLIs were looked at, and a store whose layout the
+adapter does not recognise says so in its warnings instead of reporting nothing to review.
 
 `--session <id>` finds the id in whichever host owns it; `--session last` is Crush's own word for the
 session you are in, and no other CLI defines it. Neither command is guaranteed by a CLI's README — it

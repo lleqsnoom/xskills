@@ -11,14 +11,28 @@ const path = require("node:path");
 const SKILL = path.join(__dirname, "..", "skills", "x-autoreflection", "scripts");
 const COLLECT = path.join(__dirname, "..", "automation", "daily-reflection", "collect-sessions.mjs");
 const HOSTS = path.join(SKILL, "hosts", "index.mjs");
+const GOOSE = path.join(SKILL, "hosts", "goose.mjs");
+const READ = path.join(SKILL, "read-session.mjs");
 
 let mod;
 let hosts;
+let goose;
 
 before(async () => {
   mod = await import(COLLECT);
   hosts = await import(HOSTS);
+  goose = await import(GOOSE);
 });
+
+/** Goose keeps sessions in SQLite, so its tests need the Node built-in; older runtimes skip them. */
+const hasSqlite = (() => {
+  try {
+    require("node:sqlite");
+    return true;
+  } catch {
+    return false;
+  }
+})();
 
 async function withTmpDir(prefix, fn) {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), `xskills-${prefix}-`));
@@ -78,12 +92,23 @@ function stubRun(replies = {}) {
   return run;
 }
 
+/** A home no CLI keeps a store in, so a host is only ever detected through what a test set up. */
+function isolatedEnv(extra = {}) {
+  return {
+    HOME: "/home/nobody",
+    XDG_DATA_HOME: "/home/nobody/.local/share",
+    CODEX_HOME: "/home/nobody/.codex",
+    GOOSE_DATA_DIR: "/home/nobody/goose",
+    ...extra,
+  };
+}
+
 function ctxFor(overrides = {}) {
   return {
     now: new Date("2026-01-02T12:00:00Z"),
     hours: 24,
     projectLookbackHours: 72,
-    env: { HOME: "/home/nobody", XDG_DATA_HOME: "/home/nobody/.local/share" },
+    env: isolatedEnv(),
     run: stubRun(),
     hostOptions: {},
     ...overrides,
@@ -105,7 +130,7 @@ describe("host registry", () => {
   it("registers the CLIs it ships adapters for", () => {
     assert.deepEqual(
       hosts.HOSTS.map((host) => host.id),
-      ["crush", "codex", "opencode"]
+      ["opencode", "claude", "codex", "gemini", "cursor", "cline", "goose", "crush", "qwen", "kilo", "roo", "copilot"]
     );
     for (const host of hosts.HOSTS) {
       assert.equal(typeof host.detect, "function", host.id);
@@ -355,8 +380,381 @@ describe("opencode host adapter", () => {
   });
 });
 
-describe("session discovery", () => {
-  /** `session()` defaults to a year before the context window, so the fresh ones are spelled out. */
+/** Goose keeps sessions in SQLite, so its tests need the built-in driver; older Node skips them. */
+const gooseOnly = hasSqlite ? describe : describe.skip;
+gooseOnly("goose host adapter", () => {
+  const text = (value) => JSON.stringify([{ type: "text", text: value }]);
+  const tool = (id, name, args) =>
+    JSON.stringify([{ type: "toolRequest", id, toolCall: { status: "success", value: { name, arguments: args } } }]);
+  const toolResult = (id, value) =>
+    JSON.stringify([{ type: "toolResponse", id, toolResult: { status: "success", value: { content: [{ type: "text", text: value }] } } }]);
+
+  /** A store shaped like Goose's own: two tables, UTC timestamps, blocks as JSON text. */
+  function gooseStore(dir, { sessions = [], messages = [], tables = true } = {}) {
+    const file = path.join(dir, "sessions", "sessions.db");
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const { DatabaseSync } = require("node:sqlite");
+    const db = new DatabaseSync(file);
+    if (tables) {
+      db.exec(
+        "create table sessions (id text primary key, name text, working_dir text, created_at text, updated_at text, archived_at text)"
+      );
+      db.exec("create table messages (id integer primary key autoincrement, session_id text, role text, content_json text, created_timestamp integer)");
+      const insertSession = db.prepare("insert into sessions (id, name, working_dir, created_at, updated_at, archived_at) values (?, ?, ?, ?, ?, ?)");
+      for (const row of sessions) insertSession.run(row.id, row.name, row.working_dir, row.created_at, row.updated_at, row.archived_at ?? null);
+      const insertMessage = db.prepare("insert into messages (session_id, role, content_json, created_timestamp) values (?, ?, ?, ?)");
+      for (const row of messages) insertMessage.run(row.session_id, row.role, row.content_json, row.created_timestamp);
+    } else {
+      db.exec("create table unrelated (id text)");
+    }
+    db.close();
+    return file;
+  }
+
+  it("reads the store's UTC timestamps as UTC, not as local time", () => {
+    // Goose writes `YYYY-MM-DD HH:MM:SS` UTC; read as local, a 24h window is off by the offset.
+    assert.equal(goose.parseUtc("2026-06-12 06:29:51"), "2026-06-12T06:29:51.000Z");
+    assert.equal(goose.parseUtc(""), null);
+    assert.equal(goose.parseUtc(null), null);
+  });
+
+  it("lists live sessions with their directory, and leaves archived ones out", async () => {
+    await withTmpDir("goose", async (dir) => {
+      gooseStore(dir, {
+        sessions: [
+          { id: "20260612_9", name: "Add Superpowers", working_dir: "/work/one", created_at: "2026-06-12 06:29:51", updated_at: "2026-06-12 06:44:00" },
+          { id: "20260612_8", name: "Old chat", working_dir: "/work/two", created_at: "2026-06-11 06:00:00", updated_at: "2026-06-11 06:10:00", archived_at: "2026-06-11 06:20:00" },
+        ],
+      });
+      const ctx = ctxFor({ env: isolatedEnv({ GOOSE_DATA_DIR: dir }) });
+      assert.equal(hosts.hostById("goose").detect(ctx), true);
+
+      const { sessions, warnings } = hosts.hostById("goose").list(ctx);
+      assert.deepEqual(warnings, []);
+      assert.deepEqual(sessions, [
+        {
+          id: "20260612_9",
+          uuid: "20260612_9",
+          title: "Add Superpowers",
+          project: "/work/one",
+          created: "2026-06-12T06:29:51.000Z",
+          modified: "2026-06-12T06:44:00.000Z",
+        },
+      ]);
+    });
+  });
+
+  it("maps text, thinking and a tool pair onto the normalized transcript", async () => {
+    await withTmpDir("goose-read", async (dir) => {
+      gooseStore(dir, {
+        sessions: [{ id: "s1", name: "A chat", working_dir: "/work", created_at: "2026-06-12 06:00:00", updated_at: "2026-06-12 06:30:00" }],
+        messages: [
+          { session_id: "s1", role: "user", content_json: text("read skills/x-fake/SKILL.md"), created_timestamp: 1781245791 },
+          { session_id: "s1", role: "assistant", content_json: JSON.stringify([{ type: "thinking", thinking: "checking" }]), created_timestamp: 1781245792 },
+          { session_id: "s1", role: "assistant", content_json: tool("call-1", "tree", { path: "/work", depth: 3 }), created_timestamp: 1781245793 },
+          { session_id: "s1", role: "assistant", content_json: toolResult("call-1", "Error: Source not found."), created_timestamp: 1781245794 },
+          { session_id: "s1", role: "assistant", content_json: JSON.stringify([{ type: "systemNotification", msg: "Conversation cleared" }]), created_timestamp: 1781245795 },
+          { session_id: "s1", role: "assistant", content_json: "{not json", created_timestamp: 1781245796 },
+        ],
+      });
+      const ctx = ctxFor({ env: isolatedEnv({ GOOSE_DATA_DIR: dir }) });
+      const listed = hosts.hostById("goose").list(ctx).sessions[0];
+      const raw = hosts.hostById("goose").read(listed, ctx);
+
+      assert.equal(raw.meta.host, "goose");
+      assert.equal(raw.meta.title, "A chat");
+      assert.equal(raw.meta.created, "2026-06-12T06:00:00.000Z");
+      assert.deepEqual(
+        raw.messages.map((message) => message.role),
+        ["user", "assistant", "assistant", "assistant"],
+        "the notification and the unparsable row yield no parts, so they are skipped"
+      );
+      const parts = raw.messages.flatMap((message) => message.parts);
+      assert.deepEqual(parts.map((part) => part.type), ["text", "reasoning", "tool_call", "tool_result"]);
+      assert.deepEqual(parts[2], { type: "tool_call", tool_call_id: "call-1", name: "tree", input: '{"path":"/work","depth":3}' });
+      assert.equal(parts[3].name, "tree", "the result inherits the name of the call it answers");
+      assert.match(parts[3].content, /^Error: /, "which is what the scanner reads a failure from");
+      assert.equal(raw.messages[0].created, "2026-06-12T06:29:51.000Z");
+    });
+  });
+
+  it("reports a store with no sessions table instead of returning a clean zero", async () => {
+    await withTmpDir("goose-shape", async (dir) => {
+      gooseStore(dir, { tables: false });
+      const ctx = ctxFor({ env: isolatedEnv({ GOOSE_DATA_DIR: dir }) });
+      const { sessions, warnings } = hosts.hostById("goose").list(ctx);
+      assert.deepEqual(sessions, []);
+      assert.equal(warnings.length, 1);
+      assert.match(warnings[0].reason, /no sessions table/);
+    });
+  });
+
+  it("explains itself when the store is absent rather than throwing", async () => {
+    await withTmpDir("goose-missing", async (dir) => {
+      const ctx = ctxFor({ env: isolatedEnv({ GOOSE_DATA_DIR: path.join(dir, "nope") }) });
+      assert.equal(hosts.hostStatus(hosts.hostById("goose"), ctx), "absent");
+    });
+  });
+
+  it("finds a session by id even when it sits outside the listing window", async () => {
+    await withTmpDir("goose-find", async (dir) => {
+      gooseStore(dir, {
+        sessions: [{ id: "old_1", name: "Last spring", working_dir: "/w", created_at: "2025-06-12 06:00:00", updated_at: "2025-06-12 06:30:00" }],
+      });
+      const read = await import(READ);
+      const ctx = ctxFor({ env: isolatedEnv({ GOOSE_DATA_DIR: dir }) });
+
+      assert.equal(hosts.hostById("goose").list(ctx).sessions.length, 1, "the adapter reports it");
+      assert.deepEqual(read.listHostSessions({ ctx }).sessions, [], "the window leaves it out");
+      // Asking for one session by name is not a listing, so the window must not hide it.
+      assert.equal(read.findSession("old_1", { ctx }).id, "old_1");
+      assert.throws(() => read.findSession("nope", { ctx }), /no session "nope"/);
+    });
+  });
+});
+
+/**
+ * The file-based hosts are built from their published specs, not against a live install, so these
+ * fixtures are the spec restated: if a real store stops matching, the adapter reports it in `warnings`
+ * instead of passing the session through as an empty one.
+ */
+describe("spec-built file hosts", () => {
+  const jsonl = (file, records) => {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, `${records.map((record) => JSON.stringify(record)).join("\n")}\n`);
+    return file;
+  };
+
+  function hostFor(id) {
+    const adapter = hosts.hostById(id);
+    assert.ok(adapter, `no adapter registered for ${id}`);
+    return adapter;
+  }
+
+  it("claude reads a transcript's text, thinking and tool pair", async () => {
+    await withTmpDir("claude", async (dir) => {
+      const project = path.join(dir, "projects", "-home-nobody-work");
+      const file = jsonl(path.join(project, "11111111-2222-3333-4444-555555555555.jsonl"), [
+        { type: "summary", summary: "Fix the login bug", timestamp: "2026-01-02T10:00:00.000Z" },
+        { type: "user", timestamp: "2026-01-02T10:00:01.000Z", sessionId: "11111111-2222-3333-4444-555555555555", cwd: "/home/nobody/work", message: { role: "user", content: "read skills/x-fake/SKILL.md" } },
+        { type: "assistant", timestamp: "2026-01-02T10:00:02.000Z", message: { role: "assistant", model: "claude", content: [{ type: "thinking", thinking: "hmm" }, { type: "text", text: "on it" }, { type: "tool_use", id: "toolu_1", name: "Read", input: { file_path: "skills/x-fake/SKILL.md" } }] } },
+        { type: "user", timestamp: "2026-01-02T10:00:03.000Z", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_1", content: "Exit code 2\nmissing" }] } },
+        { type: "queue-operation", timestamp: "2026-01-02T10:00:04.000Z" },
+      ]);
+      const claude = hostFor("claude");
+      const ctx = ctxFor({ env: isolatedEnv({ CLAUDE_CONFIG_DIR: dir }) });
+      assert.equal(claude.detect(ctx), true);
+
+      const { sessions, warnings } = claude.list(ctx);
+      assert.deepEqual(warnings, []);
+      assert.deepEqual(sessions.map((s) => [s.id, s.title, s.project]), [["11111111-2222-3333-4444-555555555555", "Fix the login bug", "/home/nobody/work"]]);
+
+      const raw = claude.read({ ...sessions[0], file }, ctx);
+      assert.equal(raw.meta.host, "claude");
+      assert.deepEqual(
+        raw.messages.map((message) => message.role),
+        ["user", "assistant", "user"]
+      );
+      const parts = raw.messages.flatMap((message) => message.parts);
+      assert.deepEqual(parts.map((part) => part.type), ["text", "reasoning", "text", "tool_call", "tool_result"]);
+      assert.equal(parts[4].name, "Read", "the result inherits the name of the call it answers");
+      assert.match(parts[4].content, /Exit code 2/);
+    });
+  });
+
+  it("cursor reads its agent transcripts in both observed layouts", async () => {
+    await withTmpDir("cursor", async (dir) => {
+      const projects = path.join(dir, ".cursor", "projects", "home-nobody-work", "agent-transcripts");
+      const flat = jsonl(path.join(projects, "aaaaaaaa-1111-2222-3333-444444444444.jsonl"), [
+        { role: "user", message: { content: [{ type: "text", text: "hello" }] } },
+        { role: "assistant", message: { content: [{ type: "text", text: "hi" }] } },
+      ]);
+      jsonl(path.join(projects, "bbbbbbbb-1111-2222-3333-444444444444", "transcript.jsonl"), [
+        { role: "assistant", message: { content: [{ type: "text", text: "nested" }] } },
+      ]);
+      const cursor = hostFor("cursor");
+      const ctx = ctxFor({ env: isolatedEnv({ HOME: dir }) });
+      assert.equal(cursor.detect(ctx), true);
+
+      const { sessions } = cursor.list(ctx);
+      assert.deepEqual(
+        sessions.map((s) => s.id).sort(),
+        ["aaaaaaaa-1111-2222-3333-444444444444", "bbbbbbbb-1111-2222-3333-444444444444"]
+      );
+      const raw = cursor.read({ ...sessions.find((s) => s.file === flat), file: flat }, ctx);
+      assert.equal(raw.meta.host, "cursor");
+      assert.deepEqual(
+        raw.messages.map((message) => [message.role, message.parts[0].text]),
+        [
+          ["user", "hello"],
+          ["assistant", "hi"],
+        ]
+      );
+    });
+  });
+
+  it("gemini reads both the JSONL record stream and the legacy single JSON", async () => {
+    await withTmpDir("gemini", async (dir) => {
+      const chats = path.join(dir, "tmp", "8f14e45f", "chats");
+      jsonl(path.join(chats, "session-2026-01-02T10-00-00000000.jsonl"), [
+        { sessionId: "sess-1", projectHash: "8f14e45f", startTime: "2026-01-02T10:00:00.000Z", lastUpdated: "2026-01-02T10:05:00.000Z" },
+        { id: "m1", timestamp: "2026-01-02T10:00:01.000Z", type: "user", content: [{ text: "run the tests" }] },
+        { id: "m2", timestamp: "2026-01-02T10:00:02.000Z", type: "gemini", content: [{ text: "running" }], thoughts: [{ subject: "Plan", description: "call the runner" }], toolCalls: [{ id: "c1", name: "run_shell_command", args: { command: "npm test" }, result: [{ text: "Exit code 1\nfailed" }], status: "error" }] },
+        { $set: { summary: "Test run", lastUpdated: "2026-01-02T10:06:00.000Z" } },
+      ]);
+      const legacy = path.join(chats, "session-2026-01-01T09-00-00000000.json");
+      fs.writeFileSync(
+        legacy,
+        JSON.stringify({
+          sessionId: "sess-2",
+          projectHash: "8f14e45f",
+          startTime: "2026-01-01T09:00:00.000Z",
+          lastUpdated: "2026-01-01T09:10:00.000Z",
+          summary: "Older chat",
+          messages: [
+            { id: "m1", timestamp: "2026-01-01T09:00:01.000Z", type: "user", content: "hello" },
+            { id: "m2", timestamp: "2026-01-01T09:00:02.000Z", type: "gemini", content: "hi" },
+          ],
+        })
+      );
+      fs.writeFileSync(path.join(dir, "projects.json"), JSON.stringify({ projects: { "/home/nobody/work": "8f14e45f" } }));
+      const gemini = hostFor("gemini");
+      const ctx = ctxFor({ env: isolatedEnv({ GEMINI_CLI_HOME: dir }) });
+      assert.equal(gemini.detect(ctx), true);
+
+      const { sessions, warnings } = gemini.list(ctx);
+      assert.deepEqual(warnings, []);
+      const current = sessions.find((s) => s.id === "sess-1");
+      assert.equal(current.title, "Test run", "the $set record updates the session");
+      assert.equal(current.project, "/home/nobody/work", "projects.json names the project");
+      assert.equal(current.modified, "2026-01-02T10:06:00.000Z");
+
+      const raw = gemini.read(current, ctx);
+      assert.deepEqual(
+        raw.messages.map((message) => message.role),
+        ["user", "assistant"]
+      );
+      const parts = raw.messages.flatMap((message) => message.parts);
+      assert.deepEqual(parts.map((part) => part.type), ["text", "reasoning", "text", "tool_call", "tool_result"]);
+      assert.equal(parts[3].input, '{"command":"npm test"}');
+      assert.match(parts[4].content, /Exit code 1/);
+
+      const old = sessions.find((s) => s.id === "sess-2");
+      assert.equal(old.title, "Older chat");
+      assert.equal(gemini.read(old, ctx).messages.length, 2);
+    });
+  });
+
+  it("qwen maps its model parts, including function calls and responses", async () => {
+    await withTmpDir("qwen", async (dir) => {
+      const chats = path.join(dir, "tmp", "abc123", "chats");
+      jsonl(path.join(chats, "session-1.jsonl"), [
+        { uuid: "u1", parentUuid: null, sessionId: "qwen-1", timestamp: "2026-01-02T10:00:00.000Z", type: "user", cwd: "/home/nobody/work", message: { role: "user", parts: [{ text: "read it" }] } },
+        { uuid: "u2", parentUuid: "u1", sessionId: "qwen-1", timestamp: "2026-01-02T10:00:01.000Z", type: "assistant", message: { role: "model", parts: [{ thought: true, text: "thinking" }, { functionCall: { id: "fc1", name: "read_file", args: { path: "a" } } }] } },
+        { uuid: "u3", parentUuid: "u2", sessionId: "qwen-1", timestamp: "2026-01-02T10:00:02.000Z", type: "tool_result", message: { role: "user", parts: [{ functionResponse: { id: "fc1", name: "read_file", response: { error: "boom" } } }] } },
+        { uuid: "u4", parentUuid: "u3", sessionId: "qwen-1", timestamp: "2026-01-02T10:00:03.000Z", type: "system", message: { parts: [{ text: "chat_compression" }] } },
+      ]);
+      const qwen = hostFor("qwen");
+      const ctx = ctxFor({ env: isolatedEnv({ QWEN_HOME: dir }) });
+      assert.equal(qwen.detect(ctx), true);
+
+      const listed = qwen.list(ctx).sessions;
+      assert.equal(listed.length, 1);
+      assert.equal(listed[0].project, "/home/nobody/work");
+
+      const raw = qwen.read(listed[0], ctx);
+      const parts = raw.messages.flatMap((message) => message.parts);
+      assert.deepEqual(parts.map((part) => part.type), ["text", "reasoning", "tool_call", "tool_result"]);
+      assert.deepEqual(parts[2], { type: "tool_call", tool_call_id: "fc1", name: "read_file", input: '{"path":"a"}' });
+      assert.equal(parts[3].name, "read_file");
+      assert.match(parts[3].content, /boom/);
+    });
+  });
+
+  it("copilot reads its event stream and the workspace's cwd", async () => {
+    await withTmpDir("copilot", async (dir) => {
+      const session = path.join(dir, "session-state", "005a2626-fdd3-4393-85ab-1a4050afb71d");
+      jsonl(path.join(session, "events.jsonl"), [
+        { type: "user.message", timestamp: "2026-01-02T10:00:00.000Z", data: { content: "run the tests" } },
+        { type: "assistant.turn_start", timestamp: "2026-01-02T10:00:01.000Z", data: {} },
+        { type: "assistant.message", timestamp: "2026-01-02T10:00:02.000Z", data: { content: "on it", reasoningText: "call bash", toolRequests: [{ toolCallId: "call_1", name: "bash", arguments: { command: "npm test" } }] } },
+        { type: "tool.execution_start", timestamp: "2026-01-02T10:00:03.000Z", data: { toolCallId: "call_1", toolName: "bash", arguments: { command: "npm test" } } },
+        { type: "tool.execution_complete", timestamp: "2026-01-02T10:00:04.000Z", data: { toolCallId: "call_1", result: { text: "Exit code 1" } } },
+      ]);
+      fs.writeFileSync(path.join(session, "workspace.yaml"), "cwd: /home/nobody/work\nother: 1\n");
+      const copilot = hostFor("copilot");
+      const ctx = ctxFor({ env: isolatedEnv({ COPILOT_HOME: dir }) });
+      assert.equal(copilot.detect(ctx), true);
+
+      const listed = copilot.list(ctx).sessions[0];
+      assert.equal(listed.id, "005a2626-fdd3-4393-85ab-1a4050afb71d");
+      assert.equal(listed.project, "/home/nobody/work");
+
+      const raw = copilot.read(listed, ctx);
+      const parts = raw.messages.flatMap((message) => message.parts);
+      assert.deepEqual(parts.map((part) => part.type), ["text", "reasoning", "text", "tool_call", "tool_call", "tool_result"]);
+      assert.deepEqual(parts[3], { type: "tool_call", tool_call_id: "call_1", name: "bash", input: '{"command":"npm test"}' });
+      assert.equal(parts[5].tool_call_id, "call_1", "a completion is paired with the call it closes");
+      assert.match(parts[5].content, /Exit code 1/);
+    });
+  });
+
+  it("cline prefers its Anthropic history, and merges the UI stream when that is all there is", async () => {
+    await withTmpDir("cline", async (dir) => {
+      const tasks = path.join(dir, "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "tasks");
+      fs.mkdirSync(path.join(tasks, "task-with-history"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tasks, "task-with-history", "api_conversation_history.json"),
+        JSON.stringify([
+          { role: "user", content: "run the tests" },
+          { role: "assistant", content: [{ type: "text", text: "running" }, { type: "tool_use", id: "t1", name: "execute_command", input: { command: "npm test" } }] },
+          { role: "user", content: [{ type: "tool_result", tool_use_id: "t1", content: "Exit code 1\nfailed" }] },
+        ])
+      );
+      fs.mkdirSync(path.join(tasks, "task-ui-only"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tasks, "task-ui-only", "ui_messages.json"),
+        JSON.stringify([
+          { ts: 1783776941000, type: "say", say: "text", text: "hello ", partial: true },
+          { ts: 1783776942000, type: "say", say: "text", text: "there", partial: true },
+          { ts: 1783776943000, type: "say", ask: "followup", text: "do it again" },
+          { ts: 1783776944000, type: "say", say: "completion_result", text: "done" },
+        ])
+      );
+      const cline = hostFor("cline");
+      const ctx = ctxFor({ env: isolatedEnv({ XDG_CONFIG_HOME: dir }) });
+      assert.equal(cline.detect(ctx), true);
+
+      const { sessions } = cline.list(ctx);
+      assert.deepEqual(sessions.map((s) => s.id).sort(), ["task-ui-only", "task-with-history"]);
+
+      const anthropic = sessions.find((s) => s.id === "task-with-history");
+      const parts = cline.read(anthropic, ctx).messages.flatMap((message) => message.parts);
+      assert.deepEqual(parts.map((part) => part.type), ["text", "text", "tool_call", "tool_result"]);
+      assert.equal(parts[3].name, "execute_command");
+      assert.match(parts[3].content, /Exit code 1/);
+
+      const ui = cline.read(sessions.find((s) => s.id === "task-ui-only"), ctx).messages;
+      assert.deepEqual(
+        ui.map((message) => [message.role, message.parts[0].text]),
+        [
+          ["assistant", "hello there"],
+          ["user", "do it again"],
+          ["assistant", "done"],
+        ],
+        "streamed partial chunks merge into one turn"
+      );
+    });
+  });
+
+  it("says a store is missing rather than pretending a host was read", async () => {
+    const ctx = ctxFor();
+    assert.deepEqual(hostFor("claude").list(ctx).warnings, [{ scope: "/home/nobody/.claude/projects", reason: "no store at /home/nobody/.claude/projects" }]);
+    assert.equal(hosts.hostStatus(hostFor("claude"), ctx), "absent");
+  });
+});
+
+describe("session discovery", () => {  /** `session()` defaults to a year before the context window, so the fresh ones are spelled out. */
   const inWindow = (uuid) => session({ uuid, modified: "2026-01-02T11:00:00Z" });
 
   function fakeHost(id, { sessions = [], fails = false } = {}) {
@@ -717,8 +1115,8 @@ posixOnly("daily-reflection CLI", () => {
         assert.equal(run.code, 0, run.stderr);
         const summary = JSON.parse(fs.readFileSync(path.join(out, "summary.json"), "utf8"));
         assert.deepEqual(
-          summary.hosts.map((host) => `${host.id}=${host.status}/${host.sessions}`),
-          ["crush=ok/1", "codex=ok/1"]
+          summary.hosts.map((host) => `${host.id}=${host.status}/${host.sessions}`).sort(),
+          ["codex=ok/1", "crush=ok/1"]
         );
         assert.deepEqual(summary.sessions.map((session) => session.host).sort(), ["codex", "crush"]);
         assert.equal(summary.counts.hosts, 2);
@@ -779,7 +1177,10 @@ posixOnly("daily-reflection CLI", () => {
     await withTmpDir("bad-host", async (dir) => {
       const run = await runCollect(["--host", "claude-code", "--out", path.join(dir, "out")]);
       assert.equal(run.code, 2);
-      assert.equal(JSON.parse(run.stderr).error, 'Unknown host "claude-code"; known hosts: crush, codex, opencode');
+      assert.equal(
+        JSON.parse(run.stderr).error,
+        'Unknown host "claude-code"; known hosts: opencode, claude, codex, gemini, cursor, cline, goose, crush, qwen, kilo, roo, copilot'
+      );
     });
   });
 

@@ -230,10 +230,11 @@ Skills are plain folders. You can also read any `SKILL.md` directly.
 ### Daily reflection automation
 
 This repo improves itself on a schedule. `automation/daily-reflection/` collects every session of the
-last 24 hours across the AI CLIs it finds on your machine — Crush, Codex and OpenCode today, through one
-adapter each in `skills/x-autoreflection/scripts/hosts/` — scans each one for friction with the
-`x-autoreflection` scanner, and reflects on the worst few: a digest of proposed skill edits for review.
-It proposes; it never edits a skill, commits, or pushes.
+last 24 hours across the AI CLIs it finds on your machine — through one adapter each in
+`skills/x-autoreflection/scripts/hosts/`, covering OpenCode, Claude Code, Codex, Gemini CLI, Cursor,
+Cline, Roo Code, Kilo Code, Goose, Crush, Qwen Code and GitHub Copilot CLI — scans each one for friction
+with the `x-autoreflection` scanner, and reflects on the worst few: a digest of proposed skill edits for
+review. It proposes; it never edits a skill, commits, or pushes.
 
 ```bash
 node automation/daily-reflection/collect-sessions.mjs              # write today's evidence pack

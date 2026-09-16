@@ -15,10 +15,26 @@
 import { crush } from "./crush.mjs";
 import { codex } from "./codex.mjs";
 import { opencode } from "./opencode.mjs";
+import { goose } from "./goose.mjs";
+import { claude } from "./claude.mjs";
+import { gemini } from "./gemini.mjs";
+import { qwen } from "./qwen.mjs";
+import { cursor } from "./cursor.mjs";
+import { copilot } from "./copilot.mjs";
+import { cline, kilo, roo } from "./cline.mjs";
 
-export { defaultRun, findFiles, firstLine, HOUR_MS, homeDir, withinWindow } from "./shared.mjs";
+export {
+  defaultRun,
+  findFiles,
+  firstLine,
+  HOUR_MS,
+  homeDir,
+  withModifiedMs,
+  withinWindow,
+} from "./shared.mjs";
 
-export const HOSTS = [crush, codex, opencode];
+/** Every CLI this skill knows how to read, most-installed first. */
+export const HOSTS = [opencode, claude, codex, gemini, cursor, cline, goose, crush, qwen, kilo, roo, copilot];
 
 export function hostById(id) {
   return HOSTS.find((host) => host.id === id) ?? null;

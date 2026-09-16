@@ -97,7 +97,7 @@ function roleOf(role) {
   return ROLE[role] ?? role ?? "assistant";
 }
 
-/** A `message` or `reasoning` record, or null when the record is neither. */
+/** Null for any other record type, which is what lets the caller try the tool shapes next. */
 function proseMessage(payload, created) {
   if (payload.type === "message") {
     const parts = (Array.isArray(payload.content) ? payload.content : []).map(partOf).filter(Boolean);

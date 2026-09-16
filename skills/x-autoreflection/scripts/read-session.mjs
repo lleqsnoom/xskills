@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { HOSTS, defaultRun, firstLine, hostById, hostStatus, withinWindow } from "./hosts/index.mjs";
+import { HOSTS, defaultRun, firstLine, hostById, hostStatus, withModifiedMs, withinWindow } from "./hosts/index.mjs";
 
 export const DEFAULT_CLIP = 600;
 
@@ -80,8 +80,11 @@ function hostContext({ hours = 24, now = new Date(), env = process.env, run = nu
   return { hours, now, projectLookbackHours: hours, env, run: run ?? defaultRun(env), hostOptions };
 }
 
-/** One host's sessions of the window, plus the status row the listing reports for it. */
-function listFromHost(host, ctx) {
+/**
+ * One host's sessions, plus the status row the listing reports for it. `all` skips the window: an id
+ * lookup is asking for one named session, which may well be older than the last day's work.
+ */
+function listFromHost(host, ctx, { all = false } = {}) {
   const row = { id: host.id, label: host.label, status: hostStatus(host, ctx), sessions: 0 };
   if (row.status !== "ok") return { row, sessions: [] };
 
@@ -93,7 +96,9 @@ function listFromHost(host, ctx) {
     row.reason = firstLine(err.message);
     return { row, sessions: [] };
   }
-  const fresh = withinWindow(listed.sessions, { hours: ctx.hours, now: ctx.now }).sort((a, b) => b.modifiedMs - a.modifiedMs);
+  const fresh = (all ? withModifiedMs(listed.sessions) : withinWindow(listed.sessions, { hours: ctx.hours, now: ctx.now })).sort(
+    (a, b) => b.modifiedMs - a.modifiedMs
+  );
   row.sessions = fresh.length;
   return { row, sessions: fresh };
 }
@@ -103,12 +108,12 @@ function listFromHost(host, ctx) {
  * to named host ids. The list carries the host id each session came from, because the same session
  * id means different things to different CLIs.
  */
-export function listHostSessions({ only = null, ctx = hostContext() } = {}) {
+export function listHostSessions({ only = null, ctx = hostContext(), all = false } = {}) {
   const hosts = [];
   const sessions = [];
   for (const host of HOSTS) {
     if (only && !only.has(host.id)) continue;
-    const listed = listFromHost(host, ctx);
+    const listed = listFromHost(host, ctx, { all });
     hosts.push(listed.row);
     for (const session of listed.sessions) sessions.push({ host: host.id, ...session });
   }
@@ -118,10 +123,11 @@ export function listHostSessions({ only = null, ctx = hostContext() } = {}) {
 
 /** Find one session by id, optionally pinned to a host. Throws when no host owns the id. */
 export function findSession(id, { only = null, ctx = hostContext() } = {}) {
-  const { sessions } = listHostSessions({ only, ctx });
+  const { sessions } = listHostSessions({ only, ctx, all: true });
   const match = sessions.find((session) => String(session.id) === String(id) || String(session.uuid) === String(id));
   if (!match) {
-    const searched = sessions.length ? `known ids: ${sessions.map((s) => `${s.host}:${s.id}`).slice(0, 10).join(", ")}` : "no session store had anything in the window";
+    const known = sessions.slice(0, 10).map((session) => `${session.host}:${session.id}`);
+    const searched = known.length ? `known ids: ${known.join(", ")}` : "no session store had anything in it";
     throw new Error(`no session "${id}" (${searched})`);
   }
   return match;
@@ -163,7 +169,8 @@ function usage() {
     "Flags:",
     "  --list            List sessions of every detected host (id, host, title, modified) and exit",
     "  --session <id>    Session id, or \"last\" for the session you are in on Crush",
-    "  --host <ids>      Comma-separated hosts to read: crush, codex, opencode (default: all detected)",
+    "  --host <ids>      Comma-separated hosts to read: crush, codex, opencode, goose (default: all detected)",
+    "  --hours <n>       How far back --list looks (default: 24; --session ignores it)",
     "  --file <path>     Read a raw session dump instead of calling a host",
     "  --out <path>      Write the normalized JSON here (default: stdout)",
     "  --clip <n>        Characters kept per part (default: 600)",
@@ -239,7 +246,7 @@ function writeList({ only, ctx }) {
 function main() {
   const args = parseArgs(process.argv.slice(2), {
     booleans: ["list", "full", "help"],
-    known: ["list", "session", "host", "file", "out", "clip", "cwd", "full", "help"],
+    known: ["list", "session", "host", "hours", "file", "out", "clip", "cwd", "full", "help"],
   });
   try {
     if (args.unknown.length) throw new Error(`Unknown argument "${args.unknown[0]}"`);
