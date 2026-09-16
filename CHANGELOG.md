@@ -1,3 +1,9 @@
+## [5.24.0] - 2026-09-16
+
+* Merge pull request #55 from lleqsnoom/feat/run-flags-everywhere (2b3030e)
+* test: cover the run flags for the text families (7da9b1f)
+* feat(skills): give every family the run selection flags (c1d3a86)
+
 ## [5.23.0] - 2026-09-16
 
 * Merge pull request #53 from lleqsnoom/feat/install-force (9b1254f)
