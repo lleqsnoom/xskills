@@ -394,7 +394,17 @@ describe("x-research CLI", async () => {
     assert.equal(missingSlug.code, 1);
     assert.match(missingSlug.stderr, /--slug is required/);
 
-    const missingTarget = await run(STATE, ["start", "--slug", "s", "--metric", "m", "--evaluator", "true"]);
+    const missingTarget = await run(STATE, [
+      "start",
+      "--slug",
+      "s",
+      "--metric",
+      "m",
+      "--evaluator",
+      "true",
+      "--root",
+      await fsp.mkdtemp(path.join(os.tmpdir(), "x-research-notarget-")),
+    ]);
     assert.equal(missingTarget.code, 1);
     assert.match(missingTarget.stderr, /target must be a number/);
 

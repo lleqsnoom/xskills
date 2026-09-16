@@ -61,16 +61,19 @@ function runFolders(rootAbs, slug) {
     .sort();
 }
 
-function highestRun(rootAbs) {
-  if (!fs.existsSync(rootAbs)) return 0;
-  return fs.readdirSync(rootAbs).reduce((max, name) => {
+// Counts runs of this slug only, so R<nn> reads as "the nth run of this topic".
+// Works together with `fresh`: a global counter would make the number depend on
+// unrelated topics, and per-slug numbering alone could never reach 02 because
+// resolveRunDir joins an existing run for the slug.
+function highestRun(rootAbs, slug) {
+  return runFolders(rootAbs, slug).reduce((max, name) => {
     const match = name.match(/-R(\d+)-/);
     return match ? Math.max(max, Number(match[1])) : max;
   }, 0);
 }
 
 function mintRunDir(rootAbs, slug, now) {
-  const run = highestRun(rootAbs) + 1;
+  const run = highestRun(rootAbs, slug) + 1;
   if (run > MAX_COUNTER) throw new Error(`run counter would exceed R${MAX_COUNTER}`);
   const stamp = `${now.getFullYear()}-${padRunCounter(now.getMonth() + 1)}-${padRunCounter(now.getDate())}-${padRunCounter(now.getHours())}${padRunCounter(now.getMinutes())}`;
   const dir = path.join(rootAbs, `${stamp}-R${padRunCounter(run)}-${slug}`);
@@ -79,21 +82,31 @@ function mintRunDir(rootAbs, slug, now) {
 }
 
 /**
- * Return the run folder for a slug: the folder holding `marker` when given,
- * the sole match when only one exists, or a newly minted R<nn>.
+ * Return the run folder for a slug, choosing in this order:
+ * `fresh` mints a new R<nn>, `run` selects that R number, `marker` selects the
+ * folder holding that artifact, one match is returned, none mints, and more
+ * than one without a selector throws rather than guessing.
  */
-function resolveRunDir(slug, { root = RUNS_ROOT, now = new Date(), marker = null } = {}) {
+function resolveRunDir(slug, { root = RUNS_ROOT, now = new Date(), marker = null, fresh = false, run = null } = {}) {
   if (!slug || typeof slug !== "string") throw new Error("slug is required");
   const rootAbs = path.resolve(root);
   fs.mkdirSync(rootAbs, { recursive: true });
 
+  if (fresh) return mintRunDir(rootAbs, slug, now);
+
   const folders = runFolders(rootAbs, slug);
+  if (run !== null) {
+    const wanted = `-R${padRunCounter(run)}-`;
+    const picked = folders.find((name) => name.includes(wanted));
+    if (!picked) throw new Error(`no run R${padRunCounter(run)} for "${slug}"`);
+    return path.join(rootAbs, picked);
+  }
   if (marker) {
     const holding = folders.filter((name) => fs.existsSync(path.join(rootAbs, name, marker)));
     if (holding.length) return path.join(rootAbs, holding[holding.length - 1]);
   }
   if (folders.length > 1) {
-    throw new Error(`${folders.length} runs match "${slug}"; resolve the run explicitly`);
+    throw new Error(`${folders.length} runs match "${slug}"; pass --run <nn> to pick one, or --new-run to start another`);
   }
   if (folders.length) return path.join(rootAbs, folders[0]);
   return mintRunDir(rootAbs, slug, now);

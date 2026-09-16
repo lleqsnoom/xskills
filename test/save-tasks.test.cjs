@@ -19,19 +19,28 @@ const SAVE_EPIC_SCRIPT = path.join(__dirname, "..", "skills", "x-epic", "scripts
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
-function runScript(script, args = [], cwd) {
-  return new Promise((resolve, reject) => {
-    const child = spawn("node", [script].concat(args), {
-      stdio: ["ignore", "pipe", "pipe"],
-      cwd: cwd || process.cwd(),
+/**
+ * Run a script with the given args. Without an explicit cwd it runs in a fresh
+ * temp directory and cleans it up, so the suite never writes into the repo.
+ */
+async function runScript(script, args = [], cwd) {
+  const dir = cwd || createTempDir();
+  try {
+    return await new Promise((resolve, reject) => {
+      const child = spawn("node", [script].concat(args), {
+        stdio: ["ignore", "pipe", "pipe"],
+        cwd: dir,
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => (stdout += chunk.toString()));
+      child.stderr.on("data", (chunk) => (stderr += chunk.toString()));
+      child.on("error", reject);
+      child.on("close", (code) => resolve({ code, stdout: stdout.trim(), stderr: stderr.trim() }));
     });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk) => (stdout += chunk.toString()));
-    child.stderr.on("data", (chunk) => (stderr += chunk.toString()));
-    child.on("error", reject);
-    child.on("close", (code) => resolve({ code, stdout: stdout.trim(), stderr: stderr.trim() }));
-  });
+  } finally {
+    if (!cwd) fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 function runSaveTasks(args = [], cwd) {

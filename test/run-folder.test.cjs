@@ -22,19 +22,28 @@ function createTempDir(prefix = "run-folder-test-") {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 
-function runSaveSpec(args = [], cwd) {
-  return new Promise((resolve, reject) => {
-    const child = spawn("node", [SAVE_SPEC].concat(args), {
-      stdio: ["ignore", "pipe", "pipe"],
-      cwd: cwd || process.cwd(),
+/**
+ * Run save-spec.js. Without an explicit cwd it runs in a fresh temp directory
+ * and cleans it up, so the suite never writes into the repo.
+ */
+async function runSaveSpec(args = [], cwd) {
+  const dir = cwd || createTempDir();
+  try {
+    return await new Promise((resolve, reject) => {
+      const child = spawn("node", [SAVE_SPEC].concat(args), {
+        stdio: ["ignore", "pipe", "pipe"],
+        cwd: dir,
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => (stdout += chunk.toString()));
+      child.stderr.on("data", (chunk) => (stderr += chunk.toString()));
+      child.on("error", reject);
+      child.on("close", (code) => resolve({ code, stdout: stdout.trim(), stderr: stderr.trim() }));
     });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk) => (stdout += chunk.toString()));
-    child.stderr.on("data", (chunk) => (stderr += chunk.toString()));
-    child.on("error", reject);
-    child.on("close", (code) => resolve({ code, stdout: stdout.trim(), stderr: stderr.trim() }));
-  });
+  } finally {
+    if (!cwd) fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 // ── formatStamp ──────────────────────────────────────────────────────
@@ -76,6 +85,41 @@ describe("shared.resolveRun", () => {
       const second = shared.resolveRunDir("s", { root });
       assert.equal(second, first);
       assert.equal(fs.readdirSync(root).length, 1);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("numbers runs per slug, so R<nn> is the nth run of that topic", () => {
+    const root = createTempDir();
+    try {
+      const first = shared.resolveRunDir("one", { root });
+      const other = shared.resolveRunDir("two", { root });
+      assert.match(path.basename(first), /-R01-one$/);
+      assert.match(path.basename(other), /-R01-two$/);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("mints a fresh run of the same slug when fresh is set", () => {
+    const root = createTempDir();
+    try {
+      const first = shared.resolveRunDir("s", { root });
+      const second = shared.resolveRunDir("s", { root, fresh: true });
+      assert.notEqual(second, first);
+      assert.match(path.basename(second), /-R02-s$/);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses to guess once a slug has two runs", () => {
+    const root = createTempDir();
+    try {
+      shared.resolveRunDir("s", { root });
+      shared.resolveRunDir("s", { root, fresh: true });
+      assert.throws(() => shared.resolveRunDir("s", { root }), /2 runs match/);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -256,6 +300,70 @@ describe("save-spec.js — run folder", () => {
       for (const marker of ["goal:", "contract:", "invariant:", "test:", "## Layers"]) {
         assert.ok(content.includes(marker), `skeleton is missing ${marker}`);
       }
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("save-spec.js — choosing a run", () => {
+  it("joins the existing run by default", async () => {
+    const tmpDir = createTempDir();
+    try {
+      await runSaveSpec(["--topic", "demo"], tmpDir);
+      await runSaveSpec(["--topic", "demo"], tmpDir);
+      const runs = fs.readdirSync(path.join(tmpDir, ".x-skills", "runs"));
+      assert.equal(runs.length, 1, "the second call must join, not mint a second run");
+      assert.match(runs[0], /-R01-demo$/);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("starts a second run with --new-run and joins it with --run", async () => {
+    const tmpDir = createTempDir();
+    try {
+      const first = await runSaveSpec(["--topic", "demo"], tmpDir);
+      await runSaveSpec(["--topic", "demo", "--new-run"], tmpDir);
+
+      const runs = fs.readdirSync(path.join(tmpDir, ".x-skills", "runs")).sort();
+      assert.equal(runs.length, 2);
+      assert.match(runs[0], /-R01-demo$/);
+      assert.match(runs[1], /-R02-demo$/);
+      assert.match(first.stdout, /-R01-demo\//);
+
+      const second = await runSaveSpec(["--topic", "demo", "--run", "2"], tmpDir);
+      assert.match(second.stdout, /-R02-demo\/E00-plan\.md$/);
+      const back1 = await runSaveSpec(["--topic", "demo", "--run", "1"], tmpDir);
+      assert.match(back1.stdout, /-R01-demo\/E00-plan\.md$/);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("fails loudly rather than guessing once a slug has two runs", async () => {
+    const tmpDir = createTempDir();
+    try {
+      await runSaveSpec(["--topic", "demo"], tmpDir);
+      await runSaveSpec(["--topic", "demo", "--new-run"], tmpDir);
+
+      const res = await runSaveSpec(["--topic", "demo"], tmpDir);
+      assert.equal(res.code, 1);
+      assert.match(res.stderr, /2 runs match "demo"/);
+      assert.match(res.stderr, /--run <nn> to pick one, or --new-run to start another/);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("counts runs per slug, so another topic still starts at R01", async () => {
+    const tmpDir = createTempDir();
+    try {
+      await runSaveSpec(["--topic", "one"], tmpDir);
+      await runSaveSpec(["--topic", "two"], tmpDir);
+      const runs = fs.readdirSync(path.join(tmpDir, ".x-skills", "runs")).sort();
+      assert.match(runs[0], /-R01-one$/);
+      assert.match(runs[1], /-R01-two$/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

@@ -10,16 +10,25 @@ const os = require("node:os");
 const SAVE_EPIC = path.join(__dirname, "..", "skills", "x-epic", "scripts", "save-epic.js");
 const NOTIFY = path.join(__dirname, "..", "skills", "x-implement", "scripts", "notify-github.mjs");
 
-function runSaveEpic(args, cwd) {
-  return new Promise((resolve, reject) => {
-    const child = spawn("node", [SAVE_EPIC, ...args], { stdio: ["ignore", "pipe", "pipe"], cwd });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk) => (stdout += chunk.toString()));
-    child.stderr.on("data", (chunk) => (stderr += chunk.toString()));
-    child.on("error", reject);
-    child.on("close", (code) => resolve({ code, stdout: stdout.trim(), stderr: stderr.trim() }));
-  });
+/**
+ * Run save-epic.js. Without an explicit cwd it runs in a fresh temp directory
+ * and cleans it up, so the suite never writes into the repo.
+ */
+async function runSaveEpic(args, cwd) {
+  const dir = cwd || createTempDir();
+  try {
+    return await new Promise((resolve, reject) => {
+      const child = spawn("node", [SAVE_EPIC, ...args], { stdio: ["ignore", "pipe", "pipe"], cwd: dir });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => (stdout += chunk.toString()));
+      child.stderr.on("data", (chunk) => (stderr += chunk.toString()));
+      child.on("error", reject);
+      child.on("close", (code) => resolve({ code, stdout: stdout.trim(), stderr: stderr.trim() }));
+    });
+  } finally {
+    if (!cwd) fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 function createTempDir() {
@@ -56,14 +65,19 @@ describe("epic issue field", () => {
   });
 });
 
-function runNotify(runDir, cwd) {
-  return new Promise((resolve, reject) => {
-    const child = spawn("node", [NOTIFY, "--run", runDir], { stdio: ["ignore", "pipe", "pipe"], cwd });
-    let stdout = "";
-    child.stdout.on("data", (chunk) => (stdout += chunk.toString()));
-    child.on("error", reject);
-    child.on("close", (code) => resolve({ code, stdout: stdout.trim() }));
-  });
+async function runNotify(runDir, cwd) {
+  const dir = cwd || createTempDir();
+  try {
+    return await new Promise((resolve, reject) => {
+      const child = spawn("node", [NOTIFY, "--run", runDir], { stdio: ["ignore", "pipe", "pipe"], cwd: dir });
+      let stdout = "";
+      child.stdout.on("data", (chunk) => (stdout += chunk.toString()));
+      child.on("error", reject);
+      child.on("close", (code) => resolve({ code, stdout: stdout.trim() }));
+    });
+  } finally {
+    if (!cwd) fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 function makeRun(tmpDir, { issue = "42", summary = true } = {}) {
