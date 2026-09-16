@@ -73,6 +73,7 @@ jobs:
 
       # Step 3: Calculate new version based on npm latest + commit bump type
       - name: Calculate and apply new version
+        if: ${{ steps.bump-type.outputs.type != 'none' }}
         run: |
           LATEST_NPM="${{ steps.npm-latest.outputs.version }}"
           BUMP_TYPE="${{ steps.bump-type.outputs.type }}"
@@ -82,7 +83,7 @@ jobs:
           case "$BUMP_TYPE" in
             major) MAJ=$((MAJ + 1)); MIN=0; PAT=0 ;;
             minor) MIN=$((MIN + 1)); PAT=0 ;;
-            patch|none) PAT=$((PAT + 1)) ;;
+            patch) PAT=$((PAT + 1)) ;;
             *) PAT=$((PAT + 1)) ;;  # default to patch for unknown types
           esac
           
@@ -94,6 +95,7 @@ jobs:
 
       # Step 4: Generate CHANGELOG
       - name: Generate CHANGELOG entry
+        if: ${{ steps.bump-type.outputs.type != 'none' }}
         run: |
           LAST_TAG=$(git tag --list 'v*' | sort -V | tail -1 || echo "")
           NEW_VERSION=$(node -p "require('./package.json').version")
@@ -120,6 +122,7 @@ jobs:
 
       # Step 5: Commit version bump + changelog
       - name: Commit version bump and changelog
+        if: ${{ steps.bump-type.outputs.type != 'none' }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -133,11 +136,13 @@ jobs:
 
       # Step 6: Publish to npm with OIDC provenance
       - name: Publish to npmjs with trusted publishing (OIDC provenance)
+        if: ${{ steps.bump-type.outputs.type != 'none' }}
         run: |
           npm publish --provenance --access=public
 
       # Step 7: Create and push git tag
       - name: Create Git tag and push
+        if: ${{ steps.bump-type.outputs.type != 'none' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -145,5 +150,7 @@ jobs:
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists, skipping."
           else
-            git tag "$TAG" && git push origin "$TAG"
+            git tag "$TAG"
+            git push origin HEAD:main
+            git push origin "$TAG"
           fi
