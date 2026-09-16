@@ -6,6 +6,11 @@
 
 This document defines the declarative gate condition system for xskills workflow phases. Gates are automated checks evaluated before phase completion, allowing teams to enforce quality standards without manual review.
 
+In every path below, `<runDir>` is the run folder for the topic:
+`.x-skills/runs/<YYYY-MM-DD-hhmm>-R<nn>-<slug>/` relative to the project root. Every artifact of a
+run lives in that one folder, numbered `E00`, `E01`, … in execution order — the plan is
+`<runDir>/E00-plan.md`, the epic `<runDir>/E01-epic.md`, and the tasks `<runDir>/E02-tasks/`.
+
 ---
 
 ## Overview
