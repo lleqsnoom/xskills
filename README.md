@@ -148,6 +148,22 @@ x-rollback       (standalone)
 2. **Install skills** — `xskills install-all --global` installs everything; `xskills install <skill-name>` installs one.
 3. **Use it with your AI coding agent** — your CLI finds the installed skills and offers them when relevant.
 
+### Upgrading
+
+`install-all` and `install` skip a skill that is already installed, so an upgrade does not refresh
+existing copies. Delete the skill folders you want to update, then reinstall:
+
+```bash
+rm -rf ~/.agents/skills/x-plan   # or the whole ~/.agents/skills directory
+xskills install-all --global
+```
+
+**Artifacts are not migrated.** Since v5.21.0 every skill writes into one folder per run,
+`.x-skills/runs/<date>-R<nn>-<slug>/`. Artifacts produced by an earlier version stay where they
+are, in `.x-skills/plan`, `epics`, `tasks`, `debug`, and so on; nothing reads those paths any more.
+If a run was in flight when you upgraded, move its artifacts into the run folder by hand or re-run
+the phase — otherwise it looks like the work is missing.
+
 ## How It Works
 
 1. Skills live in `.agents/skills/`, following the [Agent Skills spec](https://agentskills.io/specification).
