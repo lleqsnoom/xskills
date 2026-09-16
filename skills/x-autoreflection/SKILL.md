@@ -70,14 +70,21 @@ signal into a proposal with the map in `references/gap-taxonomy.md` — never fr
 ### 1. Pick the session
 
 ```bash
-node <skill>/scripts/read-session.mjs --list          # id, title, modified — most recent first
+node <skill>/scripts/read-session.mjs --list          # host, id, title, modified — most recent first
 ```
 
-On a Crush host this reads `crush session show <id> --json`, and `--session last` takes the session
-you are in. That command is not in the Crush README — it is whatever your installed binary supports —
-so if it disappears after an upgrade, the import fails with a usage error rather than a bad scan.
-Fall back to exporting the JSON yourself and passing `--file <path>`; any host's dump works as long
-as it has `meta` and `messages`, and `--file` accepts an already-normalized export too.
+`--list` asks every CLI that keeps sessions on this machine, through the adapters in `scripts/hosts/`:
+Crush (its own `session list|show --json`), Codex (`sessions/**/rollout-*.jsonl`) and OpenCode
+(`opencode db` and `opencode export`). Narrow it with `--host crush,codex`. A store that is missing is
+reported as `absent` rather than left out, so an empty list says which CLIs were looked at.
+
+`--session <id>` finds the id in whichever host owns it; `--session last` is Crush's own word for the
+session you are in, and no other CLI defines it. Neither command is guaranteed by a CLI's README — it
+is whatever the installed binary supports — so if one disappears after an upgrade, the import fails
+with a usage error rather than a bad scan. Fall back to exporting the JSON yourself and passing
+`--file <path>`; any host's dump works as long as it has `meta` and `messages`, and `--file` accepts an
+already-normalized export too. To add a CLI the list does not know yet, add one adapter to
+`scripts/hosts/`: `id`, `label`, `detect`, `list`, `read`, and nothing else.
 
 Default to the current session (`--session last`), which is usually the one that just frustrated
 you. When more than one session is a plausible candidate, ask with a `single` panel listing the
@@ -109,8 +116,10 @@ points at), and `evidence` (message index plus a quoted excerpt).
 Writing the scan beside the reflection (`--out "<run folder>/signals.json"`) lets the checker find
 it on its own, so the artifact carries the evidence it was judged against.
 
-A host the scanner does not know yet, or a session with no tool calls, yields no signals. Say so
-plainly rather than inventing findings.
+A session with no tool calls yields no signals, and the failure markers the scanner knows are Crush's
+words for a failed call (`Exit code N`, an edit that did not match, a leading `Error:`). Another
+host's transcript still scans, but its own wording may leave a real failure unnamed. Say so plainly
+rather than inventing findings.
 
 Completion: the scan JSON is written and its `stats` are read.
 

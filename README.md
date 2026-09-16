@@ -227,6 +227,24 @@ node skills/x-skill-lint/scripts/lint.mjs    # check the skills themselves
 
 Skills are plain folders. You can also read any `SKILL.md` directly.
 
+### Daily reflection automation
+
+This repo improves itself on a schedule. `automation/daily-reflection/` collects every session of the
+last 24 hours across the AI CLIs it finds on your machine — Crush, Codex and OpenCode today, through one
+adapter each in `skills/x-autoreflection/scripts/hosts/` — scans each one for friction with the
+`x-autoreflection` scanner, and reflects on the worst few: a digest of proposed skill edits for review.
+It proposes; it never edits a skill, commits, or pushes.
+
+```bash
+node automation/daily-reflection/collect-sessions.mjs              # write today's evidence pack
+node automation/daily-reflection/collect-sessions.mjs --check      # exit 1 = no x-skill, 3 = no host readable
+node automation/daily-reflection/collect-sessions.mjs --host crush # read one CLI only
+```
+
+The pack lands in `.x-skills/daily/<date>/`, with `DIGEST.md` as the file to read in the morning. An
+Orca automation (`x-skills-daily-reflection`) runs it at 05:00 daily; `automation/daily-reflection/runbook.md`
+is the procedure it follows. Nothing under `automation/` is published to npm.
+
 ## What This Is Not
 
 - **Not a runtime or a model.** xskills ships instructions and small Node scripts. Your AI coding CLI runs them.
