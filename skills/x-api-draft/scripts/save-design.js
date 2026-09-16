@@ -29,6 +29,8 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     if ((argv[i] === "--topic" || argv[i] === "-t") && i + 1 < argv.length) args.topic = argv[++i];
     else if (argv[i] === "--branch" && i + 1 < argv.length) args.branch = argv[++i];
+    else if (argv[i] === "--new-run") args.newRun = true;
+    else if (argv[i] === "--run" && i + 1 < argv.length) args.run = argv[++i];
   }
   return args;
 }
@@ -173,7 +175,10 @@ function main() {
   const date = getTimestamp();
   log(`using date stamp: ${date}`);
 
-  const runDir = resolveRunDir(args.topic);
+  const runDir = resolveRunDir(args.topic, {
+    fresh: args.newRun === true,
+    run: args.run === undefined ? null : Number(args.run),
+  });
   const fullPath = path.join(runDir, `${nextE(runDir)}-api-design.md`);
 
   log(`creating directory: ${runDir}`);

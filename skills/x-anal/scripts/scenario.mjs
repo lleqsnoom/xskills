@@ -128,10 +128,10 @@ function nextE(runDir) {
 }
 // #endregion run-folder
 
-export function createState({ slug, goal = null, root = REPORT_ROOT, now = new Date() } = {}) {
+export function createState({ slug, goal = null, root = REPORT_ROOT, now = new Date(), fresh = false, run = null } = {}) {
   if (!slug || typeof slug !== "string") throw new Error("slug is required");
   const when = now.toISOString();
-  const runDirAbs = resolveRunDir(slug, { root, now });
+  const runDirAbs = resolveRunDir(slug, { root, now, fresh, run });
   const reportAbs = path.join(runDirAbs, `${nextE(runDirAbs)}-analysis.md`);
   return {
     skill: SKILL,
@@ -307,7 +307,13 @@ function usage() {
 function commandStart(args) {
   if (!args.slug || args.slug === true) throw new Error("--slug is required");
   const root = args.root === true || !args.root ? REPORT_ROOT : args.root;
-  const state = createState({ slug: args.slug, goal: args.goal === true ? null : args.goal, root });
+  const state = createState({
+    slug: args.slug,
+    goal: args.goal === true ? null : args.goal,
+    root,
+    fresh: args["new-run"] === true,
+    run: args.run === undefined || args.run === true ? null : Number(args.run),
+  });
   const dir = state.runDir;
   persist(dir, state, { fromIndex: 0, writeReport: true });
   return { dir, state, node: state.node };

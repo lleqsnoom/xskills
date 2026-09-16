@@ -144,8 +144,8 @@ export function renderHeader({ slug, type = "generic", date = new Date() }) {
   ].join("\n");
 }
 
-export function createReport({ dir = DEFAULT_OUTPUT, slug, type = "generic", date = new Date() } = {}) {
-  const runDir = dir === DEFAULT_OUTPUT ? resolveRunDir(slugify(slug), { now: date }) : dir;
+export function createReport({ dir = DEFAULT_OUTPUT, slug, type = "generic", date = new Date(), fresh = false, run = null } = {}) {
+  const runDir = dir === DEFAULT_OUTPUT ? resolveRunDir(slugify(slug), { now: date, fresh, run }) : dir;
   fs.mkdirSync(runDir, { recursive: true });
   const file = reportPath(runDir, "md");
   const header = renderHeader({ slug, type, date });
@@ -167,6 +167,8 @@ function usage() {
     "  --slug <name>     Artifact name (required)",
     "  --type <type>     Rubric profile (default: generic)",
     "  --output <dir>    Output directory (default: the run folder under .x-skills/runs/)",
+    "  --new-run         Start a second run for this artifact",
+    "  --run <nn>        Join run R<nn> when the artifact has more than one",
     "  --help            Show this help",
     "",
   ].join("\n");
@@ -177,6 +179,8 @@ function main() {
   let slug = null;
   let type = "generic";
   let output = DEFAULT_OUTPUT;
+  let newRun = false;
+  let run = null;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--help" || args[i] === "-h") {
@@ -188,6 +192,10 @@ function main() {
       type = args[++i];
     } else if (args[i] === "--output" && i + 1 < args.length) {
       output = args[++i];
+    } else if (args[i] === "--new-run") {
+      newRun = true;
+    } else if (args[i] === "--run" && i + 1 < args.length) {
+      run = Number(args[++i]);
     } else {
       process.stderr.write(`${JSON.stringify({ error: `Unknown argument "${args[i]}"` })}\n`);
       process.exit(1);
@@ -200,7 +208,7 @@ function main() {
   }
 
   try {
-    const result = createReport({ dir: output, slug, type });
+    const result = createReport({ dir: output, slug, type, fresh: newRun, run });
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   } catch (err) {
     process.stderr.write(`${JSON.stringify({ error: err.message })}\n`);

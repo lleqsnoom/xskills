@@ -21,6 +21,8 @@ function parseArgs(argv) {
     if ((argv[i] === "--output" || argv[i] === "-o") && i + 1 < argv.length) args.output = argv[++i];
     else if (argv[i] === "--slug" && i + 1 < argv.length) args.slug = argv[++i];
     else if (argv[i] === "--branch" && i + 1 < argv.length) args.branch = argv[++i];
+    else if (argv[i] === "--new-run") args.newRun = true;
+    else if (argv[i] === "--run" && i + 1 < argv.length) args.run = argv[++i];
   }
   return args;
 }
@@ -242,7 +244,12 @@ function main() {
   }
 
   const branch = args.branch || getBranch();
-  const dir = args.output ? path.resolve(args.output) : resolveRunDir(args.slug || "review");
+  const dir = args.output
+    ? path.resolve(args.output)
+    : resolveRunDir(args.slug || "review", {
+        fresh: args.newRun === true,
+        run: args.run === undefined ? null : Number(args.run),
+      });
   const fullPath = path.join(dir, `${nextE(dir)}-review-plan.md`);
 
   fs.mkdirSync(dir, { recursive: true });
