@@ -103,3 +103,42 @@ describe("text families — one run folder", () => {
     }
   });
 });
+
+describe("text families — run selection flags", () => {
+  const FAMILIES = [
+    ["x-anal", ["x-anal", "scripts", "scenario.mjs"], (slug) => ["start", "--slug", slug]],
+    ["x-roast", ["x-roast", "scripts", "save-report.mjs"], (slug) => ["--slug", slug]],
+    ["x-humanize", ["x-humanize", "scripts", "save-report.mjs"], (slug) => ["--slug", slug]],
+    ["x-review", ["x-review", "scripts", "save-plan.js"], (slug) => ["--slug", slug]],
+  ];
+
+  for (const [name, script, argsFor] of FAMILIES) {
+    it(`${name} starts a second run with --new-run and joins it with --run`, async () => {
+      const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "run-flags-"));
+      try {
+        const step = (extra) => runStep({ script, args: [...argsFor("topic"), ...extra] }, cwd);
+
+        assert.equal((await step([])).code, 0, `${name} could not start a run`);
+        assert.equal((await step([])).code, 0, `${name} could not rejoin a run`);
+        let runs = fs.readdirSync(path.join(cwd, ".x-skills", "runs"));
+        assert.equal(runs.length, 1, "the second call must join, not mint");
+
+        assert.equal((await step(["--new-run"])).code, 0, `${name} rejected --new-run`);
+        runs = fs.readdirSync(path.join(cwd, ".x-skills", "runs")).sort();
+        assert.equal(runs.length, 2);
+        assert.match(runs[1], /-R02-topic$/);
+
+        assert.equal((await step(["--run", "2"])).code, 0, `${name} rejected --run`);
+        assert.equal((await step(["--run", "1"])).code, 0, `${name} rejected --run 1`);
+
+        // Without a selector the skill must refuse rather than pick a run.
+        const ambiguous = await step([]);
+        assert.equal(ambiguous.code, 1, `${name} should refuse an ambiguous slug`);
+        assert.match(ambiguous.stderr, /2 runs match/);
+        assert.match(ambiguous.stderr, /--run <nn> to pick one, or --new-run to start another/);
+      } finally {
+        fs.rmSync(cwd, { recursive: true, force: true });
+      }
+    });
+  }
+});
