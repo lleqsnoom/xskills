@@ -1,3 +1,9 @@
+## [5.26.0] - 2026-09-16
+
+* Merge pull request #58 from lleqsnoom/feat/multi-cli-session-hosts (f060b1f)
+* feat(automation): add Goose, Claude, Gemini, Cursor and Copilot hosts (98aa00d)
+* feat(automation): add daily reflection over every detected AI CLI (caf0b3c)
+
 ## [5.25.0] - 2026-09-16
 
 * Merge pull request #57 from lleqsnoom/feat/x-autoreflection (48293b6)
