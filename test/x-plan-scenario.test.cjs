@@ -82,6 +82,7 @@ describe("x-plan scenario — pure", async () => {
     const res = m.transition(s, "clarify");
     assert.equal(res.ok, false);
     assert.equal(res.state.node, "intake");
+    assert.match(res.error, /from intake you can go to: \w+/, "a refusal says how to proceed");
   });
 
   it("renderGraphMermaid emits one line per edge plus the current class", () => {

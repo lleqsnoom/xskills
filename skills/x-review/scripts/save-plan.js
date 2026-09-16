@@ -136,6 +136,11 @@ function scriptPath(rel) {
   return path.join(SKILL_DIR, "scripts", rel);
 }
 
+/**
+ * Run one analysis script. The result carries `ok` so the caller can tell "found nothing" from
+ * "never ran": a crashed analyzer that reports zero issues is a false all-clear, and the plan must
+ * say so rather than print a clean bill of health.
+ */
 function runAnalysis(scriptName, args = []) {
   try {
     const output = execSync(`node "${scriptPath(scriptName)}" ${args.join(" ")}`, {
@@ -144,11 +149,16 @@ function runAnalysis(scriptName, args = []) {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
     });
-    return JSON.parse(output);
+    return { ok: true, data: JSON.parse(output) };
   } catch (err) {
     console.error(`[x-review] Warning: ${scriptName} failed:`, err.message);
-    return null;
+    return { ok: false, script: scriptName, error: firstLine(err.message) };
   }
+}
+
+/** execSync packs the command and its stderr into one message; the plan needs only the gist. */
+function firstLine(message) {
+  return String(message ?? "").split("\n").filter((line) => line.trim())[0].slice(0, 200) || "unknown error";
 }
 
 // ── Stats aggregation ────────────────────────────────────────────────
@@ -164,8 +174,9 @@ function aggregateStats(complexity, duplication, patterns) {
     byType: {},
   };
 
-  // Complexity stats — use defaults if no config loaded (analyze-complexity has its own config)
-  const C = { maxComplexity: 5, maxLength: 20, maxParams: 3 };
+  // Count with the thresholds the analyzer actually applied, falling back to the defaults only when
+  // an older analyzer did not report them.
+  const C = { maxComplexity: 5, maxLength: 20, maxParams: 3, ...(complexity?.summary?.thresholds || {}) };
   if (complexity) {
     for (const f of complexity.files || []) {
       stats.totalFilesAnalyzed.add(f.file);
@@ -203,18 +214,29 @@ function aggregateStats(complexity, duplication, patterns) {
 
 // ── Plan header generation ───────────────────────────────────────────
 
-function generatePlanHeader(stats, branch) {
+function generatePlanHeader(stats, branch, failed = []) {
+  const failedNames = new Set(failed.map((run) => run.script));
   const totalFiles = stats.totalFilesAnalyzed.size;
+  const metric = (label, value, script) =>
+    failedNames.has(script)
+      ? `**${label}:** unknown — ${script} failed, so this was not measured`
+      : `**${label}:** ${value}`;
   const lines = [];
   lines.push("# Code Review — Fix Plan");
   lines.push("");
   lines.push(`**Date:** ${getTimestamp()}`);
   lines.push(`**Branch:** ${branch}`);
   lines.push(`**Total files analyzed:** ${totalFiles}`);
-  lines.push(`**Functions with complexity > 5:** ${stats.functionsHighComplexity}`);
-  lines.push(`**Functions longer than 20 lines:** ${stats.functionsLong}`);
-  lines.push(`**Duplicated blocks found:** ${stats.duplicatedBlocks}`);
+  lines.push(metric("Functions with complexity > 5", stats.functionsHighComplexity, "analyze-complexity.js"));
+  lines.push(metric("Functions longer than 20 lines", stats.functionsLong, "analyze-complexity.js"));
+  lines.push(metric("Duplicated blocks found", stats.duplicatedBlocks, "check-duplication.js"));
   lines.push("");
+
+  if (failed.length) {
+    lines.push("> ⚠️ **Analysis incomplete.** A count above is unknown, not zero:");
+    for (const run of failed) lines.push(`> - \`${run.script}\` failed: ${run.error}`);
+    lines.push("");
+  }
 
   if (stats.refactorSuggestions > 0) {
     lines.push("## Refactoring Suggestions Summary");
@@ -265,11 +287,16 @@ function main() {
   const patterns = runAnalysis("analyze-patterns.js", ["--all"]);
 
   // Aggregate and write plan header
-  const stats = aggregateStats(complexity, duplication, patterns);
-  const header = generatePlanHeader(stats, branch);
+  const stats = aggregateStats(complexity.data, duplication.data, patterns.data);
+  const failed = [complexity, duplication, patterns].filter((run) => !run.ok);
+  const header = generatePlanHeader(stats, branch, failed);
 
   fs.writeFileSync(fullPath, header + "\n\n---\n\n## Issues (fill in during review)\n");
   console.log(fullPath);
 }
 
-main();
+module.exports = { generatePlanHeader };
+
+if (require.main === module) {
+  main();
+}

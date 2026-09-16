@@ -90,6 +90,7 @@ Run `npx xskills list` to see all available skills.
 | `x-anal` | Interactive analysis skill — research the project and web first, ask via panels (single / multi / open / confirm) until the user is sure, then produce a thesis with cited evidence and a mechanical check, propose three solutions with trade-offs, and route to fix or task creation; graph-driven with guards and a markdown memory. |
 | `x-api-draft` | Draft API design from requirements — clarify scope, analyze endpoints and data models, produce a human-reviewable API design in markdown |
 | `x-api-swagger` | Convert an API design draft to OpenAPI YAML — generate a valid spec from markdown drafts with endpoints, schemas, and auth definitions |
+| `x-autoreflection` | Reflect on a session and improve the skills it used — read the transcript of this or an earlier session, mechanically extract friction signals (failed commands, repeated calls, user corrections, loaded-but-unused skills, questions asked in prose), check each against the real skill files, and turn the survivors into evidence-backed proposals with a target file and a check, then route them to a fix, a spec, or tasks. |
 | `x-browser` | Launch the real Chrome/Chromium with remote debugging and attach the chrome-devtools MCP to the project’s app URL — detects the URL from README/config/env, verifies the dev server, and opens the browser so you can drive it without manual setup. |
 | `x-comments` | Comment management — add only precise, meaningful comments and remove noisy or obvious ones; refactor overly commented code into self-explanatory functions instead of describing it |
 | `x-commit` | Write single-line conventional commit messages — one authoritative type map, imperative mood, no description body |
@@ -140,6 +141,12 @@ x-review → x-fix (loop)
 x-debug          (standalone)
 x-migrate        (standalone)
 x-rollback       (standalone)
+```
+
+**Improve the skills themselves** (run it after a session that felt rough):
+```
+x-autoreflection → x-fix        (small edits)
+                 → x-plan       (a gap that needs a decision)
 ```
 
 ### Quick Start

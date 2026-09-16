@@ -30,6 +30,7 @@ const TARGETS = [
   "skills/x-api-swagger/scripts/save-spec.js",
   "skills/x-debug/scripts/analyze.js",
   "skills/x-review/scripts/save-plan.js",
+  "skills/x-autoreflection/scripts/save-reflection.mjs",
 ];
 
 const START = "// #region run-folder";

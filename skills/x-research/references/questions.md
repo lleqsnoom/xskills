@@ -39,6 +39,18 @@ rule is on you.
 - **Record it.** Every question and answer goes into `memory.md`; recheck the open list after each
   answer and stop when the list is empty or the user says "you decide".
 
+## How a turn ends
+
+A turn ends in exactly one of two ways: with work, or with a panel.
+
+- **Work.** If nothing is genuinely open, do not stop to ask permission — continue to the step's
+  `Completion:` line and finish it. "Want me to keep going?" has one sensible answer, so it is not a
+  question; it is the turn stopping early.
+- **A panel.** If a decision is needed, render one (`single`, `multi`, `open`, or `confirm`).
+
+A bare nudge — "continue", "go on", "try again" — means the previous turn stopped short. When one
+arrives, do not ask again: find the unfinished step and finish it, or say plainly what blocks you.
+
 ## Format
 
 ```markdown

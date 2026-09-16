@@ -112,9 +112,16 @@ export function findEdge(state, to) {
   return state.graph.edges.find((edge) => edge.from === state.node && edge.to === to) || null;
 }
 
+/** Name the moves that are legal from here, so a refusal says how to proceed instead of only what failed. */
+function noEdgeError(state, to) {
+  const legal = [...new Set(state.graph.edges.filter((edge) => edge.from === state.node).map((edge) => edge.to))];
+  return `no edge ${state.node} -> ${to}; from ${state.node} you can go to: ${legal.join(", ") || "nothing, this is a stop"}`;
+}
+
+
 export function transition(state, to, { reportText = "" } = {}) {
   const edge = findEdge(state, to);
-  if (!edge) return { ok: false, error: `no edge ${state.node} -> ${to}`, state };
+  if (!edge) return { ok: false, error: noEdgeError(state, to), state };
   const guards = computeGuards(state, { reportText });
   const failed = edge.guards.filter((name) => !guards[name].pass);
   if (failed.length) return { ok: false, error: `${failed[0]} failed`, failed, guards, state };

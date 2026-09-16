@@ -72,6 +72,10 @@ xskills/
     ├── x-investigate/        # Hypothesis-driven root cause analysis — ranked hypotheses, git history, platform tools
     │   ├── SKILL.md
     │   └── scripts/
+    ├── x-autoreflection/     # Reflect on a session — scan the transcript for friction, propose skill improvements
+    │   ├── SKILL.md
+    │   ├── scripts/
+    │   └── references/
     ├── x-triage/             # Structured intake — classify bug platform/type/evidence before debugging
     │   ├── SKILL.md
     │   └── scripts/
@@ -190,6 +194,7 @@ Independent of the planning pipeline, debugging uses a multi-skill scientific me
 - **x-reproduce** — Creates minimal platform-aware reproducible test cases (browser console, Node standalone, ADB logcat steps)
 - **x-anal** — Interactive analysis: confirms user intent, clarifies ambiguities with suggestions, produces thesis with evidence and solution proposition, routes to fix or task creation
 - **x-investigate** — Hypothesis-driven root cause analysis using git bisect/blame, Chrome DevTools, debuggers, or engine profilers depending on platform
+- **x-autoreflection** — Session retrospective: exports the transcript of this or an earlier session, scans it mechanically for friction (failed commands, repeats, user corrections, prose questions, unused skills), verifies each signal against the real skill files, and writes evidence-backed improvement proposals to `<run folder>/E<nn>-reflection.md`
 
 ## Release Workflow
 
@@ -281,7 +286,7 @@ A skill must **never** ask the user a question in prose or bury one in a discuss
 | `open` | open form only (free text) | none |
 | `confirm` | yes/no | none |
 
-The skills that ask questions (`x-anal`, `x-plan`, `x-research`) ship the canonical rules in `references/questions.md` and enforce them with `scripts/check-questions.mjs`. Skills without that file (`x-triage`, `x-api-draft`, `x-api-swagger`, `x-browser`, `x-implement`, `x-investigate`) define the four shapes inline at first use.
+The skills that ask questions (`x-anal`, `x-plan`, `x-research`, `x-autoreflection`) ship the canonical rules in `references/questions.md` and enforce them with `scripts/check-questions.mjs`. Skills without that file (`x-triage`, `x-api-draft`, `x-api-swagger`, `x-browser`, `x-implement`, `x-investigate`) define the four shapes inline at first use.
 
 **Known limits.** The Agent Skills specification (agentskills.io/specification) defines no question or interaction primitive, so there is no portable panel: a host may have no structured question tool, in which case the skill prints the four shapes as a numbered prompt. And `check-questions.mjs` validates only the authored questions file — nothing verifies that a session actually rendered a panel. The rule is a contract on the skill, not a runtime guarantee.
 

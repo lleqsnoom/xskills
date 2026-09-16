@@ -244,7 +244,8 @@ Skills that generate artifacts write them into **one folder per run**:
 ├── E00-plan.md                      # design spec
 ├── E01-epic.md                      # epic definition
 ├── E02-tasks/                       # task breakdown (a directory)
-└── E03-review-plan.md               # code review plan
+├── E03-review-plan.md               # code review plan
+└── E04-reflection.md                # session retrospective
 ```
 
 - The stamp is `YYYY-MM-DD-hhmm`: leading zeros, no colon, so a plain name sort runs

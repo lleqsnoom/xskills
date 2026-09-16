@@ -60,7 +60,10 @@ describe("x-anal scenario — pure", async () => {
 
   it("intent_confirmed gates confirm_intent -> research", () => {
     let s = state("a");
-    assert.equal(m.transition(s, "research").ok, false);
+    const refused = m.transition(s, "research");
+    assert.equal(refused.ok, false);
+    assert.match(refused.error, /no edge intake -> research/, "names the node it is at and the one asked for");
+    assert.match(refused.error, /from intake you can go to: \w+/, "names the moves that are legal instead");
     s = m.applyEvent(s, { kind: "confirm", data: "yes" });
     s = m.transition(s, "confirm_intent").state;
     assert.equal(m.transition(s, "research").ok, true);

@@ -43,7 +43,7 @@ let Parser = null;
 let Language = null;
 
 /**
- * Resolve the global npm prefix (where -g packages are installed).
+ * Resolve the global npm prefix, the parent of the global node_modules tree.
  */
 function getGlobalPrefix() {
   try {
@@ -55,11 +55,36 @@ function getGlobalPrefix() {
 }
 
 /**
+ * Where `npm install -g` actually puts packages. Asking npm is the only reliable way: the prefix is
+ * the *parent* of the tree on Linux and macOS (`<prefix>/lib/node_modules`) but the tree itself on
+ * Windows, and a custom prefix moves it again. Each candidate is kept so a host without a working
+ * npm still resolves from a prefix that happens to be a node_modules root.
+ */
+function globalModuleDirs() {
+  const dirs = [];
+  try {
+    const cp = require("node:child_process");
+    const root = cp.execSync("npm root -g", { stdio: ["pipe", "pipe", "ignore"] }).toString().trim();
+    if (root) dirs.push(root);
+  } catch {}
+  const prefix = getGlobalPrefix();
+  dirs.push(path.join(prefix, "lib", "node_modules"), path.join(prefix, "node_modules"), prefix);
+  return [...new Set(dirs)];
+}
+
+/**
+ * Every place a package may live: the project, this skill, its parents, and the global tree.
+ */
+function moduleSearchDirs() {
+  return [process.cwd(), __dirname, path.join(__dirname, "..", ".."), ...globalModuleDirs()];
+}
+
+/**
  * Detect which language grammars are already installed for the given extensions.
  * Checks both local (cwd) and global node_modules paths.
  */
 function detectInstalledGrammars(extSet) {
-  const searchDirs = [process.cwd(), getGlobalPrefix()];
+  const searchDirs = moduleSearchDirs();
 
   const hasParser = (() => {
     for (const dir of searchDirs) {
@@ -209,8 +234,8 @@ function collectExtsRecursive(dir, extSet) {
 }
 
 try {
-  // Try to resolve web-tree-sitter from cwd, skill dir, parent dirs, then global prefix
-  const searchDirs = [process.cwd(), __dirname, path.join(__dirname, "..", ".."), getGlobalPrefix()];
+  // Try to resolve web-tree-sitter from cwd, skill dir, parent dirs, then the global tree
+  const searchDirs = moduleSearchDirs();
   let resolved = null;
   for (const dir of searchDirs) {
     try { resolved = require.resolve("web-tree-sitter", { paths: [dir] }); break; } catch {}
@@ -343,8 +368,8 @@ const EXTENSION_MAP = {
 };
 
 function findWasmFile(langName) {
-  // Search from cwd first (where source files are), then skill dir, parent dirs, then global prefix
-  const searchDirs = [process.cwd(), __dirname, path.join(__dirname, "..", ".."), getGlobalPrefix()];
+  // Search from cwd first (where source files are), then skill dir, parent dirs, then the global tree
+  const searchDirs = moduleSearchDirs();
   
   for (const baseDir of searchDirs) {
     try {
@@ -624,7 +649,7 @@ function tryMatchRegexPattern(lines, i, functions) {
       const name = matcher.nameExtractor(match);
       const startLine = i;
       const endLine = findFunctionEndLine(lines, startLine);
-      pushRegexFunction(functions, { name, startLine, endLine });
+      pushRegexFunction(functions, lines, { name, startLine, endLine });
       return endLine;
     }
   }
@@ -651,7 +676,7 @@ function extractFunctionsRegex(source) {
       if (!CONTROL_FLOW_KEYWORDS.has(name)) {
         const startLine = i;
         const endLine = findFunctionEndLine(lines, startLine);
-        pushRegexFunction(functions, { name, startLine, endLine });
+        pushRegexFunction(functions, lines, { name, startLine, endLine });
         i = endLine + 1;
         continue;
       }
@@ -679,8 +704,10 @@ function findFunctionEndLine(lines, startLine) {
 
 /**
  * Push a regex-detected function entry with computed metrics.
+ * `lines` is the split source of the file being scanned, passed in rather than captured, because this
+ * fallback is reached from two call sites and neither owns the source text.
  */
-function pushRegexFunction(functions, { name, startLine, endLine }) {
+function pushRegexFunction(functions, lines, { name, startLine, endLine }) {
   functions.push({
     name, params: [], paramCount: 0, startLine, endLine,
     length: endLine - startLine + 1,
@@ -736,6 +763,13 @@ async function collectReport(files, useTS) {
       longFunctions: 0,
       tooManyParams: 0,
       language: useTS ? "tree-sitter (AST-based)" : "regex fallback",
+      // Reported so a consumer counts with the same numbers this analysis used, instead of
+      // hardcoding its own copy of them and drifting when assets/config.json changes.
+      thresholds: {
+        maxComplexity: CONFIG.maxComplexity,
+        maxLength: CONFIG.maxLength,
+        maxParams: CONFIG.maxParams,
+      },
     },
   };
 

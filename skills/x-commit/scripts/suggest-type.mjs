@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 /**
  * Analyze staged git diff and suggest a conventional commit type + scope.
@@ -33,12 +34,42 @@ function getDiff(mode) {
   }
 }
 
-function suggestScope(diff) {
-  const files = diff
-    .split("\n")
-    .filter((l) => l.startsWith("diff --git"))
-    .map((l) => l.replace('diff --git a/', "").replace(" b/", ""))
-    .filter(Boolean);
+/** Git's own list of changed paths: no diff prefix, no quoting, nothing to parse. */
+export function getChangedFiles(mode = "staged") {
+  const cmd = mode === "unstaged" ? "git diff --name-only" : "git diff --cached --name-only";
+  try {
+    return execSync(cmd, { maxBuffer: 10 * 1024 * 1024 })
+      .toString()
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The new-side path of every file in a diff, read from the `diff --git` header.
+ * Only used when the caller has no file list. The header is `diff --git <src>/<path> <dst>/<path>`,
+ * where the prefixes are configurable (`a/`/`b/` by default, but `i/`/`w/` or none at all are valid),
+ * and git quotes either path when it holds a space or a special character.
+ */
+export function parseDiffPaths(diff) {
+  const paths = [];
+  for (const line of String(diff ?? "").split("\n")) {
+    if (!line.startsWith("diff --git ")) continue;
+    const rest = line.slice("diff --git ".length).trim();
+    const quoted = rest.match(/^"(.*?)"\s+"(.*?)"\s*$/);
+    const [from, to] = quoted ? [quoted[1], quoted[2]] : rest.split(/\s+/).slice(0, 2);
+    if (!to) continue;
+    const path = from === to ? to : to.slice(to.indexOf("/") + 1) || to;
+    if (path) paths.push(path);
+  }
+  return paths;
+}
+
+export function suggestScope(diff, changedFiles = null) {
+  const files = changedFiles && changedFiles.length ? changedFiles : parseDiffPaths(diff);
 
   if (files.length === 0) return null;
 
@@ -169,7 +200,7 @@ function isChoreChange(removed, netChange) {
   );
 }
 
-function suggestType(diff) {
+export function suggestType(diff) {
   const { added, removed } = countChanges(diff);
   const { hasTestFile, hasConfigFile, hasDocFile } = classifyFiles(diff);
   const netChange = added - removed;
@@ -185,15 +216,21 @@ function suggestType(diff) {
   return "chore";
 }
 
-const mode = process.argv.includes("--unstaged") ? "unstaged" : "staged";
-const diff = getDiff(mode);
+function main() {
+  const mode = process.argv.includes("--unstaged") ? "unstaged" : "staged";
+  const diff = getDiff(mode);
 
-if (!diff.trim()) {
-  console.error("No changes detected. Stage some files first.");
-  process.exit(1);
+  if (!diff.trim()) {
+    console.error("No changes detected. Stage some files first.");
+    process.exit(1);
+  }
+
+  const type = suggestType(diff);
+  const scope = suggestScope(diff, getChangedFiles(mode));
+
+  console.log(JSON.stringify({ type, scope }, null, 2));
 }
 
-const type = suggestType(diff);
-const scope = suggestScope(diff);
-
-console.log(JSON.stringify({ type, scope }, null, 2));
+if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
+  main();
+}
