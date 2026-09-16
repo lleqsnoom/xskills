@@ -1,6 +1,6 @@
 "use strict";
 
-const { describe, it, beforeEach } = require("node:test");
+const { describe, it, beforeEach, after } = require("node:test");
 const assert = require("node:assert/strict");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
@@ -47,15 +47,20 @@ async function record(cwd, dir, args) {
 describe("x-plan scenario — pure", async () => {
   const m = await import(SCENARIO);
 
+  const pureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "x-plan-pure-"));
+  const state = (slug) => m.createState({ slug, root: path.join(pureRoot, ".x-skills", "runs") });
+
+  after(() => fs.rmSync(pureRoot, { recursive: true, force: true }));
+
   it("createState starts at intake with the full graph", () => {
-    const s = m.createState({ slug: "a" });
+    const s = state("a");
     assert.equal(s.node, "intake");
     assert.ok(s.graph.nodes.includes("handoff"));
     assert.ok(s.graph.edges.some((e) => e.to === "propose"));
   });
 
   it("three_options gate flips at the third option", () => {
-    let s = m.createState({ slug: "a" });
+    let s = state("a");
     s = m.applyEvent(s, { kind: "option", data: "one" });
     s = m.applyEvent(s, { kind: "option", data: "two" });
     assert.equal(m.computeGuards(s).three_options.pass, false);
@@ -64,7 +69,7 @@ describe("x-plan scenario — pure", async () => {
   });
 
   it("answer closes the matching open question", () => {
-    let s = m.createState({ slug: "a" });
+    let s = state("a");
     s = m.applyEvent(s, { kind: "question", data: "Which db?" });
     assert.equal(m.computeGuards(s).no_open_questions.pass, false);
     s = m.applyEvent(s, { kind: "answer", target: "Q1", data: "Postgres" });
@@ -73,14 +78,14 @@ describe("x-plan scenario — pure", async () => {
   });
 
   it("transition refuses an edge whose guard fails", () => {
-    const s = m.createState({ slug: "a" });
+    const s = state("a");
     const res = m.transition(s, "clarify");
     assert.equal(res.ok, false);
     assert.equal(res.state.node, "intake");
   });
 
   it("renderGraphMermaid emits one line per edge plus the current class", () => {
-    const s = m.createState({ slug: "a" });
+    const s = state("a");
     const out = m.renderGraphMermaid(s);
     assert.match(out, /```mermaid/);
     assert.match(out, /classDef current/);

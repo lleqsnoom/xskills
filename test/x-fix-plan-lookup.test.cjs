@@ -10,16 +10,21 @@ const os = require("node:os");
 const SAVE_PLAN = path.join(__dirname, "..", "skills", "x-review", "scripts", "save-plan.js");
 const X_FIX_SKILL = path.join(__dirname, "..", "skills", "x-fix", "SKILL.md");
 
-function runSavePlan(args, cwd) {
-  return new Promise((resolve, reject) => {
-    const child = spawn("node", [SAVE_PLAN, ...args], { stdio: ["ignore", "pipe", "pipe"], cwd });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk) => (stdout += chunk.toString()));
-    child.stderr.on("data", (chunk) => (stderr += chunk.toString()));
-    child.on("error", reject);
-    child.on("close", (code) => resolve({ code, stdout: stdout.trim(), stderr: stderr.trim() }));
-  });
+async function runSavePlan(args, cwd) {
+  const dir = cwd || fs.mkdtempSync(path.join(os.tmpdir(), "x-fix-plan-"));
+  try {
+    return await new Promise((resolve, reject) => {
+      const child = spawn("node", [SAVE_PLAN, ...args], { stdio: ["ignore", "pipe", "pipe"], cwd: dir });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => (stdout += chunk.toString()));
+      child.stderr.on("data", (chunk) => (stderr += chunk.toString()));
+      child.on("error", reject);
+      child.on("close", (code) => resolve({ code, stdout: stdout.trim(), stderr: stderr.trim() }));
+    });
+  } finally {
+    if (!cwd) fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 describe("x-review plan is readable by x-fix", () => {

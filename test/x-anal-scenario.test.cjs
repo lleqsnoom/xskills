@@ -1,6 +1,6 @@
 "use strict";
 
-const { describe, it, beforeEach } = require("node:test");
+const { describe, it, beforeEach, after } = require("node:test");
 const assert = require("node:assert/strict");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
@@ -46,15 +46,20 @@ function evidence(cwd, dir) {
 describe("x-anal scenario — pure", async () => {
   const m = await import(SCENARIO);
 
+  const pureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "x-anal-pure-"));
+  const state = (slug) => m.createState({ slug, root: path.join(pureRoot, ".x-skills", "runs") });
+
+  after(() => fs.rmSync(pureRoot, { recursive: true, force: true }));
+
   it("reports the numbered analysis path inside a run folder", () => {
-    const s = m.createState({ slug: "leak" });
+    const s = state("leak");
     assert.match(s.report, /\.x-skills\/runs\/[^/]+-leak\/E00-analysis\.md$/);
     assert.match(s.runDir, /-leak$/);
     assert.equal(s.node, "intake");
   });
 
   it("intent_confirmed gates confirm_intent -> research", () => {
-    let s = m.createState({ slug: "a" });
+    let s = state("a");
     assert.equal(m.transition(s, "research").ok, false);
     s = m.applyEvent(s, { kind: "confirm", data: "yes" });
     s = m.transition(s, "confirm_intent").state;
@@ -62,7 +67,7 @@ describe("x-anal scenario — pure", async () => {
   });
 
   it("evidence_cited needs a source", () => {
-    let s = m.createState({ slug: "a" });
+    let s = state("a");
     s = m.applyEvent(s, { kind: "evidence", data: "claim", target: "" });
     assert.equal(m.computeGuards(s).evidence_cited.pass, false);
     s = m.applyEvent(s, { kind: "evidence", data: "claim", target: "src/a.js:1" });
@@ -70,7 +75,7 @@ describe("x-anal scenario — pure", async () => {
   });
 
   it("a not-run research lowers confidence", () => {
-    let s = m.createState({ slug: "a" });
+    let s = state("a");
     assert.equal(s.confidence, "low");
     s = m.applyEvent(s, { kind: "confidence", data: "high" });
     s = m.applyEvent(s, { kind: "research", status: "not-run", reason: "no web access" });
@@ -79,7 +84,7 @@ describe("x-anal scenario — pure", async () => {
   });
 
   it("check_recorded accepts not-run only with a reason", () => {
-    let s = m.createState({ slug: "a" });
+    let s = state("a");
     s = m.applyEvent(s, { kind: "check", data: "repro.js", status: "not-run" });
     assert.equal(m.computeGuards(s).check_recorded.pass, false);
     s = m.applyEvent(s, { kind: "check", data: "repro.js", status: "not-run", reason: "no shell" });

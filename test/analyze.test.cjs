@@ -11,14 +11,22 @@ const { execFileSync } = require("node:child_process");
 const SKILLS_DIR = path.join(__dirname, "..", "skills");
 const ANALYZE_PATH = path.join(SKILLS_DIR, "x-debug", "scripts", "analyze.js");
 
+/**
+ * Run analyze.js. Without an explicit cwd it runs in a fresh temp directory and
+ * cleans it up, so the suite never writes into the repo.
+ */
 function runAnalyze(args, { cwd, expectExit0 = true } = {}) {
-  const fullArgs = ["node", ANALYZE_PATH, ...args];
-  return execFileSync(process.execPath, [ANALYZE_PATH, ...args], {
-    cwd: cwd || process.cwd(),
-    encoding: "utf-8",
-    timeout: 15000,
-    env: { ...process.env, NO_COLOR: "1" },
-  });
+  const dir = cwd || createTempDir("xdebug-analyze-");
+  try {
+    return execFileSync(process.execPath, [ANALYZE_PATH, ...args], {
+      cwd: dir,
+      encoding: "utf-8",
+      timeout: 15000,
+      env: { ...process.env, NO_COLOR: "1" },
+    });
+  } finally {
+    if (!cwd) cleanup(dir);
+  }
 }
 
 function createTempDir(prefix) {

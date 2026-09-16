@@ -22,19 +22,28 @@ function createTempDir(prefix = "run-folder-test-") {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 
-function runSaveSpec(args = [], cwd) {
-  return new Promise((resolve, reject) => {
-    const child = spawn("node", [SAVE_SPEC].concat(args), {
-      stdio: ["ignore", "pipe", "pipe"],
-      cwd: cwd || process.cwd(),
+/**
+ * Run save-spec.js. Without an explicit cwd it runs in a fresh temp directory
+ * and cleans it up, so the suite never writes into the repo.
+ */
+async function runSaveSpec(args = [], cwd) {
+  const dir = cwd || createTempDir();
+  try {
+    return await new Promise((resolve, reject) => {
+      const child = spawn("node", [SAVE_SPEC].concat(args), {
+        stdio: ["ignore", "pipe", "pipe"],
+        cwd: dir,
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => (stdout += chunk.toString()));
+      child.stderr.on("data", (chunk) => (stderr += chunk.toString()));
+      child.on("error", reject);
+      child.on("close", (code) => resolve({ code, stdout: stdout.trim(), stderr: stderr.trim() }));
     });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk) => (stdout += chunk.toString()));
-    child.stderr.on("data", (chunk) => (stderr += chunk.toString()));
-    child.on("error", reject);
-    child.on("close", (code) => resolve({ code, stdout: stdout.trim(), stderr: stderr.trim() }));
-  });
+  } finally {
+    if (!cwd) fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 // ── formatStamp ──────────────────────────────────────────────────────
