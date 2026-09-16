@@ -91,6 +91,28 @@ describe("install", () => {
     await lib.install("x-commit");
     const printed = logSpy.mock.calls.map((c) => c[0]).join("\n");
     assert.match(printed, /already installed/);
+    assert.match(printed, /--force/, "the skip message should say how to update");
+
+    process.chdir(originalCwd);
+  });
+
+  it("replaces an installed skill when force is set", async () => {
+    tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), "xskills-test-"));
+    process.chdir(tmpDir);
+
+    await lib.install("x-commit");
+    const installedPath = path.join(tmpDir, ".agents", "skills", "x-commit");
+    const skillMd = path.join(installedPath, "SKILL.md");
+    const before = await fsp.readFile(skillMd, "utf8");
+
+    // A stale file and an edited SKILL.md must not survive the refresh.
+    await fsp.writeFile(path.join(installedPath, "stale.txt"), "old");
+    await fsp.writeFile(skillMd, "edited by the user");
+
+    await lib.install("x-commit", { force: true });
+
+    assert.equal(await fileExists(path.join(installedPath, "stale.txt")), false);
+    assert.equal(await fsp.readFile(skillMd, "utf8"), before);
 
     process.chdir(originalCwd);
   });
@@ -152,6 +174,21 @@ describe("globalInstall", () => {
       await lib.globalInstall("x-commit");
       const printed = logSpy.mock.calls.map((c) => c[0]).join("\n");
       assert.match(printed, /already installed globally/);
+      assert.match(printed, /--force/);
+    });
+  });
+
+  it("refreshes an installed skill when force is set", async () => {
+    await withGlobalTmpDir(async () => {
+      await lib.globalInstall("x-commit");
+      const installedPath = path.join(process.env.HOME, ".agents", "skills", "x-commit");
+      const skillMd = path.join(installedPath, "SKILL.md");
+      const before = await fsp.readFile(skillMd, "utf8");
+
+      await fsp.writeFile(skillMd, "edited by the user");
+      await lib.globalInstall("x-commit", { force: true });
+
+      assert.equal(await fsp.readFile(skillMd, "utf8"), before);
     });
   });
 });
