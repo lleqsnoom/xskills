@@ -747,7 +747,11 @@ function main() {
     if (command === "start") {
       if (!args.slug || args.slug === true) throw new Error("--slug is required");
       const root = !args.root || args.root === true ? path.resolve(DEFAULT_ROOT) : path.resolve(args.root);
-      const runDir = resolveRunDir(args.slug, { root });
+      const runDir = resolveRunDir(args.slug, {
+        root,
+        fresh: args["new-run"] === true,
+        run: args.run === undefined || args.run === true ? null : Number(args.run),
+      });
       const dir = path.join(runDir, `${nextE(runDir)}-research`);
       const evaluatorKind = args.evaluator === "agent" || args["evaluator-kind"] === "agent" ? "agent" : undefined;
       const state = startState({

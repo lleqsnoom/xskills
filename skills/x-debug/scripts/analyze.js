@@ -123,16 +123,19 @@ const REPRO_TEMPLATES = {
 function parseArgs(argv) {
   const args = argv.slice(2);
   let errorText = null, targetFile = null, contextDir = ".", sessionId = null, slug = null, reproduce = true;
+  let newRun = false, run = null;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--error" && i + 1 < args.length) errorText = args[++i];
     else if (args[i] === "--file" && i + 1 < args.length) targetFile = args[++i];
     else if (args[i] === "--context" && i + 1 < args.length) contextDir = args[++i];
     else if (args[i] === "--session-id" && i + 1 < args.length) sessionId = args[++i];
     else if (args[i] === "--slug" && i + 1 < args.length) slug = args[++i];
+    else if (args[i] === "--new-run") newRun = true;
+    else if (args[i] === "--run" && i + 1 < args.length) run = Number(args[++i]);
     else if (args[i] === "--no-reproduce") reproduce = false;
     else if (!args[i].startsWith("--")) targetFile = args[i];
   }
-  return { errorText, targetFile, contextDir, sessionId, slug, reproduce };
+  return { errorText, targetFile, contextDir, sessionId, slug, reproduce, fresh: newRun, run };
 }
 
 function matchPatterns(errorText) {
@@ -224,7 +227,7 @@ async function main() {
   if (!errorText) { console.error("Error: --error required"); process.exit(1); }
 
   const matches = matchPatterns(errorText);
-  const runDir = resolveRunDir(args.slug || "debug");
+  const runDir = resolveRunDir(args.slug || "debug", { fresh: args.fresh === true, run: args.run });
   let targetResolved = targetFile ? path.resolve(targetFile) : null;
   if (!targetResolved && contextDir) {
     for (const c of ["index.js","app.js","server.js","main.js"]) {

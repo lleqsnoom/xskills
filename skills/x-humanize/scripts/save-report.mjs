@@ -138,8 +138,8 @@ export function renderHeader({ slug, level = "B2", date = new Date() }) {
   ].join("\n");
 }
 
-export function createReport({ dir = DEFAULT_OUTPUT, slug, level = "B2", date = new Date() } = {}) {
-  const runDir = dir === DEFAULT_OUTPUT ? resolveRunDir(slugify(slug), { now: date }) : dir;
+export function createReport({ dir = DEFAULT_OUTPUT, slug, level = "B2", date = new Date(), fresh = false, run = null } = {}) {
+  const runDir = dir === DEFAULT_OUTPUT ? resolveRunDir(slugify(slug), { now: date, fresh, run }) : dir;
   fs.mkdirSync(runDir, { recursive: true });
   const file = reportPath(runDir, "md");
   if (fs.existsSync(file)) return { path: file, created: false };
@@ -158,6 +158,8 @@ function usage() {
     "  --slug <name>    Document name (required)",
     "  --level <lvl>    Target reader level (default: B2)",
     "  --output <dir>   Output directory (default: the run folder under .x-skills/runs/)",
+    "  --new-run        Start a second run for this document",
+    "  --run <nn>       Join run R<nn> when the document has more than one",
     "  --help           Show this help",
     "",
   ].join("\n");
@@ -168,6 +170,8 @@ function main() {
   let slug = null;
   let level = "B2";
   let output = DEFAULT_OUTPUT;
+  let newRun = false;
+  let run = null;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--help" || a === "-h") {
@@ -176,6 +180,8 @@ function main() {
     } else if (a === "--slug" && i + 1 < args.length) slug = args[++i];
     else if (a === "--level" && i + 1 < args.length) level = args[++i];
     else if (a === "--output" && i + 1 < args.length) output = args[++i];
+    else if (a === "--new-run") newRun = true;
+    else if (a === "--run" && i + 1 < args.length) run = Number(args[++i]);
     else {
       process.stderr.write(`${JSON.stringify({ error: `Unknown argument "${a}"` })}\n`);
       process.exit(1);
@@ -186,7 +192,7 @@ function main() {
     process.exit(1);
   }
   try {
-    process.stdout.write(`${JSON.stringify(createReport({ dir: output, slug, level }), null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify(createReport({ dir: output, slug, level, fresh: newRun, run }), null, 2)}\n`);
   } catch (err) {
     process.stderr.write(`${JSON.stringify({ error: err.message })}\n`);
     process.exit(1);

@@ -350,7 +350,11 @@ function main() {
     if (command === "start") {
       if (!args.slug || args.slug === true) throw new Error("--slug is required");
       const root = !args.root || args.root === true ? RUNS_ROOT : args.root;
-      const runDir = resolveRunDir(args.slug, { root });
+      const runDir = resolveRunDir(args.slug, {
+        root,
+        fresh: args["new-run"] === true,
+        run: args.run === undefined || args.run === true ? null : Number(args.run),
+      });
       const dir = path.join(runDir, `${nextE(runDir)}-article`);
       const state = startState({
         slug: args.slug,
