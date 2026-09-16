@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Create .x-skills/review/ directory and generate a fix plan file.
+ * Write E<nn>-review-plan.md into the run folder, or into --output when given.
  * Runs all analysis scripts (complexity, duplication, refactor patterns)
  * and pre-fills the plan with aggregated statistics.
  *

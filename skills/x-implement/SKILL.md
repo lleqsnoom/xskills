@@ -75,7 +75,7 @@ For each task file in `<run folder>/E<nn>-tasks/`:
    - **Reporting test:** if deleting a phase's `push`/output call leaves the phase unusable, the phase was never a unit. Delegate each phase to a named helper that returns data and let the orchestrator collect the report in one place.
 4. **VERIFY — x-review + x-fix + test.** Run on every finished task before committing:
    - **Test** — run the task's tests and the full regression suite. All must pass.
-   - **x-review** — run the review skill on the changed files. It produces a fix plan under `.x-skills/review/`.
+   - **x-review** — run the review skill on the changed files. It writes a plan (`E<nn>-review-plan.md`) into the run folder, which `x-fix` reads.
    - **x-fix** — resolve every issue in the fix plan. Re-run tests after each fix.
    - Repeat x-review + x-fix until the plan has no unresolved issues and all tests are green.
 5. **SYNC DOCS** — Update the spec (`<run folder>/E00-plan.md`) if it exists; otherwise update living docs (README, comments) directly.

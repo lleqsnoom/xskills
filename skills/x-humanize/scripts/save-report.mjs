@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// x-humanize save-report — create a timestamped humanize report under
-// .x-skills/humanize/. Mirrors the x-roast report helper.
+// x-humanize save-report — create a numbered humanize report in the run folder.
+// Mirrors the x-roast report helper.
 
 import fs from "node:fs";
 import path from "node:path";
