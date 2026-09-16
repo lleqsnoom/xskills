@@ -1,3 +1,10 @@
+## [5.23.0] - 2026-09-16
+
+* Merge pull request #53 from lleqsnoom/feat/install-force (9b1254f)
+* Merge pull request #54 from lleqsnoom/docs/fix-leftovers (cfe29c5)
+* docs: remove the last references to the old artifact paths (a9f5c1b)
+* feat(cli): let install replace a skill that is already there (c88043f)
+
 ## [5.22.0] - 2026-09-16
 
 * Merge pull request #52 from lleqsnoom/chore/isolate-test-runs (77712ef)
