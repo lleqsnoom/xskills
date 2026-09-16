@@ -235,17 +235,30 @@ Examples from existing skills:
 
 ### Output Location Convention
 
-Skills that generate artifacts use the `.x-skills/` directory structure:
+Skills that generate artifacts write them into **one folder per run**:
 
 ```
-.x-skills/
-├── design/DD-MM-YYYY-hh:mm-topic.md    # Design specs
-├── epics/DD-MM-YYYY-hh:mm-topic.md     # Epic definitions  
-├── tasks/DD-MM-YYYY-hh:mm-topic.md     # Task breakdowns
-└── review/DD-MM-YYYY-hh:mm-review.md   # Code review plans
+.x-skills/runs/2026-09-15-2130-R03-my-topic/
+├── state.json                       # scenario state, when the skill keeps one
+├── memory.md                        # event log, when the skill keeps one
+├── E00-plan.md                      # design spec
+├── E01-epic.md                      # epic definition
+├── E02-tasks/                       # task breakdown (a directory)
+└── E03-review-plan.md               # code review plan
 ```
 
-The timestamp format `DD-MM-YYYY-hh:mm` ensures chronological ordering and uniqueness.
+- The stamp is `YYYY-MM-DD-hhmm`: leading zeros, no colon, so a plain name sort runs
+  oldest to newest on every OS. A colon is reserved on Windows, so it cannot appear in
+  a file name at all.
+- `E<nn>` numbers artifacts in execution order, so a folder listing is the run's story.
+- `R<nn>` identifies the run. Only the first skill of a run mints it; every later skill
+  writes into the folder holding the artifact it read.
+- Both counters are exactly two digits. A run that would need `R100` or `E100` fails
+  loudly rather than widening the name, because `E100` would sort before `E99`.
+- The helpers implementing this are duplicated across the skills that need them (skills
+  cannot import from each other) and generated from one source. Edit
+  `scripts/sync-run-folders.js` and run `npm run sync:run-folders`; never edit a
+  `// #region run-folder` block by hand.
 
 ---
 

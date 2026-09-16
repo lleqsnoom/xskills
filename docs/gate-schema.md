@@ -16,7 +16,7 @@ Phases (x-plan, x-epic, x-decompose, x-implement) declare gates in their configu
 {
   "gates": {
     "x-epic": [
-      { "type": "file-exists", "path": ".x-skills/epics/{topic}.md" },
+      { "type": "file-exists", "path": "<runDir>/E01-epic.md" },
       { "type": "no-empty-body", "pattern": "^\\s*// TODO$" }
     ],
     "x-implement": [
@@ -43,7 +43,7 @@ Check whether a file exists at the specified path. Supports glob patterns via `{
 
 **Examples:**
 ```json
-{ "type": "file-exists", "path": ".x-skills/plan/{topic}.md" }
+{ "type": "file-exists", "path": "<runDir>/E00-plan.md" }
 { "type": "file-exists", "path": "tests/unit/{name}.test.js" }
 ```
 
@@ -111,7 +111,7 @@ Validate that a JSON/YAML file conforms to a defined schema. Useful for enforcin
 
 **Examples:**
 ```json
-{ "type": "schema-valid", "file": ".x-skills/tasks/{epic}.md", "schemaPath": "schemas/task-schema.json" }
+{ "type": "schema-valid", "file": "<runDir>/E02-tasks", "schemaPath": "schemas/task-schema.json" }
 ```
 
 ---
@@ -242,8 +242,8 @@ Each gate returns one of three states:
 {
   "gates": {
     "x-plan": [
-      { "type": "file-exists", "path": ".x-skills/plan/{topic}.md" },
-      { "type": "no-pattern", "pattern": "^\\s*$", "files": ".x-skills/plan/{topic}.md" }
+      { "type": "file-exists", "path": "<runDir>/E00-plan.md" },
+      { "type": "no-pattern", "pattern": "^\\s*$", "files": "<runDir>/E00-plan.md" }
     ]
   }
 }
@@ -254,8 +254,8 @@ Each gate returns one of three states:
 {
   "gates": {
     "x-epic": [
-      { "type": "file-exists", "path": ".x-skills/epics/{topic}.md" },
-      { "type": "schema-valid", "file": ".x-skills/epics/{topic}.md", "schemaPath": "schemas/epic-schema.json" }
+      { "type": "file-exists", "path": "<runDir>/E01-epic.md" },
+      { "type": "schema-valid", "file": "<runDir>/E01-epic.md", "schemaPath": "schemas/epic-schema.json" }
     ]
   }
 }
