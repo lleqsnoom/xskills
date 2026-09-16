@@ -29,18 +29,21 @@ async function dispatch(command, args) {
 }
 
 async function handleInstall(args) {
-  const skillName = args[0];
+  const flags = args.filter((arg) => arg.startsWith("-"));
+  const skillName = args.find((arg) => !arg.startsWith("-"));
   if (!skillName) {
-    console.error("Usage: xskills install <skill-name> [--global]");
+    console.error("Usage: xskills install <skill-name> [--global] [--force]");
     process.exit(1);
   }
-  const globalFlag = args.includes("--global") || args.includes("-g");
-  await (globalFlag ? globalInstall(skillName) : install(skillName));
+  const globalFlag = flags.includes("--global") || flags.includes("-g");
+  const force = flags.includes("--force") || flags.includes("-f");
+  await (globalFlag ? globalInstall(skillName, { force }) : install(skillName, { force }));
 }
 
 async function handleInstallAll(args) {
   const globalFlag = args.includes("--global") || args.includes("-g");
-  console.log("Installing all skills...\n");
+  const force = args.includes("--force") || args.includes("-f");
+  console.log(`Installing all skills${force ? " (replacing existing copies)" : ""}...\n`);
 
   let installedCount = 0;
   const skillNames = await listSkillNames();
@@ -48,9 +51,9 @@ async function handleInstallAll(args) {
   for (const skillName of skillNames) {
     try {
       if (globalFlag) {
-        await globalInstall(skillName);
+        await globalInstall(skillName, { force });
       } else {
-        await install(skillName);
+        await install(skillName, { force });
       }
       installedCount++;
     } catch (err) {
@@ -74,13 +77,16 @@ xskills — Cross-CLI agentic skills installer
 Usage:
   xskills install <skill-name>       Install skill into current project
   xskills install <skill-name> -g    Install skill globally (~/.agents/skills/)
+  xskills install <skill-name> -f    Replace the copy already installed
   xskills install-all                Install all available skills at once
+  xskills install-all -g -f          Refresh every installed skill globally
   xskills list                       List all available skills
   xskills help                       Show this help
 
 Examples:
-  npx @lleqsnoom/x-skills install-all --global    # Install all skills globally
-  npx xskills list                                # List available skills
+  npx @lleqsnoom/x-skills install-all --global         # Install all skills globally
+  npx @lleqsnoom/x-skills install-all --global --force # Update skills already installed
+  npx xskills list                                     # List available skills
 
 Skills are installed into .agents/skills/ (Agent Skills open standard).
 `);

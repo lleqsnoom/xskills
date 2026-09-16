@@ -19,6 +19,7 @@ The package has **zero dependencies** — it uses only Node.js built-ins (`fs/pr
 | `node bin/install.js list` | Lists available skills with descriptions |
 | `node bin/install.js install <name>` | Installs a skill into the current project's `.agents/skills/` |
 | `node bin/install.js install <name> --global` | Installs globally to `~/.agents/skills/` |
+| `node bin/install.js install-all --global --force` | Refreshes every installed skill, replacing existing copies |
 | `node bin/install.js <name>` | Shortcut: installs the named skill |
 | `node bin/install.js help` | Shows usage info |
 

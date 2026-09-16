@@ -150,12 +150,13 @@ x-rollback       (standalone)
 
 ### Upgrading
 
-`install-all` and `install` skip a skill that is already installed, so an upgrade does not refresh
-existing copies. Delete the skill folders you want to update, then reinstall:
+`install-all` and `install` leave a skill that is already installed alone, so a plain upgrade does
+nothing. Pass `--force` to refresh it, which replaces the copy rather than merging into it, so files
+the newer version dropped do not linger:
 
 ```bash
-rm -rf ~/.agents/skills/x-plan   # or the whole ~/.agents/skills directory
-xskills install-all --global
+xskills install-all --global --force     # update every installed skill
+xskills install x-plan --global --force  # update one
 ```
 
 **Artifacts are not migrated.** Since v5.21.0 every skill writes into one folder per run,
