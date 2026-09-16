@@ -20,8 +20,8 @@ graph TD
 
     subgraph "Workflow Artifacts"
         A -->|"Outputs"| DA[".x-skills/design/<timestamp>-<topic>.md"]
-        B -->|"Outputs"| DB[".x-skills/epics/<timestamp>-<topic>.md"]
-        C -->|"Outputs"| DC[".x-skills/tasks/<timestamp>-<topic>.md"]
+        B -->|"Outputs"| DB["<runDir>/E01-epic.md"]
+        C -->|"Outputs"| DC["<runDir>/E02-tasks"]
     end
 
     style A fill:#e1f5fe,stroke:#01579b
