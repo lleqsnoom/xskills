@@ -2,7 +2,7 @@
 
 /**
  * Create .x-skills/runs/<stamp>-R<nn>-<topic>/E00-plan.md with a header skeleton.
- * Usage: node save-spec.js --topic <slug> [--branch <name>] 
+ * Usage: node save-spec.js --topic <slug> [--branch <name>] [--run <nn>|--new-run]
  * Output (stdout): path to the created spec file.
  */
 
@@ -12,6 +12,8 @@ function main() {
   const args = shared.parseArgs(process.argv.slice(2), {
     "--topic": "topic", "-t": "topic",
     "--branch": "branch",
+    "--run": "run",
+    "--new-run": "newRun",
   });
 
   shared.log("x-plan", "parsing arguments");
@@ -28,7 +30,10 @@ function main() {
   const date = shared.formatStamp();
   shared.log("x-plan", `using date stamp: ${date}`);
 
-  const runDir = shared.resolveRunDir(slug);
+  const runDir = shared.resolveRunDir(slug, {
+    fresh: args.newRun === true,
+    run: args.run === undefined ? null : Number(args.run),
+  });
   const fullPath = shared.resolveArtifact(runDir, "plan", "md");
   shared.log("x-plan", `resolved run folder: ${runDir}`);
 

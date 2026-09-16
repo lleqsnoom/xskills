@@ -16,6 +16,7 @@ function main() {
   const args = shared.parseArgs(process.argv.slice(2), {
     "--epic": "epic", "-e": "epic",
     "--branch": "branch",
+    "--run": "run",
   });
 
   shared.log("x-implement", "parsing arguments");
@@ -29,7 +30,7 @@ function main() {
   const branch = args.branch || shared.getBranch();
   const date = shared.formatStamp();
 
-  const runDir = shared.resolveRunDir(slug);
+  const runDir = shared.resolveRunDir(slug, { run: args.run === undefined ? null : Number(args.run) });
   const epicFullPath = shared.resolveArtifact(runDir, "epic", "md");
   const epicPath = fs.existsSync(epicFullPath) ? path.relative(process.cwd(), epicFullPath) : null;
 

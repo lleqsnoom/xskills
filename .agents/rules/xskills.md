@@ -11,7 +11,27 @@ All artifacts live in one folder per run, relative to CWD:
 - Artifacts are `E<nn>-<kind>.md` or `E<nn>-<kind>/`, numbered in execution order (`E00` plan, `E01` epic, `E02` tasks, and so on).
 - Both counters are exactly two digits: `E100` would sort before `E99`.
 - The stamp has leading zeros and no colon, so a plain name sort runs oldest to newest on every OS.
-- A skill writes into the folder that holds the artifact it read; only the first skill of a run mints `R<nn>` (highest existing plus one).
+- `R<nn>` counts runs of **that slug only**, so `R02` reads as "the second run of this topic" and `R01` elsewhere is unrelated.
+- A skill writes into the folder that holds the artifact it read; only the first skill of a run mints `R<nn>`.
+
+### Choosing a run
+
+A slug reuses its existing run, so returning to a topic months later joins the original folder unless you say otherwise. Two flags control that, and they work on the pipeline skills (`x-plan`, `x-epic`, `x-decompose`, `x-implement`):
+
+| Flag | Effect |
+|------|--------|
+| `--new-run` | Mint a fresh `R<nn>` for this slug instead of joining. Use it to start a second run of a topic. |
+| `--run <nn>` | Join the run with that number. Needed once a slug has more than one, so a phase lands in the run you mean. |
+
+With two runs and neither flag, the skill fails loudly rather than picking one:
+
+```
+2 runs match "my-topic"; pass --run <nn> to pick one, or --new-run to start another
+```
+
+### Changing the helpers
+
+`resolveRunDir` and `nextE` are duplicated into every skill that needs them, because skills cannot import from one another. Edit them once in `scripts/sync-run-folders.js` and run `npm run sync:run-folders`. `npm run check:run-folders` fails when a copy diverges — never edit a `// #region run-folder` block by hand.
 
 ## Phase Boundaries
 - **x-plan**: No code. Only spec files and working notes.

@@ -14,6 +14,7 @@ const shared = require("./shared");
 function main() {
   const args = shared.parseArgs(process.argv.slice(2), {
     "--epic": "epic", "-e": "epic",
+    "--run": "run",
   });
 
   shared.log("x-decompose", "parsing arguments");
@@ -25,7 +26,7 @@ function main() {
 
   const slug = shared.sanitizeSlug(args.epic);
 
-  const runDir = shared.resolveRunDir(slug);
+  const runDir = shared.resolveRunDir(slug, { run: args.run === undefined ? null : Number(args.run) });
   const epicFullPath = shared.resolveArtifact(runDir, "epic", "md");
   const epicPath = fs.existsSync(epicFullPath) ? path.relative(process.cwd(), epicFullPath) : null;
 

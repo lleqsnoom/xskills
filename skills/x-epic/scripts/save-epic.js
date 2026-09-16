@@ -15,6 +15,7 @@ function main() {
   const args = shared.parseArgs(process.argv.slice(2), {
     "--topic": "topic", "-t": "topic",
     "--branch": "branch",
+    "--run": "run",
     "--issue": "issue",
   });
 
@@ -30,7 +31,7 @@ function main() {
   const date = shared.formatStamp();
   const issue = args.issue === undefined ? "" : args.issue;
 
-  const runDir = shared.resolveRunDir(slug);
+  const runDir = shared.resolveRunDir(slug, { run: args.run === undefined ? null : Number(args.run) });
   const planFullPath = shared.resolveArtifact(runDir, "plan", "md");
   const specPath = fs.existsSync(planFullPath) ? path.relative(process.cwd(), planFullPath) : null;
 
