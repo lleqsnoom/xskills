@@ -1,3 +1,12 @@
+## [5.22.0] - 2026-09-16
+
+* Merge pull request #52 from lleqsnoom/chore/isolate-test-runs (77712ef)
+* feat(skills): let a topic start a second run on demand (51079ca)
+* docs: explain the upgrade path and the unmigrated artifacts (9581acb)
+* test: stop the suite writing artifacts into the repository (543245d)
+* Merge pull request #50 from lleqsnoom/docs/run-folder-convention (95bf555)
+* docs: describe the one-folder-per-run artifact layout (ebab4d5)
+
 ## [5.21.1] - 2026-09-16
 
 * Merge pull request #51 from lleqsnoom/fix/ci-push-release-commit (9a7794e)
