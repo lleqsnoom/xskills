@@ -53,6 +53,20 @@ function refusing() {
   return stub;
 }
 
+/** The method table `orca.host.call` answers from, with every call recorded. */
+function hostCaller(answers, calls, notifications) {
+  return async (method, params) => {
+    calls.push({ method, params });
+    if (method === "notifications.show") {
+      notifications.push(params);
+      return { ok: true, value: { delivered: true } };
+    }
+    const answer = answers[method];
+    if (answer === undefined) return { ok: false, code: "unknown_method", error: method };
+    return typeof answer === "function" ? answer(params) : answer;
+  };
+}
+
 /** The orca host API the worker uses, with every call recorded. */
 function makeHost(answers = {}) {
   const calls = [];
@@ -65,18 +79,7 @@ function makeHost(answers = {}) {
     log: (message) => logs.push(String(message)),
     commands: { register: (id, handler) => commands.set(id, handler) },
     events: { on: (name, handler) => events.set(name, handler) },
-    host: {
-      call: async (method, params) => {
-        calls.push({ method, params });
-        if (method === "notifications.show") {
-          notifications.push(params);
-          return { ok: true, value: { delivered: true } };
-        }
-        const answer = answers[method];
-        if (answer === undefined) return { ok: false, code: "unknown_method", error: method };
-        return typeof answer === "function" ? answer(params) : answer;
-      },
-    },
+    host: { call: hostCaller(answers, calls, notifications) },
   };
 
   return { orca, calls, notifications, logs, commands, events };
