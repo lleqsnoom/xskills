@@ -288,3 +288,83 @@ describe("orca plugin — the probe proves identity, and the plugin stays on thi
     assert.equal(worker.readDays("<h1>hello</h1>"), null);
   });
 });
+
+describe("orca plugin — the report's address comes from the plugin's own settings", async () => {
+  const worker = await import(WORKER);
+
+  const resolve = async (answers) => {
+    const host = makeHost(answers);
+    const logs = [];
+    const resolved = await worker.resolveUrl({ orca: host.orca, log: (line) => logs.push(line) });
+    return { resolved, logs, host };
+  };
+
+  const settings = (value) => ({
+    "settings.get": { ok: true, value: { settings: value === undefined ? {} : { url: value } } },
+  });
+  const storage = (value) => ({ "storage.get": { ok: true, value: { value } } });
+
+  it("takes the address from the plugin's own settings", async () => {
+    const { resolved } = await resolve(settings("http://127.0.0.1:9000"));
+    assert.deepEqual(resolved, { origin: "http://127.0.0.1:9000", source: "settings" });
+  });
+
+  it("normalises the trailing slash, so two spellings are one address", async () => {
+    const { resolved } = await resolve(settings("http://127.0.0.1:9000/"));
+    assert.equal(resolved.origin, "http://127.0.0.1:9000");
+  });
+
+  it("falls back to its own storage, then to the default", async () => {
+    const stored = await resolve({ ...settings(undefined), ...storage("http://127.0.0.1:9001") });
+    assert.deepEqual(stored.resolved, { origin: "http://127.0.0.1:9001", source: "storage" });
+
+    const empty = await resolve({ ...settings(undefined), "storage.get": { ok: true, value: { value: null } } });
+    assert.deepEqual(empty.resolved, { origin: "http://127.0.0.1:8787", source: "default" });
+  });
+
+  it("prefers the reader's own setting over the plugin's storage", async () => {
+    const { resolved } = await resolve({ ...settings("http://127.0.0.1:9000"), ...storage("http://127.0.0.1:9001") });
+    assert.equal(resolved.source, "settings");
+    assert.equal(resolved.origin, "http://127.0.0.1:9000");
+  });
+
+  it("refuses a non-loopback setting instead of using it", async () => {
+    const { resolved, logs } = await resolve(settings("http://192.168.1.5:8787"));
+    assert.deepEqual(resolved, { origin: "http://127.0.0.1:8787", source: "default" });
+    assert.match(logs.join("\n"), /not loopback/);
+  });
+
+  it("names the type of a value that is not a URL at all", async () => {
+    const { resolved, logs } = await resolve(settings(9000));
+    assert.equal(resolved.source, "default");
+    assert.match(logs.join("\n"), /number/);
+  });
+
+  it("survives a host that cannot answer the settings call", async () => {
+    const rejecting = async () => {
+      throw new Error("settings store is unavailable");
+    };
+    const { resolved, logs } = await resolve({ "settings.get": rejecting, "storage.get": rejecting });
+    assert.equal(resolved.source, "default");
+    assert.match(logs.join("\n"), /settings store is unavailable/);
+  });
+
+  it("uses the resolved address for every command, and asks for it once", async () => {
+    const host = makeHost(settings("http://127.0.0.1:9000"));
+    const fetchStub = makeFetch([
+      { url: "http://127.0.0.1:9000/api/days", body: DAYS },
+      { url: "http://127.0.0.1:9000/api/open", method: "POST", body: OPENED },
+    ]);
+    const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub });
+
+    await plugin.open();
+    await plugin.probe();
+
+    assert.equal(host.calls.filter((call) => call.method === "settings.get").length, 1);
+    assert.ok(fetchStub.calls.length > 0);
+    assert.ok(
+      fetchStub.calls.every((call) => call.href.startsWith("http://127.0.0.1:9000")),
+      "every request went to the resolved address, not the default"
+    );
+  });
+});

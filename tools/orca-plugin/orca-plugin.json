@@ -12,5 +12,5 @@
   "contributes": {
     "commands": [{ "id": "report-open", "title": "x-skills report: Open" }]
   },
-  "capabilities": [{ "kind": "notifications:show" }]
+  "capabilities": [{ "kind": "notifications:show" }, { "kind": "settings:own" }, { "kind": "storage" }]
 }

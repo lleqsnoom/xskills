@@ -16,6 +16,7 @@ const OPEN_PATH = "/api/open";
 const NAME = "x-skills report";
 const TIMEOUT_NAMES = new Set(["AbortError", "TimeoutError"]);
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const ADDRESS_KEY = "url";
 
 /** The only hosts the report can live on: the server binds 127.0.0.1, and `localhost` is its other name. */
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost"]);
@@ -96,6 +97,34 @@ function makeRequest({ origin, fetchImpl, timeoutMs }) {
     });
 }
 
+/** Where the reader's intent wins: their own setting, then the plugin's storage, then the default. */
+const ADDRESS_SOURCES = [
+  { name: "settings", read: async (orca) => (await orca.host.call("settings.get", {}))?.value?.settings?.url },
+  { name: "storage", read: async (orca) => (await orca.host.call("storage.get", { key: ADDRESS_KEY }))?.value?.value },
+];
+
+/** One source, read defensively: a store that cannot answer is a source with nothing in it. */
+async function readSource(orca, source, log) {
+  try {
+    return await source.read(orca);
+  } catch (error) {
+    log(`could not read the ${source.name}: ${error?.message ?? error}`);
+    return undefined;
+  }
+}
+
+/** The address to use and which store it came from; a refused candidate is skipped, with its reason logged. */
+export async function resolveUrl({ orca, log = () => {} }) {
+  for (const source of ADDRESS_SOURCES) {
+    const candidate = await readSource(orca, source, log);
+    if (candidate === undefined || candidate === null) continue;
+    const allowed = loopbackOrigin(candidate);
+    if (allowed.ok) return { origin: allowed.origin, source: source.name };
+    log(`the ${source.name} holds ${String(candidate)}, refused: ${allowed.reason}`);
+  }
+  return { origin: DEFAULT_URL, source: "default" };
+}
+
 /** Is the report there, and which day is newest? */
 async function probeReport({ origin, request, timeoutMs }) {
   let response;
@@ -162,30 +191,43 @@ async function openReport({ origin, request, timeoutMs, notify, log, refused }) 
 }
 
 /** Everything a command needs, resolved once per activation. */
-function bindReport({ orca, fetchImpl, url, timeoutMs }) {
-  const allowed = loopbackOrigin(url);
+async function bindReport({ orca, fetchImpl, url, timeoutMs }) {
+  const log = (message) => orca.log(`${NAME}: ${message}`);
+  const address = url === undefined ? await resolveUrl({ orca, log }) : explicitAddress(url);
   return {
-    origin: allowed.ok ? allowed.origin : null,
-    request: allowed.ok ? makeRequest({ origin: allowed.origin, fetchImpl, timeoutMs }) : null,
-    refused: allowed.ok ? null : { up: false, kind: "bad-origin", origin: String(url), reason: allowed.reason },
+    source: address.source,
+    origin: address.origin,
+    request: address.origin ? makeRequest({ origin: address.origin, fetchImpl, timeoutMs }) : null,
+    refused: address.refused ?? null,
     timeoutMs,
-    log: (message) => orca.log(`${NAME}: ${message}`),
+    log,
     notify: (body) => orca.host.call("notifications.show", { title: NAME, body }),
   };
+}
+
+/** An address given to the plugin rather than resolved: the manifest's default, or a test's. */
+function explicitAddress(url) {
+  const allowed = loopbackOrigin(url);
+  return allowed.ok
+    ? { origin: allowed.origin, source: "explicit" }
+    : { origin: null, refused: { up: false, kind: "bad-origin", origin: String(url), reason: allowed.reason } };
 }
 
 export function createPlugin({
   orca,
   fetch: fetchImpl = fetch,
-  url = DEFAULT_URL,
+  url,
   timeoutMs = PROBE_TIMEOUT_MS,
 } = {}) {
-  const report = bindReport({ orca, fetchImpl, url, timeoutMs });
-  const open = () => openReport(report);
+  let pending = null;
+  const binding = () => (pending ??= bindReport({ orca, fetchImpl, url, timeoutMs }));
+  const open = async () => openReport(await binding());
 
   return {
-    origin: report.origin,
-    probe: async () => report.refused ?? probeReport(report),
+    probe: async () => {
+      const report = await binding();
+      return report.refused ?? probeReport(report);
+    },
     open,
     register: () => orca.commands.register("report-open", open),
   };
