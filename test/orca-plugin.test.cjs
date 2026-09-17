@@ -1007,3 +1007,76 @@ describe("orca plugin — Orca's events wake the check, and a down server is sil
     assert.equal(calls, 2, "one bad check must not wedge the plugin");
   });
 });
+
+describe("orca plugin — the panel tab", async () => {
+  const PANEL = path.join(PLUGIN, "panel.html");
+  const panel = () => fs.readFileSync(PANEL, "utf8");
+  const manifest = () => JSON.parse(fs.readFileSync(MANIFEST, "utf8"));
+
+  /** The actions the panel posts to the host, read from its own calls. */
+  const postedActions = () => [...panel().matchAll(/\bcall\(\s*"([^"]+)"/g)].map((match) => match[1]);
+
+  it("is contributed as a panel named after the plugin, with its file on disk", () => {
+    assert.deepEqual(manifest().contributes.panels, [
+      { id: "report", title: "x-skills report", icon: "plug", entry: "panel.html" },
+    ]);
+    assert.ok(fs.existsSync(PANEL));
+  });
+
+  it("references nothing the panel policy forbids", () => {
+    for (const external of [
+      /<script[^>]+\bsrc=/i,
+      /<link[^>]+\bhref=/i,
+      /\bsrc\s*=\s*["']?(https?:|\/\/)/i,
+      /@import/i,
+      /url\(\s*["']?(https?:|\/\/)/i,
+    ]) {
+      assert.doesNotMatch(panel(), external, "the policy is default-src 'none'");
+    }
+  });
+
+  it("carries no timer, no poller and no request of its own", () => {
+    for (const forbidden of [/\bsetTimeout\s*\(/, /\bsetInterval\s*\(/, /\brequestAnimationFrame\s*\(/, /\bfetch\s*\(/, /XMLHttpRequest/, /WebSocket/]) {
+      assert.doesNotMatch(panel(), forbidden);
+    }
+  });
+
+  it("posts only the two actions a panel is allowed to post", () => {
+    assert.deepEqual([...new Set(postedActions())].sort(), ["terminal.sendText", "workspace.readContext"]);
+    assert.match(panel(), /orca-panel-action-result/);
+  });
+
+  it("sends the open command to a terminal of the focused worktree", () => {
+    const html = panel();
+    assert.match(html, /npm run report:open/, "the text it types");
+    assert.match(html, /enter:\s*true/);
+    assert.match(html, /terminalId/);
+    assert.match(html, /displayName/);
+    assert.match(html, /branch/);
+  });
+
+  it("has words for every state it can be in", () => {
+    const html = panel();
+    for (const state of [
+      "Open the report",
+      "Reading the focused worktree",
+      "No worktree is focused",
+      "no terminal",
+      "Sent to",
+    ]) {
+      assert.ok(html.includes(state), `the panel needs the state: ${state}`);
+    }
+  });
+
+  it("keeps one loud thing, on the panel's type and spacing scales", () => {
+    const html = panel();
+    assert.equal([...html.matchAll(/<button\b/g)].length, 1, "one control on the panel");
+    assert.match(html, /<button[^>]*class="primary"/);
+    for (const size of [...html.matchAll(/font-size:\s*(\d+)px/g)].map((match) => Number(match[1]))) {
+      assert.ok([12, 14, 16].includes(size), `${size}px is off the panel's type scale`);
+    }
+    for (const space of [...html.matchAll(/padding:\s*(\d+)px/g)].map((match) => Number(match[1]))) {
+      assert.ok([4, 8, 12, 16, 24].includes(space), `${space}px is off the panel's spacing scale`);
+    }
+  });
+});

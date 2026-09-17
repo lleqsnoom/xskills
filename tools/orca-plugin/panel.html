@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>x-skills report</title>
+<style>
+  /* The host injects Orca's own tokens into this document; the fallbacks are for a standalone look. */
+  body {
+    margin: 0;
+    padding: 12px;
+    font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--foreground, #18181b);
+    background: var(--background, transparent);
+  }
+  .context {
+    margin: 0 0 12px;
+    color: var(--muted-foreground, #6d6d6d);
+  }
+  .primary {
+    display: block;
+    width: 100%;
+    min-height: 32px;
+    padding: 8px 12px;
+    border: 0;
+    border-radius: var(--radius, 6px);
+    background: var(--primary, #2563eb);
+    color: var(--primary-foreground, #ffffff);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .primary:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+  .primary:focus-visible {
+    outline: 2px solid var(--ring, #2563eb);
+    outline-offset: 2px;
+  }
+  .primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .note {
+    margin: 12px 0 0;
+    color: var(--muted-foreground, #6d6d6d);
+  }
+  .status {
+    margin: 12px 0 0;
+    min-height: 1.5em;
+    color: var(--muted-foreground, #6d6d6d);
+  }
+  .status[data-tone="error"] {
+    color: var(--destructive, #b91c1c);
+  }
+  code {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<p class="context" id="context">Reading the focused worktree…</p>
+<button class="primary" id="open" type="button" disabled>Open the report</button>
+<p class="note">An Orca panel has no network access, so this cannot show the report. It types
+<code>npm run report:open</code> into a terminal here: that starts the server if it is not answering, and the
+report opens in a tab.</p>
+<p class="status" id="status" role="status" aria-live="polite"></p>
+<script>
+  "use strict";
+
+  var sequence = 0;
+  var pending = {};
+  var contextEl = document.getElementById("context");
+  var openButton = document.getElementById("open");
+  var statusEl = document.getElementById("status");
+  var terminalId = null;
+
+  // The frame has an opaque origin, so the host is addressed as the parent window and verifies the sender.
+  function call(action, params) {
+    return new Promise(function (resolve) {
+      var requestId = "req-" + ++sequence;
+      pending[requestId] = resolve;
+      window.parent.postMessage({ type: "orca-panel-action", requestId: requestId, action: action, params: params }, "*");
+    });
+  }
+
+  window.addEventListener("message", function (event) {
+    var data = event.data;
+    if (!data || data.type !== "orca-panel-action-result") return;
+    var resolve = pending[data.requestId];
+    if (!resolve) return;
+    delete pending[data.requestId];
+    resolve(data);
+  });
+
+  function say(text, tone) {
+    statusEl.textContent = text;
+    statusEl.setAttribute("data-tone", tone || "info");
+  }
+
+  function show(worktree) {
+    if (!worktree) {
+      contextEl.textContent = "No worktree is focused";
+      openButton.disabled = true;
+      say("Focus a workspace in Orca, then reopen this panel.", "info");
+      return;
+    }
+    contextEl.textContent = worktree.displayName + " · " + worktree.branch;
+    var terminals = worktree.terminals || [];
+    terminalId = terminals.length ? terminals[0].id : null;
+    openButton.disabled = !terminalId;
+    if (!terminalId) say("This worktree has no terminal to send it to. Open one, then reopen this panel.", "info");
+  }
+
+  function read() {
+    call("workspace.readContext", {})
+      .then(function (result) {
+        show(result.ok ? result.value : null);
+      })
+      .catch(function () {
+        show(null);
+      });
+  }
+
+  openButton.addEventListener("click", function () {
+    if (!terminalId) return;
+    openButton.disabled = true;
+    say("Sending…", "info");
+    call("terminal.sendText", { terminalId: terminalId, text: "npm run report:open", enter: true })
+      .then(function (result) {
+        openButton.disabled = false;
+        if (result.ok) {
+          say("Sent to " + terminalId + ". The report opens in a tab once the server answers.", "info");
+          return;
+        }
+        say("Orca refused the text: " + (result.error || result.errorCode) + ". Try the palette command instead.", "error");
+      })
+      .catch(function (error) {
+        openButton.disabled = false;
+        say("Could not reach Orca: " + error.message + ". Try the palette command instead.", "error");
+      });
+  });
+
+  read();
+</script>
+</body>
+</html>

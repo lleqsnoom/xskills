@@ -36,6 +36,17 @@ npm run report
 A command that finds nothing answering says so, and says what to run. `Record` never retries: it writes
 `history.jsonl`, and a retry loop would rewrite it.
 
+## The panel
+
+`panel.html` is a right-sidebar panel tab, titled `x-skills report` after the manifest. It shows the focused
+worktree (`name · branch`) and one button, **Open the report**, which types `npm run report:open` into that
+worktree's first terminal — that starts the server if it is not answering and opens the report in a tab.
+
+It cannot do more than that, and it says so in the panel: an Orca panel is a sandboxed document with
+`connect-src 'none'` and no host-to-panel data channel, so it can neither fetch the report nor read the
+plugin's own storage. What it can call is exactly `workspace.readContext`, `terminal.sendText` and
+`notifications.show`.
+
 ## Keybinding
 
 `Mod+Alt+X` opens the report. The bundled `orca-navigation-shortcuts` plugin holds `Mod+Alt+T` (tasks),
@@ -61,12 +72,13 @@ default`), so a server on another port is a visible fact rather than a mystery.
   refused with the reason, and no request is made.
 - **It reads before it trusts.** A 200 is not evidence: the payload must be the report's own `GET /api/days`
   shape, so a stranger holding port 8787 reads as *not the report* rather than as a working report.
-- **It cannot render itself in a pane.** An Orca plugin panel is a sandboxed document
-  (`default-src 'none'; connect-src 'none'`), mounted in the right sidebar, with no host-to-panel data channel;
-  it cannot be a full-area tab and it cannot reach a loopback server. So the report opens as an Orca **browser
-  tab** — the same pane type a terminal uses — and the live pane is a request to Orca rather than something
-  this plugin can do today: see [PANE-REQUEST.md](PANE-REQUEST.md), which quotes the host lines that block it
-  and the two designs that would unblock it.
+- **The panel is a control, not a view.** `panel.html` is a right-sidebar panel tab named after the plugin. An
+  Orca panel is a sandboxed document (`default-src 'none'; connect-src 'none'`) with three callable host
+  actions and no data channel, so it cannot fetch the report or read the plugin's own storage. It shows the
+  focused worktree and one button, which types `npm run report:open` into a terminal there; the report itself
+  opens as a full-area **browser tab** — the same pane type a terminal uses. A live *pane* is a request to
+  Orca rather than something this plugin can do today: see [PANE-REQUEST.md](PANE-REQUEST.md), which quotes the
+  host lines that block it and the two designs that would unblock it.
 
 ## What the worker sees
 
@@ -88,6 +100,8 @@ machine yet; the line exists so that the first run records it rather than leavin
 
 | File | What it is |
 |---|---|
-| `orca-plugin.json` | The manifest: identity, the command, the capabilities, and the engine range |
-| `main.mjs` | The worker: the probe, the open request, and the rules both obey |
-| `../../test/orca-plugin.test.cjs` | The tests, driven with a stubbed Orca host and a stubbed `fetch` |
+| `orca-plugin.json` | The manifest: identity, the four commands, the panel, the keybinding, the events, the capabilities |
+| `main.mjs` | The worker: the probe, the commands, the new-day check, and the rules they obey |
+| `panel.html` | The right-sidebar panel: the focused worktree and the one button |
+| `PANE-REQUEST.md` | What Orca would have to add for the report to live in a pane, and why it cannot today |
+| `../../test/orca-plugin.test.cjs` | The tests: the worker against a stubbed host, the panel and manifest as source audits |
