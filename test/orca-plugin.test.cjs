@@ -40,6 +40,16 @@ function makeFetch(routes) {
   return stub;
 }
 
+/** A port nobody is listening on: fetch rejects the way Node does. */
+function refusing() {
+  const stub = async (url) => {
+    stub.calls.push({ href: String(url) });
+    throw Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:8787"), { code: "ECONNREFUSED" });
+  };
+  stub.calls = [];
+  return stub;
+}
+
 /** The orca host API the worker uses, with every call recorded. */
 function makeHost(answers = {}) {
   const calls = [];
@@ -124,7 +134,7 @@ describe("orca plugin — the report in an Orca tab", async () => {
 
   it("says what to run when nothing answers", async () => {
     const host = makeHost();
-    const fetchStub = makeFetch([]);
+    const fetchStub = refusing();
     const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub });
 
     await plugin.open();
@@ -196,6 +206,85 @@ describe("orca plugin — the report in an Orca tab", async () => {
     const probe = await plugin.probe();
 
     assert.equal(probe.up, false);
+    assert.equal(probe.kind, "unreachable");
     assert.match(probe.reason, /time|abort/i);
+  });
+});
+
+describe("orca plugin — the probe proves identity, and the plugin stays on this machine", async () => {
+  const worker = await import(WORKER);
+
+  it("accepts the two loopback spellings, and normalises the trailing slash", () => {
+    assert.equal(worker.loopbackOrigin("http://127.0.0.1:8787").origin, "http://127.0.0.1:8787");
+    assert.equal(worker.loopbackOrigin("http://127.0.0.1:8787/").origin, "http://127.0.0.1:8787");
+    assert.equal(worker.loopbackOrigin("http://localhost:9000").origin, "http://localhost:9000");
+  });
+
+  it("refuses every way out of this machine, each with its own reason", () => {
+    const cases = [
+      ["https://127.0.0.1:8787", /http/i, "the report is plain http on loopback"],
+      ["http://127.0.0.1.example.com:8787", /loopback/i, "a hostname that starts with the right text is elsewhere"],
+      ["http://user:pass@127.0.0.1:8787", /credential|user|password/i, "credentials in a URL are never ours"],
+      ["http://[::1]:8787", /loopback/i, "the server binds 127.0.0.1, so this cannot be it"],
+      ["file:///etc/passwd", /http/i, "not a URL the report could answer on"],
+      ["http://192.168.1.5:8787", /loopback/i, "another machine"],
+      ["http://127.0.0.1:8787/skill/x-anal", /origin|path/i, "an origin, not a route"],
+      [undefined, /url|string/i, "no value at all"],
+      [42, /url|string/i, "not a string"],
+      ["not a url", /url/i, "not a URL"],
+    ];
+    for (const [value, pattern, why] of cases) {
+      const result = worker.loopbackOrigin(value);
+      assert.equal(result.ok, false, `${String(value)} must be refused (${why})`);
+      assert.match(result.reason, pattern, `${String(value)}: ${why}`);
+    }
+  });
+
+  it("never makes a request when the address is refused", async () => {
+    const host = makeHost();
+    const fetchStub = makeFetch([{ url: "http://192.168.1.5:8787/api/days", body: DAYS }]);
+    const plugin = worker.createPlugin({
+      orca: host.orca,
+      fetch: fetchStub,
+      url: "http://192.168.1.5:8787",
+    });
+
+    const probe = await plugin.probe();
+    await plugin.open();
+
+    assert.equal(probe.up, false);
+    assert.equal(probe.kind, "bad-origin");
+    assert.equal(fetchStub.calls.length, 0, "a refused address is never requested");
+    assert.equal(host.notifications.length, 1);
+    assert.match(host.notifications[0].body, /loopback/i);
+  });
+
+  it("tells a stranger on the port apart from a server that is not running", async () => {
+    const host = makeHost();
+    const fetchStub = makeFetch([{ url: `${ORIGIN}/api/days`, body: "<h1>hello</h1>", contentType: "text/html" }]);
+    const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub });
+
+    const probe = await plugin.probe();
+    await plugin.open();
+
+    assert.equal(probe.kind, "wrong-service");
+    assert.match(host.notifications[0].body, /not the report/i);
+    assert.doesNotMatch(host.notifications[0].body, /npm run report/);
+    assert.equal(fetchStub.calls.filter((call) => call.method === "POST").length, 0);
+  });
+
+  it("reads a payload only when it is the report's own shape", () => {
+    assert.deepEqual(worker.readDays({ dates: ["2026-09-16"], calendar: {} }), {
+      day: "2026-09-16",
+      dates: ["2026-09-16"],
+    });
+    assert.equal(worker.readDays({ dates: [], calendar: {} }).day, null);
+    assert.equal(worker.readDays({ dates: ["2026-9-7"], calendar: {} }), null);
+    assert.equal(worker.readDays({ dates: ["2026-09-17"] }), null);
+    assert.equal(worker.readDays({ calendar: {} }), null);
+    assert.equal(worker.readDays({ dates: [], calendar: [] }), null);
+    assert.equal(worker.readDays({ dates: "2026-09-17", calendar: {} }), null);
+    assert.equal(worker.readDays(null), null);
+    assert.equal(worker.readDays("<h1>hello</h1>"), null);
   });
 });
