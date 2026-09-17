@@ -85,7 +85,18 @@ function makeHost(answers = {}) {
   return { orca, calls, notifications, logs, commands, events };
 }
 
-const DAYS = { dates: ["2026-09-16", "2026-09-17"], recent: [], calendar: {} };
+/** A payload in the shape `GET /api/days` really sends, captured from a running report. */
+const REAL_DAYS = {
+  dates: ["2026-09-16", "2026-09-17"],
+  recent: [{ date: "2026-09-17", mean: 68.3, band: { key: "weak", label: "needs work" }, sessions: 21, scored: 4, skills: 28 }],
+  calendar: [
+    {
+      month: "2026-09",
+      cells: [{ day: null, date: null, recorded: false }, { day: 1, date: "2026-09-01", recorded: false }],
+    },
+  ],
+};
+const DAYS = { dates: ["2026-09-16", "2026-09-17"], recent: [], calendar: [] };
 const OPENED = { ok: true, surface: "orca", how: "created", url: `${ORIGIN}/`, message: "opened" };
 
 describe("orca plugin — the report in an Orca tab", async () => {
@@ -133,7 +144,7 @@ describe("orca plugin — the report in an Orca tab", async () => {
   it("still asks the server to open when no day is recorded yet", async () => {
     const host = makeHost();
     const fetchStub = makeFetch([
-      { url: `${ORIGIN}/api/days`, body: { dates: [], recent: [], calendar: {} } },
+      { url: `${ORIGIN}/api/days`, body: { dates: [], recent: [], calendar: [] } },
       { url: `${ORIGIN}/api/open`, method: "POST", body: OPENED },
     ]);
     const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub });
@@ -285,16 +296,18 @@ describe("orca plugin — the probe proves identity, and the plugin stays on thi
   });
 
   it("reads a payload only when it is the report's own shape", () => {
-    assert.deepEqual(worker.readDays({ dates: ["2026-09-16"], calendar: {} }), {
+    assert.deepEqual(worker.readDays({ dates: ["2026-09-16"], recent: [], calendar: [] }), {
       day: "2026-09-16",
       dates: ["2026-09-16"],
     });
-    assert.equal(worker.readDays({ dates: [], calendar: {} }).day, null);
-    assert.equal(worker.readDays({ dates: ["2026-9-7"], calendar: {} }), null);
-    assert.equal(worker.readDays({ dates: ["2026-09-17"] }), null);
-    assert.equal(worker.readDays({ calendar: {} }), null);
+    assert.equal(worker.readDays({ dates: [], recent: [], calendar: [] }).day, null);
+    assert.equal(worker.readDays(REAL_DAYS).day, "2026-09-17", "the shape a running report actually sends");
+    assert.equal(worker.readDays({ dates: ["2026-9-7"], recent: [], calendar: [] }), null);
+    assert.equal(worker.readDays({ dates: ["2026-09-17"], recent: [] }), null);
+    assert.equal(worker.readDays({ recent: [], calendar: [] }), null);
     assert.equal(worker.readDays({ dates: [], calendar: [] }), null);
-    assert.equal(worker.readDays({ dates: "2026-09-17", calendar: {} }), null);
+    assert.equal(worker.readDays({ dates: "2026-09-17", recent: [], calendar: [] }), null);
+    assert.equal(worker.readDays({ dates: [], recent: [], calendar: {} }), null, "the server sends months, not an object");
     assert.equal(worker.readDays(null), null);
     assert.equal(worker.readDays("<h1>hello</h1>"), null);
   });
@@ -430,7 +443,7 @@ describe("orca plugin — status, refresh and start", async () => {
 
   it("says no day is recorded rather than showing an empty count", async () => {
     const { host, run } = plugin({
-      routes: [{ url: `${ORIGIN}/api/days`, body: { dates: [], recent: [], calendar: {} } }],
+      routes: [{ url: `${ORIGIN}/api/days`, body: { dates: [], recent: [], calendar: [] } }],
     });
 
     await run("report-status");
@@ -709,7 +722,7 @@ describe("orca plugin — the manifest and the key it answers to", async () => {
 describe("orca plugin — it speaks once when a day lands", async () => {
   const worker = await import(WORKER);
 
-  const DAYS_TODAY = { dates: ["2026-09-16", "2026-09-17"], recent: [], calendar: {} };
+  const DAYS_TODAY = { dates: ["2026-09-16", "2026-09-17"], recent: [], calendar: [] };
   const MOVEMENT = { days: 3, movement: [{ latestScore: 80 }, { latestScore: null }], todos: [] };
   const stored = (value) => ({ "storage.get": { ok: true, value: { value } } });
   const quiet = { "settings.get": { ok: true, value: { settings: { notifyOnNewDay: false } } } };
@@ -847,7 +860,7 @@ describe("orca plugin — it speaks once when a day lands", async () => {
 describe("orca plugin — Orca's events wake the check, and a down server is silence", async () => {
   const worker = await import(WORKER);
 
-  const DAYS_TODAY = { dates: ["2026-09-16", "2026-09-17"], recent: [], calendar: {} };
+  const DAYS_TODAY = { dates: ["2026-09-16", "2026-09-17"], recent: [], calendar: [] };
   const MOVEMENT = { days: 3, movement: [{ latestScore: 80 }], todos: [] };
   const stored = (value) => ({ "storage.get": { ok: true, value: { value } } });
   const manifest = () => JSON.parse(fs.readFileSync(MANIFEST, "utf8"));
@@ -950,7 +963,7 @@ describe("orca plugin — Orca's events wake the check, and a down server is sil
     const slow = async (url) => {
       slow.calls.push({ href: String(url) });
       await held;
-      return respond({ dates: DAYS_TODAY.dates, recent: [], calendar: {} });
+      return respond({ dates: DAYS_TODAY.dates, recent: [], calendar: [] });
     };
     slow.calls = [];
     const { emit, probes } = wired({ fetch: slow });

@@ -69,12 +69,16 @@ export function loopbackOrigin(value) {
   return violated ? { ok: false, reason: violated.reason(url) } : { ok: true, origin: url.origin };
 }
 
-/** The shape `GET /api/days` has, and the only shape the worker accepts as the report. */
+/**
+ * The shape `GET /api/days` has, and the only shape the worker accepts as the report: `dates` as the recorded
+ * days, `recent` as their summaries, `calendar` as the months they span. All three are arrays — `calendar` is
+ * a list of month objects, not one object — because that is what the server sends.
+ */
 const DAYS_SHAPE = [
   (payload) => Array.isArray(payload.dates),
   (payload) => payload.dates.every((day) => typeof day === "string" && DATE.test(day)),
-  (payload) =>
-    Boolean(payload.calendar) && typeof payload.calendar === "object" && !Array.isArray(payload.calendar),
+  (payload) => Array.isArray(payload.recent),
+  (payload) => Array.isArray(payload.calendar),
 ];
 
 /**
