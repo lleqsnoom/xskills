@@ -491,18 +491,21 @@ export async function findReportRoot({ orca, own = {}, log = () => {}, run: runC
   const context = await readContext(orca, log);
   if (!context?.branch) return null;
 
+  const found = worktreeFor({ branch: context.branch, log, run: runCommand });
+  if (found) await writeStored({ orca, key: ROOT_KEY, value: found, log });
+  return found;
+}
+
+/** The path Orca has for a branch, or null: the one question the worker cannot answer about itself. */
+function worktreeFor({ branch, log, run: runCommand }) {
   const listed = runCommand(ORCA_CLI, ["worktree", "list", "--json"]);
   if (listed.code !== 0) {
     log(`could not ask Orca for its worktrees: ${firstLine(listed.stderr || listed.stdout)}`);
     return null;
   }
-  const match = parseWorktrees(listed.stdout).find((entry) => entry.branch === context.branch);
-  if (!match) {
-    log(`no worktree in Orca is on ${context.branch}`);
-    return null;
-  }
-  await writeStored({ orca, key: ROOT_KEY, value: match.path, log });
-  return match.path;
+  const match = parseWorktrees(listed.stdout).find((entry) => entry.branch === branch);
+  if (!match) log(`no worktree in Orca is on ${branch}`);
+  return match?.path ?? null;
 }
 
 const loadBakerFrom = (root) => import(pathToFileURL(path.join(root, "scripts", "report-panel.mjs")).href);
@@ -615,28 +618,33 @@ export function makePathNote({ log }) {
   };
 }
 
+/** What an Orca event does: look for a new day, then make the next panel open current. */
+function checkThenBake({ orca, binding, bake, noteFailure }) {
+  return async () => {
+    const bound = await binding();
+    const result = await checkNewDay({ orca, ...bound });
+    if (!result.checked) noteFailure(result.reason);
+    await bake(bound);
+    return result;
+  };
+}
+
 /** Orca's events: the plugin looks when something happens, and stays quiet when nothing is there. */
 function subscribeToEvents({ orca, binding, log, now, intervalMs, bake }) {
   const notePath = makePathNote({ log });
-  const noteFailure = makeFailureLog({ log });
   const onEvent = makeEventCheck({
     now,
     intervalMs,
     log,
-    check: async () => {
-      const bound = await binding();
-      const result = await checkNewDay({ orca, ...bound });
-      if (!result.checked) noteFailure(result.reason);
-      await bake(bound);
-      return result;
-    },
+    check: checkThenBake({ orca, binding, bake, noteFailure: makeFailureLog({ log }) }),
   });
 
-  const handle = async (payload) => {
-    notePath(payload);
-    await onEvent();
-  };
-  for (const name of PLUGIN_EVENTS) orca.events.on(name, handle);
+  for (const name of PLUGIN_EVENTS) {
+    orca.events.on(name, async (payload) => {
+      notePath(payload);
+      await onEvent();
+    });
+  }
 }
 
 /** The object a caller drives: one function per decision, without the palette in the way. */
