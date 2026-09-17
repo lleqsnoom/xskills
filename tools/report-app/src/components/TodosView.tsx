@@ -1,8 +1,10 @@
 import { Show, createResource, createSignal } from "solid-js";
 import { api, isSnapshot, type TodoItem } from "../api";
 import { todoLine } from "../lib";
+import { settled } from "../resource.mjs";
 import { taskFromTodo, type Task } from "../tasks";
 import { ShapePicker, TaskList } from "./TaskList";
+import { Loader } from "./Loader";
 
 /**
  * The to-do list. This screen is why the app has a server: the selection is a file beside the packs, so it
@@ -12,7 +14,9 @@ export function TodosView() {
   const [saved, { refetch }] = createResource(async () => api.todos());
   const [items, setItems] = createSignal<TodoItem[] | null>(null);
   const [status, setStatus] = createSignal("");
-  const current = () => items() ?? saved()?.items ?? [];
+  // Reading the list through `settled` keeps the failure a state this screen can draw, rather than a throw
+  // from inside its own update.
+  const current = () => items() ?? settled(saved)?.items ?? [];
 
   const persist = async (next: TodoItem[]) => {
     setItems(next);
@@ -40,43 +44,47 @@ export function TodosView() {
   };
 
   return (
-    <Show when={saved()} fallback={<p class="loading">Loading the list…</p>}>
-      <header>
-        <h1>To-do</h1>
-        <p class="facts">
-          {current().length} item{current().length === 1 ? "" : "s"}
-          {saved()!.updatedAt ? ` · saved ${saved()!.updatedAt}` : " · nothing saved yet"}
-        </p>
-        <div class="toolbar">
-          <button onClick={copy} disabled={!current().length}>
-            copy as markdown
-          </button>
-          <Show when={!isSnapshot()}>
-            <button onClick={clear} disabled={!current().length}>
-              clear
-            </button>
-          </Show>
-          <Show when={status()}>
-            <span class="dim">{status()}</span>
-          </Show>
-        </div>
-      </header>
+    <Loader resource={saved} loading="Loading the list…" empty="Nothing on the list yet.">
+      {(loaded) => (
+        <>
+          <header>
+            <h1>To-do</h1>
+            <p class="facts">
+              {current().length} item{current().length === 1 ? "" : "s"}
+              {loaded().updatedAt ? ` · saved ${loaded().updatedAt}` : " · nothing saved yet"}
+            </p>
+            <div class="toolbar">
+              <button onClick={copy} disabled={!current().length}>
+                copy as markdown
+              </button>
+              <Show when={!isSnapshot()}>
+                <button onClick={clear} disabled={!current().length}>
+                  clear
+                </button>
+              </Show>
+              <Show when={status()}>
+                <span class="dim">{status()}</span>
+              </Show>
+            </div>
+          </header>
 
-      <div class="section-head">
-        <h2>The selection</h2>
-        <ShapePicker />
-      </div>
-      <TaskList
-        tasks={current().map(taskFromTodo)}
-        empty="Nothing on the list. Open a day and use “+ to-do” on a proposal, and it lands here — and in .x-skills/daily/todos.json."
-        action={(task) => (
-          <Show when={!isSnapshot()} fallback={<span class="dim">a snapshot cannot write</span>}>
-            <button onClick={() => remove(task)} title={`drop ${task.id} from the list`}>
-              remove
-            </button>
-          </Show>
-        )}
-      />
-    </Show>
+          <div class="section-head">
+            <h2>The selection</h2>
+            <ShapePicker />
+          </div>
+          <TaskList
+            tasks={current().map(taskFromTodo)}
+            empty="Nothing on the list. Open a day and use “+ to-do” on a proposal, and it lands here — and in .x-skills/daily/todos.json."
+            action={(task) => (
+              <Show when={!isSnapshot()} fallback={<span class="dim">a snapshot cannot write</span>}>
+                <button onClick={() => remove(task)} title={`drop ${task.id} from the list`}>
+                  remove
+                </button>
+              </Show>
+            )}
+          />
+        </>
+      )}
+    </Loader>
   );
 }

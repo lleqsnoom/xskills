@@ -1,7 +1,9 @@
 import { For, Show, createMemo, createResource, createSignal } from "solid-js";
 import { api, type Band, type MovementPage, type MovementRow } from "../api";
 import { linkProps } from "../router";
+import { settled } from "../resource.mjs";
 import { Gauge, Sparkline } from "./charts";
+import { Loader } from "./Loader";
 
 /** The default screen: did anything in use get better or worse, and by which axis. */
 export function Movement() {
@@ -9,8 +11,10 @@ export function Movement() {
   const [filter, setFilter] = createSignal("");
   const [only, setOnly] = createSignal<"all" | "up" | "down">("all");
 
+  // Both memos read the resource, so both ask for the value safely: an unguarded read throws the failure out
+  // of the update that records it, and the screens below never get to draw their message.
   const rows = createMemo(() => {
-    const found = page()?.movement ?? [];
+    const found = settled(page)?.movement ?? [];
     const needle = filter().trim().toLowerCase();
     const pick = only();
     return found.filter(
@@ -21,7 +25,7 @@ export function Movement() {
   });
 
   const counts = createMemo(() => {
-    const found = page()?.movement ?? [];
+    const found = settled(page)?.movement ?? [];
     return {
       up: found.filter((r) => r.direction === "up").length,
       down: found.filter((r) => r.direction === "down").length,
@@ -30,44 +34,48 @@ export function Movement() {
   });
 
   return (
-    <Show when={page()} fallback={<p class="loading">Loading the record…</p>}>
-      <header>
-        <h1>Movement per skill</h1>
-        <p class="facts">
-          {page()!.days} day{page()!.days === 1 ? "" : "s"} recorded · {page()!.movement.length} skill
-          {page()!.movement.length === 1 ? "" : "s"} in use ·{" "}
-          <span class="good">{counts().up} improved</span>, <span class="weak">{counts().down} regressed</span>,{" "}
-          {counts().flat} flat
-        </p>
-        <div class="toolbar">
-          <input type="search" placeholder="filter by skill" value={filter()} onInput={(e) => setFilter(e.currentTarget.value)} />
-          <button class={only() === "all" ? "on" : ""} onClick={() => setOnly("all")}>all</button>
-          <button class={only() === "up" ? "on" : ""} onClick={() => setOnly("up")}>improved</button>
-          <button class={only() === "down" ? "on" : ""} onClick={() => setOnly("down")}>regressed</button>
-        </div>
-      </header>
+    <Loader resource={page} loading="Loading the record…" empty="No skill has been recorded yet.">
+      {(loaded) => (
+        <>
+          <header>
+            <h1>Movement per skill</h1>
+            <p class="facts">
+              {loaded().days} day{loaded().days === 1 ? "" : "s"} recorded · {loaded().movement.length} skill
+              {loaded().movement.length === 1 ? "" : "s"} in use ·{" "}
+              <span class="good">{counts().up} improved</span>, <span class="weak">{counts().down} regressed</span>,{" "}
+              {counts().flat} flat
+            </p>
+            <div class="toolbar">
+              <input type="search" placeholder="filter by skill" value={filter()} onInput={(e) => setFilter(e.currentTarget.value)} />
+              <button class={only() === "all" ? "on" : ""} onClick={() => setOnly("all")}>all</button>
+              <button class={only() === "up" ? "on" : ""} onClick={() => setOnly("up")}>improved</button>
+              <button class={only() === "down" ? "on" : ""} onClick={() => setOnly("down")}>regressed</button>
+            </div>
+          </header>
 
-      <p class="dim" style={{ margin: "1rem 0 .4rem", "max-width": "78ch" }}>
-        One row per skill, and the line is its daily mean before the sample floor — so the question this page
-        answers is whether it is going up or down, not what it scored on Tuesday. Ordered by change: the top
-        is where the work paid off, the bottom is where it did not.
-      </p>
+          <p class="dim" style={{ margin: "1rem 0 .4rem", "max-width": "78ch" }}>
+            One row per skill, and the line is its daily mean before the sample floor — so the question this page
+            answers is whether it is going up or down, not what it scored on Tuesday. Ordered by change: the top
+            is where the work paid off, the bottom is where it did not.
+          </p>
 
-      <Show when={rows().length} fallback={<p class="empty">No skill matches.</p>}>
-        <div class="movement">
-          <div class="mrow head">
-            <span>skill</span>
-            <span>line</span>
-            <span class="num">change</span>
-            <span>what moved</span>
-            <span class="num">latest</span>
-          </div>
-          <For each={rows()}>
-            {(row) => <MovementLine row={row} />}
-          </For>
-        </div>
-      </Show>
-    </Show>
+          <Show when={rows().length} fallback={<p class="empty">No skill matches.</p>}>
+            <div class="movement">
+              <div class="mrow head">
+                <span>skill</span>
+                <span>line</span>
+                <span class="num">change</span>
+                <span>what moved</span>
+                <span class="num">latest</span>
+              </div>
+              <For each={rows()}>
+                {(row) => <MovementLine row={row} />}
+              </For>
+            </div>
+          </Show>
+        </>
+      )}
+    </Loader>
   );
 }
 

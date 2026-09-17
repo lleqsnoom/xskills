@@ -1048,6 +1048,13 @@ describe("orca plugin — the panel tab", async () => {
       assert.doesNotMatch(html, external, "the panel policy is default-src 'none'");
     }
   });
+
+  it("hands a link that lost its href the pointer its role promises", () => {
+    if (!fs.existsSync(PANEL)) return;
+    // The host swallows clicks on `<a href>`, so the panel's links carry a role instead — and a browser gives
+    // an anchor without an href the text cursor, which is what "every button shows an I-beam" was.
+    assert.match(fs.readFileSync(PANEL, "utf8"), /a\[role=["']?link["']?\]\s*\{[^}]*cursor:\s*pointer/);
+  });
 });
 
 describe("orca plugin — the worker bakes the panel too", async () => {

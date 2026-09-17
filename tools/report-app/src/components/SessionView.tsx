@@ -2,12 +2,17 @@ import { For, Show, createResource } from "solid-js";
 import { api, type SessionDetail } from "../api";
 import { linkProps } from "../router";
 import { SignalList } from "./DayView";
+import { Loader } from "./Loader";
 
 /** One session: what the scanner counted, and every signal it blamed on a skill. */
 export function SessionView(props: { date: string; id: string }) {
   const [detail] = createResource(() => api.session(props.date, props.id));
   return (
-    <Show when={detail()} fallback={<p class="loading">Loading the session…</p>}>
+    <Loader
+      resource={detail}
+      loading="Loading the session…"
+      empty={`No session ${props.id} in ${props.date}.`}
+    >
       {(found) => (
         <>
           <header>
@@ -108,7 +113,7 @@ export function SessionView(props: { date: string; id: string }) {
           <SignalList signals={found().signals} date={props.date} limit={12} />
         </>
       )}
-    </Show>
+    </Loader>
   );
 }
 

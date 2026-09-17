@@ -5,6 +5,7 @@ import { AxisRates, Gauge, Radar, Sparkline } from "./charts";
 import { pct } from "../lib";
 import { taskFromProposal } from "../tasks";
 import { SignalList } from "./DayView";
+import { Loader } from "./Loader";
 import { TaskList } from "./TaskList";
 
 /**
@@ -14,18 +15,19 @@ import { TaskList } from "./TaskList";
 export function SkillView(props: { name: string }) {
   const [skill] = createResource(() => api.skill(props.name));
   return (
-    <Show when={skill()} fallback={<p class="loading">Loading {props.name}…</p>}>
-      <Show when={skill()!.series.length} fallback={<p class="failed">No movement recorded for {props.name}.</p>}>
+    <Loader resource={skill} loading={`Loading ${props.name}…`} empty={`No movement recorded for ${props.name}.`}>
+      {(loaded) => (
+      <Show when={loaded().series.length} fallback={<p class="failed">No movement recorded for {props.name}.</p>}>
         <header>
-          <h1 class="mono">{skill()!.name}</h1>
+          <h1 class="mono">{loaded()!.name}</h1>
           <p class="facts">
-            {skill()!.measured} of {skill()!.series.length} days measured
-            {skill()!.change === null
+            {loaded()!.measured} of {loaded()!.series.length} days measured
+            {loaded()!.change === null
               ? " · one day so far, so no change yet"
-              : ` · ${skill()!.change! > 0 ? "+" : ""}${skill()!.change!.toFixed(1)} over ${skill()!.measured} days`}
+              : ` · ${loaded()!.change! > 0 ? "+" : ""}${loaded()!.change!.toFixed(1)} over ${loaded()!.measured} days`}
           </p>
-          <Show when={floorNote(skill()!)}>
-            <p class="dim">{floorNote(skill()!)}</p>
+          <Show when={floorNote(loaded()!)}>
+            <p class="dim">{floorNote(loaded()!)}</p>
           </Show>
         </header>
 
@@ -34,31 +36,31 @@ export function SkillView(props: { name: string }) {
         <section class="panel skill-top">
           <div class="status">
             <div class="status-score">
-              <Gauge score={skill()!.latestScore} band={skill()!.band} size={110} label={skill()!.name} />
-              <span class={`mono stat-value ${skill()!.band.key}`}>
-                {skill()!.latestScore === null ? "—" : skill()!.latestScore!.toFixed(1)}
+              <Gauge score={loaded()!.latestScore} band={loaded()!.band} size={110} label={loaded()!.name} />
+              <span class={`mono stat-value ${loaded()!.band.key}`}>
+                {loaded()!.latestScore === null ? "—" : loaded()!.latestScore!.toFixed(1)}
               </span>
-              <span class={`pill ${skill()!.band.key}`}>{skill()!.band.label}</span>
+              <span class={`pill ${loaded()!.band.key}`}>{loaded()!.band.label}</span>
             </div>
             {/* The shape today: the gauge gives the number, the radar gives where it comes from. */}
             <div class="radar-box">
-              <Radar dimensions={skill()!.dimensions} label={`${skill()!.name} on ${skill()!.latest}`} />
+              <Radar dimensions={loaded()!.dimensions} label={`${loaded()!.name} on ${loaded()!.latest}`} />
               {/* The same five rates as a list, for a box too narrow to hold a labelled pentagon. */}
-              <AxisRates dimensions={skill()!.dimensions} />
+              <AxisRates dimensions={loaded()!.dimensions} />
             </div>
           </div>
           <div class="score-per-day">
             <h3 class="dim">Score per day</h3>
             <div class="chart-box">
-              <Sparkline points={skill()!.series} width={560} domain={[0, 100]} bands={[CONFIDENT, HEALTHY]} canvas annotate timeScale="log" />
+              <Sparkline points={loaded()!.series} width={560} domain={[0, 100]} bands={[CONFIDENT, HEALTHY]} canvas annotate timeScale="log" />
             </div>
           </div>
         </section>
 
-        <Show when={skill()!.moved.length}>
+        <Show when={loaded()!.moved.length}>
           <h2>What moved</h2>
           <p>
-            <For each={skill()!.moved}>
+            <For each={loaded()!.moved}>
               {(axis, index) => (
                 <>
                   {index() > 0 ? " · " : ""}
@@ -72,12 +74,12 @@ export function SkillView(props: { name: string }) {
           </p>
         </Show>
 
-        <Show when={skill()!.proposals.length}>
+        <Show when={loaded()!.proposals.length}>
           <div class="section-head">
-            <h2>What was proposed for it — {skill()!.proposals.length}</h2>
+            <h2>What was proposed for it — {loaded()!.proposals.length}</h2>
           </div>
           <TaskList
-            tasks={skill()!.proposals.map((proposal) => taskFromProposal(proposal, proposal.date))}
+            tasks={loaded()!.proposals.map((proposal) => taskFromProposal(proposal, proposal.date))}
             empty="No proposal targets this skill."
             action={(task) => (
               <a class="mono" {...linkProps({ name: "day", date: task.from! })} title={`open ${task.from}`}>
@@ -87,13 +89,13 @@ export function SkillView(props: { name: string }) {
           />
         </Show>
 
-        <Show when={skill()!.signals.length}>
-          <h2>Signals blamed on it — {skill()!.signals.length}</h2>
+        <Show when={loaded()!.signals.length}>
+          <h2>Signals blamed on it — {loaded()!.signals.length}</h2>
           <p class="dim">
             A signal is attached to every skill a session names, so this is what the scanner saw around this
             skill, not proof that the skill caused it.
           </p>
-          <SignalList signals={skill()!.signals} date={skill()!.latest ?? ""} showDay compact limit={5} />
+          <SignalList signals={loaded()!.signals} date={loaded()!.latest ?? ""} showDay compact limit={5} />
         </Show>
 
         <h2>Every day</h2>
@@ -110,7 +112,7 @@ export function SkillView(props: { name: string }) {
               </tr>
             </thead>
             <tbody>
-              <For each={[...skill()!.perDay].reverse()}>
+              <For each={[...loaded()!.perDay].reverse()}>
                 {(day) => (
                   <tr>
                     <td>
@@ -146,7 +148,8 @@ export function SkillView(props: { name: string }) {
         </div>
         <p class="dim">* below the sample floor: the mean is shown with a marker so a thin day is visible.</p>
       </Show>
-    </Show>
+      )}
+    </Loader>
   );
 }
 

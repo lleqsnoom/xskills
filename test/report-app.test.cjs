@@ -756,37 +756,39 @@ describe("report:panel — the app running on a snapshot", async () => {
   const snapshot = {
     bakedAt: "2026-09-17T21:40:12.000Z",
     newest: "2026-09-17",
+    days: ["2026-09-17"],
     data: { "/api/movement": { days: 2 }, "/api/day/2026-09-17": { date: "2026-09-17" } },
   };
 
-  /** A daily root with one pack, which is all a bake needs to have something to bake. */
-  function dailyRoot() {
+  /** A daily root with a pack per date, which is all a bake needs to have something to bake. */
+  function dailyRoot(dates = ["2026-09-17"]) {
     const dir = tmp();
-    const pack = path.join(dir, "2026-09-17");
-    fs.mkdirSync(pack, { recursive: true });
-    const session = {
-      id: "s1",
-      host: "crush",
-      uuid: "s1",
-      title: "One session",
-      project: "/tmp/p",
-      modified: "2026-09-17T10:00:00Z",
-      stats: { messages: 4, userMessages: 1, assistantMessages: 3, toolCalls: 2, toolResults: 2, panels: 1, toolFailures: 0, expectedExits: 0, repeats: 0, corrections: 0, reprompts: 0, proseQuestions: 0 },
-      skills: { loaded: ["x-plan"], used: ["x-plan"], unused: [] },
-      checks: [],
-      graphs: [],
-      runFolders: [],
-      artifacts: [],
-    };
-    const signal = { id: "S1", kind: "tool-failure", severity: "medium", summary: "bash failed", count: 1, suspects: ["x-plan"], session: "s1", sessionTitle: "One session", evidence: [] };
-    fs.writeFileSync(
-      path.join(pack, "summary.json"),
-      JSON.stringify({ pack: ".x-skills/daily/2026-09-17", generatedAt: "2026-09-17 05:00", hosts: [], counts: { scanned: 1 }, skills: { touched: [], idle: [] }, sessions: [session], signals: [signal], runFolders: [], artifacts: [], warnings: [], notes: [] })
-    );
-    fs.writeFileSync(
-      path.join(dir, "history.jsonl"),
-      `${JSON.stringify(line("2026-09-17", [scored("x-plan", 70, { trigger: 0.6 })], { sessions: 4 }))}\n`
-    );
+    const lines = [];
+    for (const date of dates) {
+      const pack = path.join(dir, date);
+      fs.mkdirSync(pack, { recursive: true });
+      const session = {
+        id: "s1",
+        host: "crush",
+        uuid: "s1",
+        title: "One session",
+        project: "/tmp/p",
+        modified: `${date}T10:00:00Z`,
+        stats: { messages: 4, userMessages: 1, assistantMessages: 3, toolCalls: 2, toolResults: 2, panels: 1, toolFailures: 0, expectedExits: 0, repeats: 0, corrections: 0, reprompts: 0, proseQuestions: 0 },
+        skills: { loaded: ["x-plan"], used: ["x-plan"], unused: [] },
+        checks: [],
+        graphs: [],
+        runFolders: [],
+        artifacts: [],
+      };
+      const signal = { id: "S1", kind: "tool-failure", severity: "medium", summary: "bash failed", count: 1, suspects: ["x-plan"], session: "s1", sessionTitle: "One session", evidence: [] };
+      fs.writeFileSync(
+        path.join(pack, "summary.json"),
+        JSON.stringify({ pack: `.x-skills/daily/${date}`, generatedAt: `${date} 05:00`, hosts: [], counts: { scanned: 1 }, skills: { touched: [], idle: [] }, sessions: [session], signals: [signal], runFolders: [], artifacts: [], warnings: [], notes: [] })
+      );
+      lines.push(`${JSON.stringify(line(date, [scored("x-plan", 70, { trigger: 0.6 })], { sessions: 4 }))}\n`);
+    }
+    fs.writeFileSync(path.join(dir, "history.jsonl"), lines.join(""));
     return dir;
   }
 
@@ -803,16 +805,19 @@ describe("report:panel — the app running on a snapshot", async () => {
     return dir;
   }
 
-  it("answers a path the snapshot holds, query or not", () => {
-    assert.deepEqual(baked.bakedAt(snapshot, "/api/movement"), { days: 2 });
+  it("answers a path the snapshot holds, query or not", () => {    assert.deepEqual(baked.bakedAt(snapshot, "/api/movement"), { days: 2 });
     assert.deepEqual(baked.bakedAt(snapshot, "/api/movement?days=14"), { days: 2 }, "the query is a knob");
     assert.deepEqual(baked.bakedAt(snapshot, "/api/day/2026-09-17"), { date: "2026-09-17" });
   });
 
-  it("says which day the snapshot holds when it holds no such path", () => {
+  it("says which days the snapshot holds when it holds no such path", () => {
     assert.equal(baked.bakedAt(snapshot, "/api/day/2026-09-16"), null);
-    assert.match(baked.missingSentence(snapshot, "/api/day/2026-09-16"), /2026-09-17/);
+    assert.match(baked.missingSentence(snapshot, "/api/day/2026-09-16"), /2026-09-17 only/);
     assert.match(baked.missingSentence(snapshot, "/api/day/2026-09-16"), /live report/);
+
+    const window = { ...snapshot, days: ["2026-09-17", "2026-09-16"] };
+    assert.match(baked.missingSentence(window, "/api/day/2026-09-15"), /2 days, up to 2026-09-17/);
+    assert.match(baked.missingSentence({ data: {} }, "/api/movement"), /holds no day/);
   });
 
   it("knows whether it is running on a snapshot at all", () => {
@@ -834,6 +839,12 @@ describe("report:panel — the app running on a snapshot", async () => {
     const panel = baked.navProps({ baked: true, href: "/day/2026-09-17" });
     assert.equal("href" in panel, false, "an <a href> is a click the host cancels before the app sees it");
     assert.deepEqual(panel, { role: "link", tabindex: 0 }, "so the anchor keeps a role and a tab stop instead");
+  });
+
+  it("keeps the pointer on a link that carries no href", () => {
+    const css = fs.readFileSync(path.join(ROOT, "tools", "report-app", "src", "styles.css"), "utf8");
+    assert.match(css, /a\[role="link"\]\s*\{[^}]*cursor:\s*pointer/, "an href-less anchor is still a link");
+    assert.match(css, /\.chart-point[^{]*\{[^}]*cursor:\s*crosshair/, "which must not make the chart's hover columns a hand");
   });
 
   it("inlines the entry and the stylesheet, leaving no external reference", () => {
@@ -861,6 +872,33 @@ describe("report:panel — the app running on a snapshot", async () => {
     assert.ok(table["/api/day/2026-09-17"], "the newest day");
     assert.ok(table["/api/day/2026-09-17/session/s1"], "its sessions");
     assert.ok(table["/api/skill/x-plan"], "the skills its movement rows name");
+  });
+
+  it("bakes every day a reader can reach, not only the newest", () => {
+    const table = baker.payloadTable({ root: dailyRoot(["2026-09-16", "2026-09-17"]) });
+
+    assert.ok(table["/api/day/2026-09-16"], "a day the rail offers is a day that opens");
+    assert.ok(table["/api/day/2026-09-16/session/s1"], "and its sessions open too");
+    assert.ok(table["/api/day/2026-09-17"], "the newest day is still there");
+    assert.deepEqual(baker.bakedDays(table), ["2026-09-17", "2026-09-16"], "newest first, read off the table");
+  });
+
+  it("stops at the byte budget, and keeps the newest day whatever it holds", () => {
+    const root = dailyRoot(["2026-09-16", "2026-09-17"]);
+    const kept = baker.payloadTable({ root, budget: 1 });
+
+    assert.deepEqual(baker.bakedDays(kept), ["2026-09-17"], "the day the reader lands on is never the one dropped");
+    assert.ok(kept["/api/day/2026-09-17/session/s1"], "and its drill-downs come with it");
+    assert.equal(kept["/api/day/2026-09-16"], undefined, "a day past the budget is left out, and says so");
+    assert.ok(kept["/api/movement"] && kept["/api/skill/x-plan"], "the record's own screens are not the budget's problem");
+  });
+
+  it("records the days it baked, so a snapshot can name them", () => {
+    const out = path.join(tmp(), "panel.html");
+    baker.bake({ root: dailyRoot(["2026-09-16", "2026-09-17"]), dist: panelBundle(), out });
+
+    const written = fs.readFileSync(out, "utf8");
+    assert.match(written, /"days":\["2026-09-17","2026-09-16"\]/);
   });
 
   it("writes one file with the app and the snapshot in it", () => {
@@ -995,5 +1033,96 @@ describe("report:panel — the app running on a snapshot", async () => {
     } finally {
       server.close();
     }
+  });
+});
+
+describe("a resource that failed is a state the view can draw", async () => {
+  const { errorMessage, settled, viewState } = await import(path.join(ROOT, "tools", "report-app", "src", "resource.mjs"));
+
+  /** A resource as Solid hands it over. `thrown` makes the accessor shout, for a value nobody may read. */
+  const resource = ({ error = undefined, loading = false, value = undefined, thrown = null } = {}) =>
+    Object.assign(
+      () => {
+        if (thrown) throw new Error(thrown);
+        return value;
+      },
+      { error, loading, latest: value }
+    );
+
+  it("says a failure is a failure, without reading the accessor", () => {
+    const failed = resource({ error: new Error("no pack for 2026-09-16"), thrown: "the accessor was read" });
+
+    assert.equal(viewState(failed), "error");
+    assert.equal(settled(failed), undefined, "a failed resource is never read");
+    assert.equal(errorMessage(failed), "no pack for 2026-09-16");
+  });
+
+  it("says what was thrown even when it was not an Error", () => {
+    assert.equal(errorMessage(resource({ error: "no pack for 2026-09-16" })), "no pack for 2026-09-16");
+    assert.equal(errorMessage(resource()), undefined);
+  });
+
+  it("tells a fetch in flight apart from an answer with nothing in it", () => {
+    const pending = resource({ loading: true });
+    assert.equal(viewState(pending), "loading");
+    assert.equal(settled(pending), undefined, "a resource in flight has no value yet, and reading one is safe");
+
+    assert.equal(viewState(resource({ value: null })), "empty", "settled, and holding nothing");
+    assert.equal(viewState(resource({ value: { days: 2 } })), "ready");
+    assert.deepEqual(settled(resource({ value: { days: 2 } })), { days: 2 });
+  });
+});
+
+describe("no view reads a resource where it cannot survive the read", async () => {
+  const SRC = path.join(ROOT, "tools", "report-app", "src");
+
+  function viewSources() {
+    const found = [];
+    for (const dir of [SRC, path.join(SRC, "components")]) {
+      for (const entry of fs.readdirSync(dir)) {
+        if (entry.endsWith(".tsx")) found.push(path.join(dir, entry));
+      }
+    }
+    return found;
+  }
+
+  /**
+   * Every `when=` prop that calls one of the file's own resources.
+   *
+   * Reading a resource's accessor inside a `when` prop throws the failure out of the update that recorded it,
+   * which aborts the rest of that update and leaves the view on the spinner it drew a moment earlier — the
+   * bug that made a day that failed to load look like a day that was still loading. `settled` is the read a
+   * view is allowed to make; a `when` prop is never the place for it.
+   *
+   * Only a `when` prop on one line is seen, which every one of them in this app is.
+   */
+  function readsInWhen(source) {
+    const resources = [...source.matchAll(/const \[(\w+)[^\]]*\] = createResource/g)].map((match) => match[1]);
+    const found = [];
+    for (const name of resources) {
+      for (const match of source.matchAll(new RegExp(`when=\\{[^}]*\\b${name}\\(`, "g"))) found.push(`${name}: ${match[0]}`);
+    }
+    return found;
+  }
+
+  it("leaves a resource's value to `settled`, and its three sentences to `Loader`", () => {
+    const offenders = viewSources().flatMap((file) => readsInWhen(fs.readFileSync(file, "utf8")).map((hit) => `${path.basename(file)} — ${hit}`));
+    assert.deepEqual(offenders, [], "a failed read here is a spinner that never becomes a message");
+  });
+
+  it("would catch the shape that was there before", () => {
+    const was = `
+      const [day] = createResource(() => api.day(props.date));
+      <Show when={day() ? day()! : undefined}>{(loaded) => <p>{loaded().date}</p>}</Show>;
+      <Show when={day.error}><p class="failed">{(day.error as Error).message}</p></Show>`;
+    assert.equal(readsInWhen(was).length, 1, "the day that never loaded, in one line");
+  });
+
+  it("draws every sentence a resource can mean in one place", () => {
+    const loader = fs.readFileSync(path.join(SRC, "components", "Loader.tsx"), "utf8");
+    assert.match(loader, /errorMessage\(props\.resource\)/, "the reason a fetch failed");
+    assert.match(loader, /class="loading"/, "what it is waiting for");
+    assert.match(loader, /class="empty"/, "an answer with nothing in it");
+    assert.match(loader, /settled\(props\.resource\)/, "and the value, through the guard");
   });
 });

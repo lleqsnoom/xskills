@@ -23,14 +23,30 @@ export const DEFAULT_ROOT = path.join(REPO_ROOT, ".x-skills", "daily");
 export const DEFAULT_DIST = path.join(REPO_ROOT, "tools", "report-app", "dist-panel");
 export const DEFAULT_OUT = path.join(REPO_ROOT, "tools", "orca-plugin", "panel.html");
 const MAX_DAYS = 14;
+/**
+ * How much snapshot the panel may carry.
+ *
+ * Orca caps a panel entry at 10 MB and the app shell is a little under 200 kB, so this is the payload's
+ * share of that with room to spare. A day costs somewhere between a quarter and half a megabyte, so the whole
+ * window fits in practice; the cap is what keeps a repository whose days are far heavier than this one's from
+ * baking a panel Orca would refuse.
+ */
+export const MAX_SNAPSHOT_BYTES = 6_000_000;
 
-/** The newest day, its sessions, and the skills the movement rows name: every drill-down the app offers. */
-function dayPayloads({ root, newest, movement, maxDays }) {
-  const day = apiDay({ root, date: newest });
-  const payloads = { [`/api/day/${newest}`]: day };
-  for (const session of day?.pack?.sessions ?? []) {
-    payloads[`/api/day/${newest}/session/${session.id}`] = apiSession({ root, date: newest, id: session.id });
+/** One day: its pack, its scores, its digest's proposals — and a drill-down per session it holds. */
+function dayPayloads({ root, date }) {
+  const day = apiDay({ root, date });
+  if (!day) return null;
+  const payloads = { [`/api/day/${date}`]: day };
+  for (const session of day.pack?.sessions ?? []) {
+    payloads[`/api/day/${date}/session/${session.id}`] = apiSession({ root, date, id: session.id });
   }
+  return payloads;
+}
+
+/** One drill-down per skill the movement table names: its series across the whole record, not one day. */
+function skillPayloads({ root, movement, maxDays }) {
+  const payloads = {};
   for (const row of movement.movement ?? []) {
     payloads[`/api/skill/${row.name}`] = apiSkill({ root, name: row.name, maxDays });
   }
@@ -38,20 +54,53 @@ function dayPayloads({ root, newest, movement, maxDays }) {
 }
 
 /**
+ * The days a reader can reach, newest first: the newest pack, then every day the record names.
+ *
+ * A day whose pack is gone is not one the app can open — the calendar refuses to link it — so the list is the
+ * days the record knows about, and `dayPayloads` skips the ones with nothing behind them.
+ */
+function daysNewestFirst(root, days) {
+  const newest = newestPack(root);
+  const recorded = days?.dates ?? [];
+  return [...new Set([...(newest ? [newest] : []), ...recorded])].sort().reverse();
+}
+
+/**
  * Every payload the app asks for, keyed by the path it asks for it on.
  *
- * One day is baked, not the window: the newest pack is the one the reader is looking at, and carrying fourteen
- * of them would multiply the file by about ten for screens nobody opens first.
+ * Every day the rail or the calendar can reach is baked, newest first, so a day a reader can click is a day
+ * that opens. The limit is a byte budget rather than a count, because one day's pack is not the size of
+ * another's: the days past it are left out and say so, and the newest day is always baked — a panel holding
+ * no day at all, and a panel holding the wrong one, are different kinds of broken.
  */
-export function payloadTable({ root = DEFAULT_ROOT, maxDays = MAX_DAYS } = {}) {
+export function payloadTable({ root = DEFAULT_ROOT, maxDays = MAX_DAYS, budget = MAX_SNAPSHOT_BYTES } = {}) {
   const movement = apiMovement({ root, maxDays });
-  const newest = newestPack(root);
-  return {
+  const days = apiDays({ root, maxDays });
+  const table = {
     "/api/movement": movement,
-    "/api/days": apiDays({ root, maxDays }),
+    "/api/days": days,
     "/api/todos": apiTodos({ root }),
-    ...(newest ? dayPayloads({ root, newest, movement, maxDays }) : {}),
+    ...skillPayloads({ root, movement, maxDays }),
   };
+  let bytes = 0;
+  for (const date of daysNewestFirst(root, days)) {
+    const payloads = dayPayloads({ root, date });
+    if (!payloads) continue;
+    const size = JSON.stringify(payloads).length;
+    if (bytes > 0 && bytes + size > budget) break;
+    Object.assign(table, payloads);
+    bytes += size;
+  }
+  return table;
+}
+
+/** The days a snapshot carries, newest first — read back off the table, so the two cannot disagree. */
+export function bakedDays(data) {
+  return Object.keys(data)
+    .map((path) => path.match(/^\/api\/day\/(\d{4}-\d{2}-\d{2})$/)?.[1])
+    .filter(Boolean)
+    .sort()
+    .reverse();
 }
 
 /** A built panel: its HTML, and the contents of every file that HTML points at. */
@@ -105,10 +154,12 @@ export function bake({
   dist = DEFAULT_DIST,
   out = DEFAULT_OUT,
   maxDays = MAX_DAYS,
+  budget = MAX_SNAPSHOT_BYTES,
   now = new Date(),
 } = {}) {
   const { html, assets } = readPanelBundle(dist);
-  const snapshot = { bakedAt: now.toISOString(), newest: newestPack(root), data: payloadTable({ root, maxDays }) };
+  const data = payloadTable({ root, maxDays, budget });
+  const snapshot = { bakedAt: now.toISOString(), newest: newestPack(root), days: bakedDays(data), data };
   const panel = withSnapshot(inlineAssets(html, assets), snapshot);
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, panel);
@@ -143,6 +194,7 @@ export function bakeIfStale({
   dist = DEFAULT_DIST,
   out = DEFAULT_OUT,
   maxDays = MAX_DAYS,
+  budget = MAX_SNAPSHOT_BYTES,
   force = false,
   now = new Date(),
 } = {}) {
@@ -150,7 +202,7 @@ export function bakeIfStale({
   const marker = `${out}.fingerprint`;
   const seen = fs.existsSync(marker) ? fs.readFileSync(marker, "utf8").trim() : null;
   if (!force && seen === stamp && fs.existsSync(out)) return { baked: false, reason: "current", stamp };
-  bake({ root, dist, out, maxDays, now });
+  bake({ root, dist, out, maxDays, budget, now });
   fs.writeFileSync(marker, `${stamp}\n`);
   return { baked: true, stamp, out };
 }

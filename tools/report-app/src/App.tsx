@@ -8,6 +8,7 @@ import { DayView } from "./components/DayView";
 import { SessionView } from "./components/SessionView";
 import { SkillView } from "./components/SkillView";
 import { TodosView } from "./components/TodosView";
+import { Loader } from "./components/Loader";
 
 /**
  * The shell: a rail with the screens and the recent days, a pane title bar with the actions, and the routed
@@ -31,40 +32,46 @@ export function App() {
           <Nav to={{ name: "todos" }} label="To-do" route={route()} />
         </nav>
 
-        <Show when={movement()}>
-          <section>
-            <span class="dim">
-              {movement()!.days} day{movement()!.days === 1 ? "" : "s"} recorded
-            </span>
-            <div class="rail-days">
-              <For each={movement()!.recent}>
-                {(day) => (
-                  <a {...linkProps({ name: "day", date: day.date })}>
-                    {day.date}
-                    <span class={`num ${day.band.key}`} style={{ float: "right" }}>
-                      {day.mean === null ? "—" : day.mean.toFixed(1)}
-                    </span>
-                  </a>
-                )}
-              </For>
-            </div>
-          </section>
-          <section>
-            <span class="dim">skills in use</span>
-            <div class="rail-days">
-              <For each={movement()!.movement.slice(0, 12)}>
-                {(row) => (
-                  <a {...linkProps({ name: "skill", skill: row.name })}>
-                    {row.name}
-                    <span class={`num ${row.direction}`} style={{ float: "right" }}>
-                      {row.change === null ? "" : `${row.change > 0 ? "+" : ""}${row.change.toFixed(1)}`}
-                    </span>
-                  </a>
-                )}
-              </For>
-            </div>
-          </section>
-        </Show>
+        {/* The rail loads the same payload the screens do, and it sits in the same tree: a throw from this
+            read would take the routed view down with it. */}
+        <Loader resource={movement} loading="Loading the record…" empty="Nothing recorded yet.">
+          {(loaded) => (
+            <>
+              <section>
+                <span class="dim">
+                  {loaded().days} day{loaded().days === 1 ? "" : "s"} recorded
+                </span>
+                <div class="rail-days">
+                  <For each={loaded().recent}>
+                    {(day) => (
+                      <a {...linkProps({ name: "day", date: day.date })}>
+                        {day.date}
+                        <span class={`num ${day.band.key}`} style={{ float: "right" }}>
+                          {day.mean === null ? "—" : day.mean.toFixed(1)}
+                        </span>
+                      </a>
+                    )}
+                  </For>
+                </div>
+              </section>
+              <section>
+                <span class="dim">skills in use</span>
+                <div class="rail-days">
+                  <For each={loaded().movement.slice(0, 12)}>
+                    {(row) => (
+                      <a {...linkProps({ name: "skill", skill: row.name })}>
+                        {row.name}
+                        <span class={`num ${row.direction}`} style={{ float: "right" }}>
+                          {row.change === null ? "" : `${row.change > 0 ? "+" : ""}${row.change.toFixed(1)}`}
+                        </span>
+                      </a>
+                    )}
+                  </For>
+                </div>
+              </section>
+            </>
+          )}
+        </Loader>
       </aside>
 
       <header class="topbar">

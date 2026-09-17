@@ -30,10 +30,15 @@ export function bakedAt(report, path) {
   return Object.hasOwn(data, bare) ? data[bare] : null;
 }
 
-/** What to say when the snapshot does not hold what was asked for: name the day it does, and where to look. */
+/** What to say when the snapshot does not hold what was asked for: name the days it does, and where to look. */
 export function missingSentence(report, path) {
-  const day = report?.newest ?? "no day";
-  return `this snapshot holds ${day} only, so it has no ${path} — open the live report for it`;
+  const days = report?.days ?? [];
+  const holds = !days.length
+    ? "no day"
+    : days.length === 1
+      ? `${days[0]} only`
+      : `${days.length} days, up to ${days[0]}`;
+  return `this snapshot holds ${holds}, so it has no ${path} — open the live report for it`;
 }
 
 /** A snapshot cannot write: it has no network, so say so rather than leave a button looking broken. */

@@ -47,8 +47,8 @@ npm run report:panel   # build the panel bundle, then bake the snapshot into too
 
 A panel is a sandboxed document with `connect-src 'none'`, so it cannot fetch. What it can do is run inline
 script and style, and Orca re-reads its entry file on every open — so the app answers from `window.__REPORT__`
-(a snapshot of movement, days, todos, the newest day, its sessions and the skills in use) instead of from the
-network.
+(a snapshot of movement, days, todos, every day the rail and the calendar can reach — each with its sessions —
+and the skills in use) instead of from the network.
 
 **Two callers keep that snapshot current, and they share one baker** (`scripts/report-panel.mjs`, the same
 module the standalone report uses):
@@ -88,8 +88,10 @@ report is a link, so all of them were dead until the href came out.
 
 - **It cannot write.** `+ to-do`, `remove` and `clear` are hidden, and `Run` is replaced by the snapshot's
 timestamp, because a panel cannot reach `/api/todos` or `/api/open`.
-- **It holds the newest day only.** An older day is a click away in the calendar, and the app says so instead
-  of spinning.
+- **It holds every recorded day, up to a byte budget.** Days are baked newest first until the payloads reach
+  6 MB (Orca refuses a panel entry over 10 MB), so the newest day is always there and a record far heavier than
+  this one's loses its oldest days rather than its newest. A day that is not in the snapshot says which days
+  are, instead of spinning.
 - **It is a dashboard in a side panel.** Measured at 360px: the page does not overflow, and the movement table
   scrolls inside its own wrapper — usable, not roomy.
 - **A live pane still needs Orca.** See [PANE-REQUEST.md](PANE-REQUEST.md): a panel cannot be a full-area tab

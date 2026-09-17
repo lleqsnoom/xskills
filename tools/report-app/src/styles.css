@@ -78,6 +78,10 @@ body { background: var(--background); color: var(--foreground);
   -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 a { color: var(--link); text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 2px; }
 a:hover { text-decoration: underline; }
+/* A baked panel's links carry no href — the host swallows those clicks — and a browser hands an href-less
+   anchor the text cursor, which is what "every button shows an I-beam" was. The role is what says it is still
+   a link, so the pointer hangs off the role; the served app's links keep the browser's own. */
+a[role="link"] { cursor: pointer; }
 code, .mono { font-family: var(--font-mono); overflow-wrap: anywhere; }
 code { background: var(--muted); padding: .05em .3em; border-radius: var(--radius-sm); }
 /* Charts are drawn at a fixed reading size and scale down rather than pushing the page sideways. */

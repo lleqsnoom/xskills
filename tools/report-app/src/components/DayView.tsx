@@ -4,6 +4,7 @@ import { linkProps } from "../router";
 import { Bar } from "./charts";
 import { severityClass } from "../lib";
 import { ShapePicker, TaskList } from "./TaskList";
+import { Loader } from "./Loader";
 import { taskFromProposal, type Task } from "../tasks";
 
 /** One day: what was scanned, how the skills scored, and what the digest wants changed. */
@@ -11,15 +12,9 @@ export function DayView(props: { date: string }) {
   // Remounted per route by the shell (see App), so this fetches once for the date it was given.
   const [day] = createResource(() => api.day(props.date));
   return (
-    <>
-      <Show when={day.error}>
-        <p class="failed">Could not load {props.date}: {(day.error as Error).message}</p>
-      </Show>
-      <Show when={day.loading}>
-        <p class="loading">Loading {props.date}…</p>
-      </Show>
-      <Show when={day() ? day()! : undefined}>
-        {(loaded) => (
+    <Loader resource={day} loading={`Loading ${props.date}…`} empty={`No pack on disk for ${props.date}.`}>
+      {(loaded) => (
+        <>
           <Show when={loaded().pack} fallback={<p class="failed">No pack on disk for {props.date}.</p>}>
             <DayHeader date={props.date} loaded={loaded()} />
 
@@ -66,9 +61,9 @@ export function DayView(props: { date: string }) {
               </Show>
             </details>
           </Show>
-        )}
-      </Show>
-    </>
+        </>
+      )}
+    </Loader>
   );
 }
 

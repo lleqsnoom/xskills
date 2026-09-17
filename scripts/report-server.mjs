@@ -506,13 +506,13 @@ function parseArgs(args) {
  * cycle — and a server that cannot bake a panel is still a working server. The baker carries the staleness
  * rule too, because the plugin's worker bakes by the same one.
  */
-function loadPanelBake({ root, out }) {
+function loadPanelBake({ root, out, maxDays }) {
   const target = typeof out === "string" ? path.resolve(out) : path.join(REPO_ROOT, "tools", "orca-plugin", "panel.html");
   if (!fs.existsSync(path.dirname(target))) return null;
   const baker = () => import("./report-panel.mjs");
   return {
     target,
-    rebake: async () => (await baker()).bake({ root, out: target }),
+    rebake: async () => (await baker()).bake({ root, out: target, maxDays }),
     fingerprint: async () => (await baker()).packFingerprint(root),
   };
 }
@@ -538,7 +538,7 @@ function main() {
   const root = typeof args.root === "string" ? path.resolve(args.root) : DAILY_ROOT;
   const maxDays = Number(typeof args.days === "string" ? args.days : 14) || 14;
   const port = Number(typeof args.port === "string" ? args.port : process.env.PORT ?? 8787);
-  const panel = args["no-panel"] === true ? null : loadPanelBake({ root, out: args["panel-out"] });
+  const panel = args["no-panel"] === true ? null : loadPanelBake({ root, out: args["panel-out"], maxDays });
   const rebake = panel ? panel.rebake : null;
 
   if (args["no-refresh"] !== true) {
