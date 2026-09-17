@@ -39,13 +39,17 @@ A command that finds nothing answering says so, and says what to run. `Record` n
 ## The panel
 
 `panel.html` is a right-sidebar panel tab, titled `x-skills report` after the manifest. It shows the focused
-worktree (`name · branch`) and one button, **Open the report**, which types `npm run report:open` into that
-worktree's first terminal — that starts the server if it is not answering and opens the report in a tab.
+worktree (`name · branch`) and names the two ways to open the report: **Ctrl+J** (⌘J on macOS) →
+"x-skills report: Open", and the `Mod+Alt+X` keybinding.
 
-It cannot do more than that, and it says so in the panel: an Orca panel is a sandboxed document with
-`connect-src 'none'` and no host-to-panel data channel, so it can neither fetch the report nor read the
-plugin's own storage. What it can call is exactly `workspace.readContext`, `terminal.sendText` and
-`notifications.show`.
+It has no button, deliberately. The only thing a panel can do to a terminal is type into one, and
+`workspace.readContext` returns terminal **ids only** — no titles, no marker for an agent session — so
+typing `npm run report:open` picked whichever terminal Orca listed first, which on this machine was the Crush
+session's TUI rather than a shell. A panel that cannot tell a shell from an agent is not allowed to type.
+
+It cannot show the report either: an Orca panel is a sandboxed document with `connect-src 'none'` and no
+host-to-panel data channel, so it can neither fetch the report nor read the plugin's own storage. What it can
+call is exactly `workspace.readContext`, `terminal.sendText` and `notifications.show`.
 
 ## Keybinding
 
@@ -102,6 +106,6 @@ machine yet; the line exists so that the first run records it rather than leavin
 |---|---|
 | `orca-plugin.json` | The manifest: identity, the four commands, the panel, the keybinding, the events, the capabilities |
 | `main.mjs` | The worker: the probe, the commands, the new-day check, and the rules they obey |
-| `panel.html` | The right-sidebar panel: the focused worktree and the one button |
+| `panel.html` | The right-sidebar panel: the focused worktree, and how to open the report |
 | `PANE-REQUEST.md` | What Orca would have to add for the report to live in a pane, and why it cannot today |
 | `../../test/orca-plugin.test.cjs` | The tests: the worker against a stubbed host, the panel and manifest as source audits |

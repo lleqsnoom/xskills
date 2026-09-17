@@ -18,41 +18,21 @@
     margin: 0 0 12px;
     color: var(--muted-foreground, #6d6d6d);
   }
-  .primary {
-    display: block;
-    width: 100%;
-    min-height: 32px;
-    padding: 8px 12px;
-    border: 0;
-    border-radius: var(--radius, 6px);
-    background: var(--primary, #2563eb);
-    color: var(--primary-foreground, #ffffff);
-    font: inherit;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .primary:hover:not(:disabled) {
-    opacity: 0.9;
-  }
-  .primary:focus-visible {
-    outline: 2px solid var(--ring, #2563eb);
-    outline-offset: 2px;
-  }
-  .primary:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  .lead {
+    margin: 0;
+    color: var(--foreground, #18181b);
   }
   .note {
     margin: 12px 0 0;
     color: var(--muted-foreground, #6d6d6d);
   }
-  .status {
-    margin: 12px 0 0;
-    min-height: 1.5em;
-    color: var(--muted-foreground, #6d6d6d);
-  }
-  .status[data-tone="error"] {
-    color: var(--destructive, #b91c1c);
+  kbd {
+    padding: 4px 8px;
+    border: 1px solid var(--border, #e5e5e5);
+    border-radius: var(--radius, 6px);
+    background: var(--secondary, #f4f4f5);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 12px;
   }
   code {
     font-family: var(--font-mono, ui-monospace, monospace);
@@ -62,20 +42,21 @@
 </head>
 <body>
 <p class="context" id="context">Reading the focused worktree…</p>
-<button class="primary" id="open" type="button" disabled>Open the report</button>
-<p class="note">An Orca panel has no network access, so this cannot show the report. It types
-<code>npm run report:open</code> into a terminal here: that starts the server if it is not answering, and the
-report opens in a tab.</p>
-<p class="status" id="status" role="status" aria-live="polite"></p>
+<p class="lead">Open the report from Orca's quick actions: <kbd id="palette">Ctrl+J</kbd>, then
+“x-skills report: Open”.</p>
+<p class="note">The keybinding <kbd id="key">Ctrl+Alt+X</kbd> does the same thing. This panel cannot reach the
+report itself — an Orca panel has no network access — so the report opens as a tab beside your terminals, not
+here. It has no way to tell a shell from an agent session, so it types into nothing.</p>
 <script>
   "use strict";
 
   var sequence = 0;
   var pending = {};
   var contextEl = document.getElementById("context");
-  var openButton = document.getElementById("open");
-  var statusEl = document.getElementById("status");
-  var terminalId = null;
+  var isMac = /mac/i.test(navigator.platform || "");
+
+  document.getElementById("palette").textContent = isMac ? "⌘J" : "Ctrl+J";
+  document.getElementById("key").textContent = isMac ? "⌘⌥X" : "Ctrl+Alt+X";
 
   // The frame has an opaque origin, so the host is addressed as the parent window and verifies the sender.
   function call(action, params) {
@@ -95,55 +76,22 @@ report opens in a tab.</p>
     resolve(data);
   });
 
-  function say(text, tone) {
-    statusEl.textContent = text;
-    statusEl.setAttribute("data-tone", tone || "info");
-  }
-
   function show(worktree) {
     if (!worktree) {
-      contextEl.textContent = "No worktree is focused";
-      openButton.disabled = true;
-      say("Focus a workspace in Orca, then reopen this panel.", "info");
+      contextEl.textContent = "No worktree is focused: open a workspace and the report follows it.";
       return;
     }
     contextEl.textContent = worktree.displayName + " · " + worktree.branch;
-    var terminals = worktree.terminals || [];
-    terminalId = terminals.length ? terminals[0].id : null;
-    openButton.disabled = !terminalId;
-    if (!terminalId) say("This worktree has no terminal to send it to. Open one, then reopen this panel.", "info");
   }
 
-  function read() {
-    call("workspace.readContext", {})
-      .then(function (result) {
-        show(result.ok ? result.value : null);
-      })
-      .catch(function () {
-        show(null);
-      });
-  }
-
-  openButton.addEventListener("click", function () {
-    if (!terminalId) return;
-    openButton.disabled = true;
-    say("Sending…", "info");
-    call("terminal.sendText", { terminalId: terminalId, text: "npm run report:open", enter: true })
-      .then(function (result) {
-        openButton.disabled = false;
-        if (result.ok) {
-          say("Sent to " + terminalId + ". The report opens in a tab once the server answers.", "info");
-          return;
-        }
-        say("Orca refused the text: " + (result.error || result.errorCode) + ". Try the palette command instead.", "error");
-      })
-      .catch(function (error) {
-        openButton.disabled = false;
-        say("Could not reach Orca: " + error.message + ". Try the palette command instead.", "error");
-      });
-  });
-
-  read();
+  // The only thing this panel asks the host: which workspace the reader is in, so the line above is true.
+  call("workspace.readContext", {})
+    .then(function (result) {
+      show(result.ok ? result.value : null);
+    })
+    .catch(function () {
+      show(null);
+    });
 </script>
 </body>
 </html>

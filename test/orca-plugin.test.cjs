@@ -1041,37 +1041,38 @@ describe("orca plugin — the panel tab", async () => {
     }
   });
 
-  it("posts only the two actions a panel is allowed to post", () => {
-    assert.deepEqual([...new Set(postedActions())].sort(), ["terminal.sendText", "workspace.readContext"]);
+  it("posts only the one action a panel may safely post", () => {
+    assert.deepEqual([...new Set(postedActions())], ["workspace.readContext"]);
     assert.match(panel(), /orca-panel-action-result/);
   });
 
-  it("sends the open command to a terminal of the focused worktree", () => {
+  it("types into nothing: the host cannot say which terminal is a shell", () => {
     const html = panel();
-    assert.match(html, /npm run report:open/, "the text it types");
-    assert.match(html, /enter:\s*true/);
-    assert.match(html, /terminalId/);
-    assert.match(html, /displayName/);
-    assert.match(html, /branch/);
+    assert.doesNotMatch(html, /terminal\.sendText/);
+    assert.doesNotMatch(html, /npm run/);
+    assert.doesNotMatch(html, /<button\b/);
+    assert.equal([...html.matchAll(/addEventListener\(\s*"click"/g)].length, 0);
+  });
+
+  it("names the two ways to open the report for real", () => {
+    const html = panel();
+    assert.match(html, /x-skills report: Open/);
+    assert.match(html, /Ctrl\+J/);
+    assert.match(html, /Ctrl\+Alt\+X/);
+    assert.match(html, /“J|⌘J/);
   });
 
   it("has words for every state it can be in", () => {
     const html = panel();
-    for (const state of [
-      "Open the report",
-      "Reading the focused worktree",
-      "No worktree is focused",
-      "no terminal",
-      "Sent to",
-    ]) {
+    for (const state of ["Reading the focused worktree", "No worktree is focused", "no network access"]) {
       assert.ok(html.includes(state), `the panel needs the state: ${state}`);
     }
+    assert.match(html, /displayName/);
+    assert.match(html, /branch/);
   });
 
-  it("keeps one loud thing, on the panel's type and spacing scales", () => {
+  it("keeps the panel's type and spacing scales", () => {
     const html = panel();
-    assert.equal([...html.matchAll(/<button\b/g)].length, 1, "one control on the panel");
-    assert.match(html, /<button[^>]*class="primary"/);
     for (const size of [...html.matchAll(/font-size:\s*(\d+)px/g)].map((match) => Number(match[1]))) {
       assert.ok([12, 14, 16].includes(size), `${size}px is off the panel's type scale`);
     }
