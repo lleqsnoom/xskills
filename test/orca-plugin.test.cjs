@@ -421,7 +421,7 @@ describe("orca plugin — status, refresh and start", async () => {
 
     await run("report-status");
 
-    const body = host.notifications[0].body;
+    const body = host.notifications.at(-1).body;
     assert.match(body, /up at http:\/\/127\.0\.0\.1:9000/);
     assert.match(body, /from settings/);
     assert.match(body, /2026-09-17/);
@@ -453,7 +453,7 @@ describe("orca plugin — status, refresh and start", async () => {
 
     await run("report-refresh");
 
-    const body = host.notifications[0].body;
+    const body = host.notifications.at(-1).body;
     assert.match(body, /recorded 2026-09-17/);
     assert.match(body, /1 pack\b/);
     assert.match(body, /4 in use/);
@@ -462,13 +462,20 @@ describe("orca plugin — status, refresh and start", async () => {
   it("repeats the server's own reason verbatim, once", async () => {
     const reason = "no pack under .x-skills/daily; run the collector first";
     const { host, fetchStub, run } = plugin({
-      routes: [{ url: `${ORIGIN}/api/refresh`, body: { ok: false, reason } }],
+      routes: [
+        { url: `${ORIGIN}/api/days`, body: DAYS },
+        { url: `${ORIGIN}/api/refresh`, body: { ok: false, reason } },
+      ],
     });
 
     await run("report-refresh");
 
-    assert.equal(host.notifications[0].body, reason);
-    assert.equal(fetchStub.calls.length, 1, "a recording is never retried");
+    assert.equal(host.notifications.at(-1).body, reason);
+    assert.equal(
+      fetchStub.calls.filter((call) => call.href.endsWith("/api/refresh")).length,
+      1,
+      "a recording is never retried"
+    );
   });
 
   it("says what to run when refresh finds nothing answering", async () => {
@@ -476,8 +483,8 @@ describe("orca plugin — status, refresh and start", async () => {
 
     await run("report-refresh");
 
-    assert.match(host.notifications[0].body, /npm run report/);
-    assert.equal(fetchStub.calls.length, 1);
+    assert.match(host.notifications.at(-1).body, /npm run report/);
+    assert.equal(fetchStub.calls.filter((call) => call.href.endsWith("/api/refresh")).length, 1);
   });
 
   it("truncates a body the host would refuse", async () => {
@@ -488,7 +495,7 @@ describe("orca plugin — status, refresh and start", async () => {
 
     await run("report-refresh");
 
-    const body = host.notifications[0].body;
+    const body = host.notifications.at(-1).body;
     assert.ok(body.length <= 1000, `body was ${body.length} characters`);
     assert.ok(body.endsWith("…"));
   });
@@ -696,5 +703,143 @@ describe("orca plugin — the manifest and the key it answers to", async () => {
     delete manifest.contributes.panels;
     delete manifest.capabilities;
     assert.deepEqual(manifestIssues(manifest), []);
+  });
+});
+
+describe("orca plugin — it speaks once when a day lands", async () => {
+  const worker = await import(WORKER);
+
+  const DAYS_TODAY = { dates: ["2026-09-16", "2026-09-17"], recent: [], calendar: {} };
+  const MOVEMENT = { days: 3, movement: [{ latestScore: 80 }, { latestScore: null }], todos: [] };
+  const stored = (value) => ({ "storage.get": { ok: true, value: { value } } });
+  const quiet = { "settings.get": { ok: true, value: { settings: { notifyOnNewDay: false } } } };
+
+  const setDay = (host) =>
+    host.calls.find((call) => call.method === "storage.set" && call.params.key === "lastSeenDay");
+
+  /** The report answering with today, and nothing else. */
+  const reportRoutes = () => [
+    { url: `${ORIGIN}/api/days`, body: DAYS_TODAY },
+    { url: `${ORIGIN}/api/movement`, body: MOVEMENT },
+  ];
+
+  /** A plugin whose store already holds yesterday, so today is news. */
+  function armed({ answers = {}, routes = [] } = {}) {
+    const host = makeHost({ ...stored("2026-09-16"), ...answers });
+    const fetchStub = makeFetch([
+      ...reportRoutes(),
+      { url: `${ORIGIN}/api/open`, method: "POST", body: OPENED },
+      ...routes,
+    ]);
+    const instance = worker.createPlugin({ orca: host.orca, fetch: fetchStub });
+    instance.register();
+    return { host, fetchStub, run: (id) => host.commands.get(id)(), check: () => instance.check() };
+  }
+
+  it("names the day, the record length and what was scored", () => {
+    const notice = worker.newDayNotice({ previous: "2026-09-16", newest: "2026-09-17", movement: MOVEMENT });
+    assert.equal(notice.body, "2026-09-17 is in · 3 days recorded · 1 skill scored");
+  });
+
+  it("says nothing when the day is the one already announced", () => {
+    assert.equal(worker.newDayNotice({ previous: "2026-09-17", newest: "2026-09-17", movement: MOVEMENT }), null);
+  });
+
+  it("says nothing when the report holds no day", () => {
+    assert.equal(worker.newDayNotice({ previous: "2026-09-16", newest: null, movement: MOVEMENT }), null);
+  });
+
+  it("still names the day when the movement could not be read", () => {
+    const notice = worker.newDayNotice({ previous: "2026-09-16", newest: "2026-09-17", movement: null });
+    assert.match(notice.body, /2026-09-17 is in/);
+    assert.doesNotMatch(notice.body, /undefined|NaN/);
+  });
+
+  it("announces once, and only once", async () => {
+    const { host, run } = armed();
+
+    await run("report-status");
+    assert.equal(host.notifications.length, 2, "the new day, then the status");
+    assert.match(host.notifications[0].body, /2026-09-17 is in/);
+
+    const second = armed();
+    await second.run("report-status");
+    assert.equal(second.host.notifications.length, 2, "yesterday's store is untouched in this fixture");
+  });
+
+  it("says nothing on a first look, and remembers the day it saw", async () => {
+    const host = makeHost({});
+    const instance = worker.createPlugin({ orca: host.orca, fetch: makeFetch(reportRoutes()) });
+
+    const result = await instance.check();
+
+    assert.equal(result.checked, true);
+    assert.deepEqual(host.notifications, [], "nothing has landed for this reader yet");
+    assert.equal(setDay(host).params.value, "2026-09-17");
+  });
+
+  it("remembers the day even when the reader has turned notifications off", async () => {
+    const { host, run } = armed({ answers: quiet });
+
+    await run("report-status");
+
+    assert.equal(host.notifications.length, 1, "only the status was shown");
+    assert.match(host.notifications[0].body, /up at/);
+    assert.equal(setDay(host).params.value, "2026-09-17");
+  });
+
+  it("announces a leap of several days once, naming the newest", async () => {
+    const { host, run } = armed({ answers: stored("2026-09-14") });
+
+    await run("report-status");
+
+    const announced = host.notifications.filter((entry) => /is in/.test(entry.body));
+    assert.equal(announced.length, 1);
+    assert.match(announced[0].body, /2026-09-17 is in/);
+    assert.doesNotMatch(announced[0].body, /2026-09-15/);
+  });
+
+  it("stays silent when the report is not answering, and remembers nothing", async () => {
+    const host = makeHost({ ...stored("2026-09-16") });
+    const instance = worker.createPlugin({ orca: host.orca, fetch: refusing() });
+
+    const result = await instance.check();
+
+    assert.equal(result.checked, false);
+    assert.equal(host.notifications.length, 0);
+    assert.equal(setDay(host), undefined);
+  });
+
+  it("runs before open and before refresh, not only before status", async () => {
+    const opened = armed();
+    await opened.run("report-open");
+    assert.match(opened.host.notifications[0].body, /2026-09-17 is in/);
+
+    const refreshed = armed({
+      routes: [
+        {
+          url: `${ORIGIN}/api/refresh`,
+          body: { ok: true, day: "2026-09-17", packs: ["2026-09-17"], skills: 11, inUse: 4 },
+        },
+      ],
+    });
+    await refreshed.run("report-refresh");
+    assert.match(refreshed.host.notifications[0].body, /2026-09-17 is in/);
+    assert.match(refreshed.host.notifications[1].body, /recorded/);
+  });
+
+  it("shows the new day even when the store refuses to be written", async () => {
+    const host = makeHost({
+      ...stored("2026-09-16"),
+      "storage.set": { ok: false, code: "capability_denied", error: "storage was not granted" },
+    });
+    const fetchStub = makeFetch(reportRoutes());
+    const instance = worker.createPlugin({ orca: host.orca, fetch: fetchStub });
+
+    const result = await instance.check();
+
+    assert.equal(result.checked, true);
+    assert.equal(host.notifications.length, 1);
+    assert.match(host.logs.join("\n"), /storage was not granted/);
   });
 });

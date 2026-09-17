@@ -13,6 +13,7 @@ export const PROBE_TIMEOUT_MS = 1500;
 
 const DAYS_PATH = "/api/days";
 const REFRESH_PATH = "/api/refresh";
+const MOVEMENT_PATH = "/api/movement";
 const OPEN_PATH = "/api/open";
 const NAME = "x-skills report";
 const START_TEXT = "npm run report";
@@ -20,6 +21,8 @@ const NOTIFY_BODY_LIMIT = 1000;
 const TIMEOUT_NAMES = new Set(["AbortError", "TimeoutError"]);
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const ADDRESS_KEY = "url";
+const LAST_SEEN_KEY = "lastSeenDay";
+const NOTIFY_KEY = "notifyOnNewDay";
 
 /** The only hosts the report can live on: the server binds 127.0.0.1, and `localhost` is its other name. */
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost"]);
@@ -109,30 +112,71 @@ function makeRequest({ origin, fetchImpl, timeoutMs }) {
     });
 }
 
-/** Where the reader's intent wins: their own setting, then the plugin's storage, then the default. */
-const ADDRESS_SOURCES = [
-  { name: "settings", read: async (orca) => (await orca.host.call("settings.get", {}))?.value?.settings?.url },
-  { name: "storage", read: async (orca) => (await orca.host.call("storage.get", { key: ADDRESS_KEY }))?.value?.value },
-];
-
-/** One source, read defensively: a store that cannot answer is a source with nothing in it. */
-async function readSource(orca, source, log) {
+/**
+ * The plugin's own settings, read once per activation: one call serves every key the plugin keeps there.
+ * A store that cannot answer is an empty record, so a denied capability costs a default, not a command.
+ */
+async function readOwnSettings({ orca, log }) {
   try {
-    return await source.read(orca);
+    const answer = await orca.host.call("settings.get", {});
+    const settings = answer?.ok === true ? answer.value?.settings : null;
+    return settings && typeof settings === "object" ? settings : {};
   } catch (error) {
-    log(`could not read the ${source.name}: ${error?.message ?? error}`);
+    log(`could not read the settings: ${error?.message ?? error}`);
+    return {};
+  }
+}
+
+/** One of the plugin's own storage keys, or undefined. */
+async function readOwnStorage({ orca, key, log }) {
+  try {
+    return (await orca.host.call("storage.get", { key }))?.value?.value;
+  } catch (error) {
+    log(`could not read the storage: ${error?.message ?? error}`);
     return undefined;
   }
 }
 
-/** The address to use and which store it came from; a refused candidate is skipped, with its reason logged. */
-export async function resolveUrl({ orca, log = () => {} }) {
-  for (const source of ADDRESS_SOURCES) {
-    const candidate = await readSource(orca, source, log);
-    if (candidate === undefined || candidate === null) continue;
-    const allowed = loopbackOrigin(candidate);
+/** A value the reader left for the plugin: their own setting wins, then the plugin's storage. */
+async function readOwn({ orca, own, key, log }) {
+  const fromSettings = own[key];
+  if (fromSettings !== undefined && fromSettings !== null) return fromSettings;
+  return readOwnStorage({ orca, key, log });
+}
+
+/** Remember a value in the plugin's own storage. A store that refuses is logged, never thrown. */
+async function writeStored({ orca, key, value, log }) {
+  try {
+    const answer = await orca.host.call("storage.set", { key, value });
+    if (answer?.ok !== true) log(`could not remember ${key}: ${answer?.error ?? answer?.code ?? "refused"}`);
+    return answer?.ok === true;
+  } catch (error) {
+    log(`could not remember ${key}: ${error?.message ?? error}`);
+    return false;
+  }
+}
+
+/** A boolean the reader can set, read the same way as the address. */
+async function resolveFlag({ orca, own, key, fallback, log }) {
+  const value = await readOwn({ orca, own, key, log });
+  return typeof value === "boolean" ? value : fallback;
+}
+
+/**
+ * The address to use and which store it came from; a refused candidate is skipped, with its reason logged.
+ * An activation passes the settings record it already read; a lone caller lets this read its own.
+ */
+export async function resolveUrl({ orca, own, log = () => {} }) {
+  const settings = own ?? (await readOwnSettings({ orca, log }));
+  const sources = [
+    { name: "settings", value: settings[ADDRESS_KEY] },
+    { name: "storage", value: await readOwnStorage({ orca, key: ADDRESS_KEY, log }) },
+  ];
+  for (const source of sources) {
+    if (source.value === undefined || source.value === null) continue;
+    const allowed = loopbackOrigin(source.value);
     if (allowed.ok) return { origin: allowed.origin, source: source.name };
-    log(`the ${source.name} holds ${String(candidate)}, refused: ${allowed.reason}`);
+    log(`the ${source.name} holds ${String(source.value)}, refused: ${allowed.reason}`);
   }
   return { origin: DEFAULT_URL, source: "default" };
 }
@@ -295,12 +339,14 @@ async function openReport({ origin, request, timeoutMs, notify, log, refused }) 
 /** Everything a command needs, resolved once per activation. */
 async function bindReport({ orca, fetchImpl, url, timeoutMs }) {
   const log = logTo(orca);
-  const address = url === undefined ? await resolveUrl({ orca, log }) : explicitAddress(url);
+  const own = await readOwnSettings({ orca, log });
+  const address = url === undefined ? await resolveUrl({ orca, own, log }) : explicitAddress(url);
   return {
     source: address.source,
     origin: address.origin,
     request: address.origin ? makeRequest({ origin: address.origin, fetchImpl, timeoutMs }) : null,
     refused: address.refused ?? null,
+    announce: await resolveFlag({ orca, own, key: NOTIFY_KEY, fallback: true, log }),
     timeoutMs,
     log,
     notify: notifyVia(orca),
@@ -315,15 +361,90 @@ function explicitAddress(url) {
     : { origin: null, refused: { up: false, kind: "bad-origin", origin: String(url), reason: allowed.reason } };
 }
 
-/** The palette, as Orca sees it: one entry per contributed command. */
-function commandTable({ binding, startDeps }) {
+/** The movement payload, or null when it could not be read: the notice is worth more than its numbers. */
+async function movementFor({ origin, request }) {
+  try {
+    const response = await request(MOVEMENT_PATH);
+    if (!response.ok) return null;
+    const payload = await readJson(response);
+    return payload && typeof payload === "object" ? payload : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The sentence a new day deserves, or null when there is nothing to say.
+ *
+ * A first look is not news: with no day already seen, the reader has just arrived, and the plugin tells them
+ * about what lands from then on rather than about the day that was already there.
+ */
+export function newDayNotice({ previous, newest, movement }) {
+  if (typeof previous !== "string" || !newest || newest === previous) return null;
+  if (!movement) return { title: NAME, body: `${newest} is in · what it holds is here when you open it` };
+  const days = Number(movement.days ?? 0);
+  const scored = (movement.movement ?? []).filter((row) => (row?.latestScore ?? null) !== null).length;
   return {
-    "report-open": async () => openReport(await binding()),
-    "report-status": async () => reportStatus(await binding()),
-    "report-refresh": async () => reportRefresh(await binding()),
+    title: NAME,
+    body: `${newest} is in · ${days} ${days === 1 ? "day" : "days"} recorded · ${scored} ${scored === 1 ? "skill" : "skills"} scored`,
+  };
+}
+
+/** The day worth announcing, if any: what the plugin remembers against what is there now. */
+async function pendingNotice({ orca, found, movement, announce, log }) {
+  if (!announce) return null;
+  const previous = await readOwnStorage({ orca, key: LAST_SEEN_KEY, log });
+  return newDayNotice({ previous, newest: found.day, movement });
+}
+
+/**
+ * Look once, say once. The day is remembered whenever it is seen, announced or not, so turning notifications
+ * off does not build a queue that arrives the moment they are turned back on.
+ */
+export async function checkNewDay({ orca, origin, request, timeoutMs, notify, log, refused, announce = true }) {
+  if (refused) return { checked: false, reason: refused.reason };
+  const found = await probeReport({ origin, request, timeoutMs });
+  if (!found.up) return { checked: false, reason: found.reason };
+
+  const movement = await movementFor({ origin, request });
+  const notice = await pendingNotice({ orca, found, movement, announce, log });
+  if (notice) await notify(notice.body);
+  if (found.day) await writeStored({ orca, key: LAST_SEEN_KEY, value: found.day, log });
+  return { checked: true, day: found.day, announced: Boolean(notice) };
+}
+
+/** The palette, as Orca sees it: one entry per contributed command. */
+function commandTable({ binding, startDeps, orca }) {
+  const afterChecking = async (work) => {
+    const bound = await binding();
+    await checkNewDay({ orca, ...bound });
+    return work(bound);
+  };
+
+  return {
+    "report-open": () => afterChecking(openReport),
+    "report-status": () => afterChecking(reportStatus),
+    "report-refresh": () => afterChecking(reportRefresh),
     "report-start": async () => reportStart(startDeps),
   };
 }
+
+/** The object a caller drives: one function per decision, without the palette in the way. */
+function pluginSurface({ orca, binding, commands }) {
+  return {
+    probe: async () => {
+      const report = await binding();
+      return report.refused ?? probeReport(report);
+    },
+    check: async () => checkNewDay({ orca, ...(await binding()) }),
+    open: commands["report-open"],
+    register: () => {
+      for (const [id, handler] of Object.entries(commands)) orca.commands.register(id, handler);
+    },
+  };
+}
+
+const startDepsFor = (orca) => ({ orca, notify: notifyVia(orca), log: logTo(orca) });
 
 export function createPlugin({
   orca,
@@ -333,17 +454,8 @@ export function createPlugin({
 } = {}) {
   let pending = null;
   const binding = () => (pending ??= bindReport({ orca, fetchImpl, url, timeoutMs }));
-  const commands = commandTable({ binding, startDeps: { orca, notify: notifyVia(orca), log: logTo(orca) } });
-  return {
-    probe: async () => {
-      const report = await binding();
-      return report.refused ?? probeReport(report);
-    },
-    open: commands["report-open"],
-    register: () => {
-      for (const [id, handler] of Object.entries(commands)) orca.commands.register(id, handler);
-    },
-  };
+  const commands = commandTable({ binding, orca, startDeps: startDepsFor(orca) });
+  return pluginSurface({ orca, binding, commands });
 }
 
 /** Orca's worker entry. The second argument is ours: tests inject a fetch and a timeout. */
