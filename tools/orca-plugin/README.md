@@ -54,6 +54,20 @@ older than the last recording.
 The panel is generated and not committed (`panel.html` is gitignored): a clone that has not baked has no
 entry file, which shows as an empty panel rather than a broken plugin.
 
+### What the panel's own host does to it
+
+Orca injects a guard into every panel, and it is worth knowing because it shapes the app:
+
+- **A click on an `<a href>` is cancelled in the capture phase** (`preventDefault` +
+  `stopImmediatePropagation`), before any handler of the page runs. An anchor *without* an href is left alone.
+  So a snapshot renders the same links without an href — `navProps` in `tools/report-app/src/baked.mjs` —
+  and supplies `role="link"` and a tab stop instead, with Enter and Space activating them.
+- **Navigations are cancelled** (`window.navigation`), so the router keeps its view in memory.
+- **Forms and `window.open` are cancelled**; the app has neither.
+
+The symptom of getting this wrong is "the panel's buttons do nothing": every rail item and every row in the
+report is a link, so all of them were dead until the href came out.
+
 ### What the panel cannot do
 
 - **It cannot write.** `+ to-do`, `remove` and `clear` are hidden, and `Run` is replaced by the snapshot's

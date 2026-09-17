@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js";
-import { bakedReport } from "./baked.mjs";
+import { bakedReport, navProps } from "./baked.mjs";
 
 /**
  * A router in eighty lines: the path is a signal, and a link is an anchor whose click is intercepted.
@@ -69,15 +69,35 @@ export function navigate(to: Route, { replace = false } = {}) {
   window.scrollTo({ top: 0 });
 }
 
-/** An anchor that routes instead of reloading, so a link keeps the keyboard and the back button. */
+/** The attrs a link needs, in the shape the JSX spread accepts: an href, or a role and a tab stop. */
+function navAttrs(to: Route): { href?: string; role?: "link"; tabindex?: number } {
+  // `baked.mjs` is JavaScript, so the literal type of `role` is lost at the boundary: declare it here.
+  return navProps({ baked, href: withShape(href(to)) }) as { href?: string; role?: "link"; tabindex?: number };
+}
+
+/**
+ * An anchor that routes instead of reloading, so a link keeps the keyboard and the back button.
+ *
+ * In a snapshot it is an anchor *without* an href, because the panel host swallows those clicks: see
+ * `navProps`. The role and the tab stop are then ours to supply, and Enter or Space activates it.
+ */
 export function linkProps(to: Route) {
+  const go = () => navigate(to);
+  const onClick = (event: MouseEvent) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+    event.preventDefault();
+    go();
+  };
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    go();
+  };
+
   return {
-    href: withShape(href(to)),
-    onClick: (event: MouseEvent) => {
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
-      event.preventDefault();
-      navigate(to);
-    },
+    ...navAttrs(to),
+    onClick,
+    ...(baked ? { onKeyDown } : {}),
   };
 }
 

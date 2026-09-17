@@ -826,6 +826,15 @@ describe("report:panel — the app running on a snapshot", async () => {
     assert.match(baked.writeRefused(snapshot, "/api/todos"), /live report/);
   });
 
+  it("keeps the href out of a snapshot, because the host swallows those clicks", () => {
+    const served = baked.navProps({ baked: false, href: "/day/2026-09-17" });
+    assert.deepEqual(served, { href: "/day/2026-09-17" });
+
+    const panel = baked.navProps({ baked: true, href: "/day/2026-09-17" });
+    assert.equal("href" in panel, false, "an <a href> is a click the host cancels before the app sees it");
+    assert.deepEqual(panel, { role: "link", tabindex: 0 }, "so the anchor keeps a role and a tab stop instead");
+  });
+
   it("inlines the entry and the stylesheet, leaving no external reference", () => {
     const assets = { "/assets/app.js": "console.log('the app');", "/assets/app.css": "body{color:#18181b}" };
     const html = baker.inlineAssets(fs.readFileSync(path.join(panelBundle(), "index.html"), "utf8"), assets);

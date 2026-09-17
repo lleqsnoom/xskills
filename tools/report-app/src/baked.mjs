@@ -40,3 +40,18 @@ export function missingSentence(report, path) {
 export function writeRefused(report, path) {
   return `this snapshot cannot write, so ${path} is unavailable — open the live report for it`;
 }
+
+/**
+ * What a link carries where it is rendered.
+ *
+ * In a panel the host cancels every click on an `<a href>` in the capture phase, before any handler of ours
+ * runs — and it cancels navigations besides. So a snapshot renders the same anchors *without* an `href`: the
+ * host leaves those alone, the app routes in memory as it already does, and the keyboard keeps its tab stop
+ * through an explicit role.
+ *
+ * Returning the href only when it is safe to have one is the whole point: a link that keeps its href in a
+ * panel is a click that does nothing, which is what "the buttons do not work" looked like.
+ */
+export function navProps({ baked, href }) {
+  return baked ? { role: "link", tabindex: 0 } : { href };
+}
