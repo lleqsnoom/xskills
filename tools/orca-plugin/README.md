@@ -38,18 +38,34 @@ A command that finds nothing answering says so, and says what to run. `Record` n
 
 ## The panel
 
-`panel.html` is a right-sidebar panel tab, titled `x-skills report` after the manifest. It shows the focused
-worktree (`name · branch`) and names the two ways to open the report: **Ctrl+J** (⌘J on macOS) →
-"x-skills report: Open", and the `Mod+Alt+X` keybinding.
+`panel.html` is a right-sidebar panel tab, titled `x-skills report` after the manifest — and it is **the
+report's own UI**: the same Solid app the server serves, built to one file with the API payloads baked in.
 
-It has no button, deliberately. The only thing a panel can do to a terminal is type into one, and
-`workspace.readContext` returns terminal **ids only** — no titles, no marker for an agent session — so
-typing `npm run report:open` picked whichever terminal Orca listed first, which on this machine was the Crush
-session's TUI rather than a shell. A panel that cannot tell a shell from an agent is not allowed to type.
+```bash
+npm run report:panel   # build the panel bundle, then bake the snapshot into tools/orca-plugin/panel.html
+```
 
-It cannot show the report either: an Orca panel is a sandboxed document with `connect-src 'none'` and no
-host-to-panel data channel, so it can neither fetch the report nor read the plugin's own storage. What it can
-call is exactly `workspace.readContext`, `terminal.sendText` and `notifications.show`.
+A panel is a sandboxed document with `connect-src 'none'`, so it cannot fetch. What it can do is run inline
+script and style, and Orca re-reads its entry file on every open — so the app answers from `window.__REPORT__`
+(a snapshot of movement, days, todos, the newest day, its sessions and the skills in use) instead of from the
+network. `npm run report` bakes that snapshot on start and after every `/api/refresh`, so the panel is never
+older than the last recording.
+
+The panel is generated and not committed (`panel.html` is gitignored): a clone that has not baked has no
+entry file, which shows as an empty panel rather than a broken plugin.
+
+### What the panel cannot do
+
+- **It cannot write.** `+ to-do`, `remove` and `clear` are hidden, and `Run` is replaced by the snapshot's
+timestamp, because a panel cannot reach `/api/todos` or `/api/open`.
+- **It holds the newest day only.** An older day is a click away in the calendar, and the app says so instead
+  of spinning.
+- **It is a dashboard in a side panel.** Measured at 360px: the page does not overflow, and the movement table
+  scrolls inside its own wrapper — usable, not roomy.
+- **A live pane still needs Orca.** See [PANE-REQUEST.md](PANE-REQUEST.md): a panel cannot be a full-area tab
+  and cannot fetch, so live-and-wide is a request to the host.
+- **An installed copy is frozen.** Installed plugins are content-hash verified, so the bake only refreshes a
+  development copy; a marketplace build would carry the snapshot it was published with.
 
 ## Keybinding
 
@@ -106,6 +122,6 @@ machine yet; the line exists so that the first run records it rather than leavin
 |---|---|
 | `orca-plugin.json` | The manifest: identity, the four commands, the panel, the keybinding, the events, the capabilities |
 | `main.mjs` | The worker: the probe, the commands, the new-day check, and the rules they obey |
-| `panel.html` | The right-sidebar panel: the focused worktree, and how to open the report |
+| `panel.html` | The report's own UI, baked with a snapshot (generated: `npm run report:panel`) |
 | `PANE-REQUEST.md` | What Orca would have to add for the report to live in a pane, and why it cannot today |
 | `../../test/orca-plugin.test.cjs` | The tests: the worker against a stubbed host, the panel and manifest as source audits |

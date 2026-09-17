@@ -86,6 +86,7 @@ xskills <skill-name>
 ```bash
 npm run report:install          # once: the app's own dependencies
 npm run report:build            # once, and after any change under tools/report-app
+npm run report:panel            # the Orca plugin's panel: the same app, baked with a snapshot
 npm run report                  # http://127.0.0.1:8787/ — movement per skill, per day
 npm run report:open             # start it if it is not running, then open it in an Orca tab
 npm run report:window           # the same, in a window with no browser controls (chrome --app)
@@ -103,10 +104,11 @@ in use — one line a task with an importance badge, and the file, the check and
 ### The Orca plugin
 
 `tools/orca-plugin/` is an Orca plugin over the same server: four commands (`Open`, `Status`, `Record the
-newest day`, `Start the server here`), `Mod+Alt+X` for the first, and a notification the first time you look
-after a new day has landed. It owns no server process and talks only to a loopback address; the report itself
-is unchanged, and the plugin is a client of it. An Orca plugin panel cannot show a page from a local server, so
-the report opens as a full-area browser tab and the live pane is requested rather than faked — see
+newest day`, `Start the server here`), `Mod+Alt+X` for the first, a notification the first time you look after
+a new day has landed, and a **panel** that is this app itself — built to one file with the API payloads baked
+in, because a panel cannot fetch. It owns no server process and talks only to a loopback address; the report
+itself is unchanged, and the plugin is a client of it. A panel cannot be a full-area tab and cannot fetch, so
+the report also opens as a browser tab and the live wide pane is requested rather than faked — see
 [`tools/orca-plugin/PANE-REQUEST.md`](tools/orca-plugin/PANE-REQUEST.md) and
 [`tools/orca-plugin/README.md`](tools/orca-plugin/README.md).
 

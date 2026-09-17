@@ -612,6 +612,8 @@ describe("orca plugin — the manifest and the key it answers to", async () => {
     "settings:own",
   ]);
   const EVENTS = new Set(["worktree.created", "worktree.removed", "agent.status.changed"]);
+  /** Declared by the manifest and written by the tooling rather than by hand, so a clone may not have it. */
+  const GENERATED = new Set(["panel.html"]);
   const SLUG = /^[a-z0-9][a-z0-9.-]*$/;
   const SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
   const bindingKey = (binding) =>
@@ -642,6 +644,9 @@ describe("orca plugin — the manifest and the key it answers to", async () => {
 
     const files = [manifest.main, ...(contributes.panels ?? []).map((panel) => panel.entry)];
     for (const file of files.filter(Boolean)) {
+      // The panel is generated (gitignored): a clone that has not baked yet has no file, and that is a panel
+      // with nothing in it rather than a plugin that does not load. The baker has its own tests.
+      if (GENERATED.has(file)) continue;
       if (!exists(path.join(PLUGIN, file))) issues.push(`missing file ${file}`);
     }
 
@@ -1010,74 +1015,33 @@ describe("orca plugin — Orca's events wake the check, and a down server is sil
 
 describe("orca plugin — the panel tab", async () => {
   const PANEL = path.join(PLUGIN, "panel.html");
-  const panel = () => fs.readFileSync(PANEL, "utf8");
   const manifest = () => JSON.parse(fs.readFileSync(MANIFEST, "utf8"));
+  const gitignore = () => fs.readFileSync(path.join(ROOT, ".gitignore"), "utf8");
 
-  /** The actions the panel posts to the host, read from its own calls. */
-  const postedActions = () => [...panel().matchAll(/\bcall\(\s*"([^"]+)"/g)].map((match) => match[1]);
-
-  it("is contributed as a panel named after the plugin, with its file on disk", () => {
+  it("is contributed as a panel named after the plugin", () => {
     assert.deepEqual(manifest().contributes.panels, [
       { id: "report", title: "x-skills report", icon: "plug", entry: "panel.html" },
     ]);
-    assert.ok(fs.existsSync(PANEL));
   });
 
-  it("references nothing the panel policy forbids", () => {
+  it("is generated, so a clone that has not baked has no panel yet", () => {
+    assert.match(gitignore(), /tools\/orca-plugin\/panel\.html/, "the baked panel is not committed");
+    assert.equal(manifest().contributes.panels[0].entry, "panel.html");
+  });
+
+  it("is the app on a snapshot once it is baked: one file, no external reference", () => {
+    if (!fs.existsSync(PANEL)) return; // generated: the baker, and its tests, live in test/report-app.test.cjs
+    const html = fs.readFileSync(PANEL, "utf8");
+
+    assert.match(html, /window\.__REPORT__ = \{/, "the snapshot the app answers from");
+    assert.match(html, /"\/api\/movement"/);
     for (const external of [
       /<script[^>]+\bsrc=/i,
-      /<link[^>]+\bhref=/i,
-      /\bsrc\s*=\s*["']?(https?:|\/\/)/i,
+      /<link[^>]+\bhref="(?!data:)/i,
       /@import/i,
       /url\(\s*["']?(https?:|\/\/)/i,
     ]) {
-      assert.doesNotMatch(panel(), external, "the policy is default-src 'none'");
-    }
-  });
-
-  it("carries no timer, no poller and no request of its own", () => {
-    for (const forbidden of [/\bsetTimeout\s*\(/, /\bsetInterval\s*\(/, /\brequestAnimationFrame\s*\(/, /\bfetch\s*\(/, /XMLHttpRequest/, /WebSocket/]) {
-      assert.doesNotMatch(panel(), forbidden);
-    }
-  });
-
-  it("posts only the one action a panel may safely post", () => {
-    assert.deepEqual([...new Set(postedActions())], ["workspace.readContext"]);
-    assert.match(panel(), /orca-panel-action-result/);
-  });
-
-  it("types into nothing: the host cannot say which terminal is a shell", () => {
-    const html = panel();
-    assert.doesNotMatch(html, /terminal\.sendText/);
-    assert.doesNotMatch(html, /npm run/);
-    assert.doesNotMatch(html, /<button\b/);
-    assert.equal([...html.matchAll(/addEventListener\(\s*"click"/g)].length, 0);
-  });
-
-  it("names the two ways to open the report for real", () => {
-    const html = panel();
-    assert.match(html, /x-skills report: Open/);
-    assert.match(html, /Ctrl\+J/);
-    assert.match(html, /Ctrl\+Alt\+X/);
-    assert.match(html, /“J|⌘J/);
-  });
-
-  it("has words for every state it can be in", () => {
-    const html = panel();
-    for (const state of ["Reading the focused worktree", "No worktree is focused", "no network access"]) {
-      assert.ok(html.includes(state), `the panel needs the state: ${state}`);
-    }
-    assert.match(html, /displayName/);
-    assert.match(html, /branch/);
-  });
-
-  it("keeps the panel's type and spacing scales", () => {
-    const html = panel();
-    for (const size of [...html.matchAll(/font-size:\s*(\d+)px/g)].map((match) => Number(match[1]))) {
-      assert.ok([12, 14, 16].includes(size), `${size}px is off the panel's type scale`);
-    }
-    for (const space of [...html.matchAll(/padding:\s*(\d+)px/g)].map((match) => Number(match[1]))) {
-      assert.ok([4, 8, 12, 16, 24].includes(space), `${space}px is off the panel's spacing scale`);
+      assert.doesNotMatch(html, external, "the panel policy is default-src 'none'");
     }
   });
 });
