@@ -59,41 +59,30 @@ export function packFile(root, date) {
 }
 
 /**
- * What the record looks like right now: the newest pack, and the size and mtime of the file that carries it.
- *
- * A panel is baked from these files, and a panel that is already open cannot be asked to re-read them, so the
- * server watches this string and re-bakes when it changes. `none` is a record with no packs yet.
- */
-export function packFingerprint(root = DAILY_ROOT) {
-  const newest = newestPack(root);
-  if (!newest) return "none";
-  const file = packFile(root, newest);
-  if (!fs.existsSync(file)) return `${newest}:missing`;
-  const { size, mtimeMs } = fs.statSync(file);
-  return `${newest}:${size}:${Math.round(mtimeMs)}`;
-}
-
-/**
  * Re-bake whenever the record changes under us, so the panel a reader opens next is never older than the packs.
  *
  * Polling rather than `fs.watch`: recursive watching is not available on every platform Node 18 supports, a
  * pack arrives as several files, and one stat a few seconds apart costs less than chasing events. The interval,
  * the timer and the fingerprint are injectable so a test can drive the whole thing.
+ *
+ * The fingerprint is injected rather than owned: the same rule serves the plugin's worker, and it lives beside
+ * the baker in `report-panel.mjs`. The first tick only learns what the record looks like.
  */
 export function followPacks({
   root = DAILY_ROOT,
   rebake,
+  fingerprint,
   intervalMs = PACK_POLL_MS,
-  fingerprint = packFingerprint,
   timer = setInterval,
   clear = clearInterval,
 } = {}) {
-  let seen = fingerprint(root);
+  let seen = null;
 
   const tick = async () => {
-    const current = fingerprint(root);
-    if (current === seen) return false;
+    const current = await fingerprint(root);
+    const changed = seen !== null && current !== seen;
     seen = current;
+    if (!changed) return false;
     try {
       await rebake();
       return true;
@@ -514,14 +503,17 @@ function parseArgs(args) {
  * The panel baker, when the Orca plugin is here to bake for.
  *
  * Imported late on purpose: the baker imports this module's API functions, so a static import would be a
- * cycle — and a server that cannot bake a panel is still a working server.
+ * cycle — and a server that cannot bake a panel is still a working server. The baker carries the staleness
+ * rule too, because the plugin's worker bakes by the same one.
  */
-function loadRebake({ root, out }) {
+function loadPanelBake({ root, out }) {
   const target = typeof out === "string" ? path.resolve(out) : path.join(REPO_ROOT, "tools", "orca-plugin", "panel.html");
   if (!fs.existsSync(path.dirname(target))) return null;
-  return async () => {
-    const { bake } = await import("./report-panel.mjs");
-    return bake({ root, out: target });
+  const baker = () => import("./report-panel.mjs");
+  return {
+    target,
+    rebake: async () => (await baker()).bake({ root, out: target }),
+    fingerprint: async () => (await baker()).packFingerprint(root),
   };
 }
 
@@ -546,7 +538,8 @@ function main() {
   const root = typeof args.root === "string" ? path.resolve(args.root) : DAILY_ROOT;
   const maxDays = Number(typeof args.days === "string" ? args.days : 14) || 14;
   const port = Number(typeof args.port === "string" ? args.port : process.env.PORT ?? 8787);
-  const rebake = args["no-panel"] === true ? null : loadRebake({ root, out: args["panel-out"] });
+  const panel = args["no-panel"] === true ? null : loadPanelBake({ root, out: args["panel-out"] });
+  const rebake = panel ? panel.rebake : null;
 
   if (args["no-refresh"] !== true) {
     const result = refresh({ root, days: maxDays });
@@ -568,9 +561,9 @@ function main() {
         "",
       ].join("\n")
     );
-    if (rebake) {
-      void bakeQuietly(rebake);
-      followPacks({ root, rebake });
+    if (panel) {
+      void bakeQuietly(panel.rebake);
+      followPacks({ root, rebake: panel.rebake, fingerprint: panel.fingerprint });
     }
   });
   return 0;

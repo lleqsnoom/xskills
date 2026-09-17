@@ -4,8 +4,11 @@
  *
  * A panel is a document with no network, and Orca re-reads its entry file from disk on every open. So the app
  * is built to a single HTML file (no external reference survives the policy) and the payloads it would have
- * fetched are written into that same file. Every panel open then shows the newest baked record, and the server
- * re-bakes after anything that changes the record.
+ * fetched are written into that same file.
+ *
+ * This module is the one place that knows how to build a snapshot, and two callers share it: the report server,
+ * which owns the packs and keeps the panel current while it runs, and the Orca plugin's worker, which bakes
+ * whenever Orca wakes it so the panel is current even with no server running.
  *
  * Usage: node scripts/report-panel.mjs [--root <dir>] [--dist <dir>] [--out <file>]
  */
@@ -13,7 +16,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { apiDay, apiDays, apiMovement, apiSession, apiSkill, apiTodos, newestPack } from "./report-server.mjs";
+import { apiDay, apiDays, apiMovement, apiSession, apiSkill, apiTodos, newestPack, packFile } from "./report-server.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const DEFAULT_ROOT = path.join(REPO_ROOT, ".x-skills", "daily");
@@ -110,6 +113,46 @@ export function bake({
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, panel);
   return out;
+}
+
+/**
+ * What the record looks like right now: the newest pack, and the size and mtime of the file that carries it.
+ *
+ * `none` is a record with no packs yet. A change under the newest pack is what a bake is for, and both callers
+ * — the server's poll and the plugin worker — compare this string rather than re-reading the record.
+ */
+export function packFingerprint(root = DEFAULT_ROOT) {
+  const newest = newestPack(root);
+  if (!newest) return "none";
+  const file = packFile(root, newest);
+  if (!fs.existsSync(file)) return `${newest}:missing`;
+  // Sub-millisecond mtime, unrounded: a pack written twice in the same millisecond is still a bake.
+  const { size, mtimeMs } = fs.statSync(file);
+  return `${newest}:${size}:${mtimeMs}`;
+}
+
+/**
+ * Bake only if the panel is behind the record.
+ *
+ * `fingerprint` is remembered beside the panel (a sibling file, not plugin storage: this runs in a plain Node
+ * process as often as in a worker) so two callers cannot bake each other's work away, and a caller that has
+ * nothing to do pays one stat.
+ */
+export function bakeIfStale({
+  root = DEFAULT_ROOT,
+  dist = DEFAULT_DIST,
+  out = DEFAULT_OUT,
+  maxDays = MAX_DAYS,
+  force = false,
+  now = new Date(),
+} = {}) {
+  const stamp = packFingerprint(root);
+  const marker = `${out}.fingerprint`;
+  const seen = fs.existsSync(marker) ? fs.readFileSync(marker, "utf8").trim() : null;
+  if (!force && seen === stamp && fs.existsSync(out)) return { baked: false, reason: "current", stamp };
+  bake({ root, dist, out, maxDays, now });
+  fs.writeFileSync(marker, `${stamp}\n`);
+  return { baked: true, stamp, out };
 }
 
 function parseArgs(args) {

@@ -913,15 +913,36 @@ describe("report:panel — the app running on a snapshot", async () => {
     }
   });
 
+  /** Move a pack on disk the way the collector does: same shape, new content. */
+  function touchPack(root) {
+    const file = path.join(root, "2026-09-17", "summary.json");
+    const pack = JSON.parse(fs.readFileSync(file, "utf8"));
+    pack.generatedAt = `${pack.generatedAt} (again)`;
+    fs.writeFileSync(file, JSON.stringify(pack));
+  }
+
   it("fingerprints the newest pack, so a change under it is visible", () => {
-    const srv = SERVER_MODULE;
     const root = dailyRoot();
-    const first = srv.packFingerprint(root);
+    const first = baker.packFingerprint(root);
     assert.match(first, /^2026-09-17:/, "the newest pack and what it holds");
 
-    fs.appendFileSync(path.join(root, "2026-09-17", "summary.json"), "\n");
-    assert.notEqual(srv.packFingerprint(root), first, "a rewritten pack is a new fingerprint");
-    assert.match(srv.packFingerprint(path.join(root, "nowhere")), /^none$/, "no packs is a fingerprint too");
+    touchPack(root);
+    assert.notEqual(baker.packFingerprint(root), first, "a rewritten pack is a new fingerprint");
+    assert.equal(baker.packFingerprint(path.join(root, "nowhere")), "none", "no packs is a fingerprint too");
+  });
+
+  it("bakes only when the record is newer than the panel", () => {
+    const root = dailyRoot();
+    const dist = panelBundle();
+    const out = path.join(tmp(), "panel.html");
+
+    assert.equal(baker.bakeIfStale({ root, dist, out }).baked, true, "nothing baked yet");
+    assert.equal(baker.bakeIfStale({ root, dist, out }).baked, false, "the same record is not baked twice");
+    assert.equal(baker.bakeIfStale({ root, dist, out, force: true }).baked, true, "unless it is forced");
+
+    touchPack(root);
+    assert.equal(baker.bakeIfStale({ root, dist, out }).baked, true, "a rewritten pack bakes again");
+    assert.equal(fs.existsSync(`${out}.fingerprint`), true, "the marker keeps two callers from fighting");
   });
 
   it("re-bakes when the packs change, once per change", async () => {
@@ -932,8 +953,9 @@ describe("report:panel — the app running on a snapshot", async () => {
     const follower = srv.followPacks({
       root,
       rebake: async () => {
-        baked.push(srv.packFingerprint(root));
+        baked.push(baker.packFingerprint(root));
       },
+      fingerprint: async (dir) => baker.packFingerprint(dir),
       timer: (fn) => {
         tick = fn;
         return 1;
@@ -944,7 +966,7 @@ describe("report:panel — the app running on a snapshot", async () => {
     await tick();
     assert.equal(baked.length, 0, "nothing has changed yet");
 
-    fs.appendFileSync(path.join(root, "2026-09-17", "summary.json"), "\n");
+    touchPack(root);
     await tick();
     assert.equal(baked.length, 1, "a new pack re-bakes the panel the reader will open next");
 
