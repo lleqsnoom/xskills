@@ -81,6 +81,35 @@ xskills <skill-name>
 - **Git** — needed by `x-rollback` and `x-parallel`.
 - **A compatible CLI** — see [Supported CLIs](#supported-clis). A few skills need extra tooling: `x-browser` drives a real Chrome/Chromium through a `chrome-devtools` MCP client.
 
+## Reading the daily report
+
+```bash
+npm run report:install          # once: the app's own dependencies
+npm run report:build            # once, and after any change under tools/report-app
+npm run report                  # http://127.0.0.1:8787/ — movement per skill, per day
+npm run report:open             # start it if it is not running, then open it in an Orca tab
+npm run report:window           # the same, in a window with no browser controls (chrome --app)
+```
+
+The app is styled in Orca's own design language — its theme tokens, its Geist font, its radius and badge
+recipes — so the report reads as another pane of the same application. `Run` in its title bar opens (or
+focuses) the report in an Orca browser tab; `window` opens it in an application window instead, which is the
+only surface with no browser controls, because nothing inside a tab can hide that tab's own chrome.
+
+A digest's proposals and the to-do list are the same tasks, drawn by the same component. `rows` is the shape
+in use — one line a task with an importance badge, and the file, the check and the rest behind a disclosure.
+`cards` and `lines` are still one click away in the picker above the list (`?shape=a|b|c`).
+
+### The Orca plugin
+
+`tools/orca-plugin/` is an Orca plugin over the same server: four commands (`Open`, `Status`, `Record the
+newest day`, `Start the server here`), `Mod+Alt+X` for the first, and a notification the first time you look
+after a new day has landed. It owns no server process and talks only to a loopback address; the report itself
+is unchanged, and the plugin is a client of it. An Orca plugin panel cannot show a page from a local server, so
+the report opens as a full-area browser tab and the live pane is requested rather than faked — see
+[`tools/orca-plugin/PANE-REQUEST.md`](tools/orca-plugin/PANE-REQUEST.md) and
+[`tools/orca-plugin/README.md`](tools/orca-plugin/README.md).
+
 ## Available Skills
 
 Run `npx xskills list` to see all available skills.
