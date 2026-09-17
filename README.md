@@ -106,7 +106,9 @@ in use — one line a task with an importance badge, and the file, the check and
 `tools/orca-plugin/` is an Orca plugin over the same server: four commands (`Open`, `Status`, `Record the
 newest day`, `Start the server here`), `Mod+Alt+X` for the first, a notification the first time you look after
 a new day has landed, and a **panel** that is this app itself — built to one file with the API payloads baked
-in, because a panel cannot fetch. It owns no server process and talks only to a loopback address; the report
+in, because a panel cannot fetch. Both surfaces share one baker (`scripts/report-panel.mjs`): the server bakes
+while it runs, and the plugin's worker bakes whenever Orca wakes it, so the panel is current with or without
+the server up. It owns no server process and talks only to a loopback address; the report
 itself is unchanged, and the plugin is a client of it. A panel cannot be a full-area tab and cannot fetch, so
 the report also opens as a browser tab and the live wide pane is requested rather than faked — see
 [`tools/orca-plugin/PANE-REQUEST.md`](tools/orca-plugin/PANE-REQUEST.md) and

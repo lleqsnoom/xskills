@@ -2,11 +2,20 @@
 /**
  * The Orca plugin's worker: it puts the x-skills report in front of the reader.
  *
- * Orca loads this as a plain Node process (no Electron) when a command runs. Everything Orca-specific about
- * opening the report already lives in `scripts/report-open.mjs`, which the server reaches through
- * `POST /api/open`, so the worker has no tab logic of its own: it asks the server, and the server knows the
- * directory the tab belongs to.
+ * Orca loads this as a plain Node process (no Electron) when a command runs. Three things happen here, and
+ * each of them is a *client* of the report rather than a copy of it:
+ *   - the report is opened through the server's own `POST /api/open`, so the tab logic lives in one place;
+ *   - the panel's snapshot is baked by the repository's own baker (`scripts/report-panel.mjs`), so the panel
+ *     and the served app are the same build rather than two implementations;
+ *   - the day the reader has not seen is announced once, from the server's own answers.
+ *
+ * The worker runs with no working directory of its own (Orca forks it without one), so where the report lives
+ * is *asked for* — Orca knows the focused branch, and its CLI maps a branch to a path.
  */
+
+import { spawnSync } from "node:child_process";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 export const DEFAULT_URL = "http://127.0.0.1:8787";
 export const PROBE_TIMEOUT_MS = 1500;
@@ -14,6 +23,9 @@ export const EVENT_CHECK_INTERVAL_MS = 60_000;
 
 /** The events Orca offers, all three of them: a worktree coming or going, and an agent changing state. */
 export const PLUGIN_EVENTS = ["worktree.created", "worktree.removed", "agent.status.changed"];
+
+const ORCA_CLI = process.env.ORCA_CLI ?? "orca";
+const ROOT_KEY = "reportRoot";
 
 const DAYS_PATH = "/api/days";
 const REFRESH_PATH = "/api/refresh";
@@ -350,6 +362,7 @@ async function bindReport({ orca, fetchImpl, url, timeoutMs }) {
   const own = await readOwnSettings({ orca, log });
   const address = url === undefined ? await resolveUrl({ orca, own, log }) : explicitAddress(url);
   return {
+    own,
     source: address.source,
     origin: address.origin,
     request: address.origin ? makeRequest({ origin: address.origin, fetchImpl, timeoutMs }) : null,
@@ -422,10 +435,11 @@ export async function checkNewDay({ orca, origin, request, timeoutMs, notify, lo
 }
 
 /** The palette, as Orca sees it: one entry per contributed command. */
-function commandTable({ binding, startDeps, orca }) {
+function commandTable({ binding, startDeps, orca, bake }) {
   const afterChecking = async (work) => {
     const bound = await binding();
     await checkNewDay({ orca, ...bound });
+    await bake(bound);
     return work(bound);
   };
 
@@ -435,6 +449,90 @@ function commandTable({ binding, startDeps, orca }) {
     "report-refresh": () => afterChecking(reportRefresh),
     "report-start": async () => reportStart(startDeps),
   };
+}
+
+/** Run a command and hand back what it printed: the seam a test replaces. */
+export function run(command, args, { cwd = process.cwd(), timeout = 5000 } = {}) {
+  const result = spawnSync(command, args, { cwd, encoding: "utf8", timeout });
+  return {
+    code: result.status ?? 1,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? result.error?.message ?? "",
+  };
+}
+
+const firstLine = (text) => (text ?? "").trim().split("\n")[0] ?? "";
+
+/** The worktrees Orca knows about, as its CLI reports them. */
+export function parseWorktrees(stdout) {
+  try {
+    const payload = JSON.parse(stdout);
+    const list = payload?.result?.worktrees ?? payload?.worktrees ?? [];
+    return list
+      .map((entry) => ({ path: entry.path ?? entry.worktreePath ?? null, branch: entry.branch ?? null }))
+      .filter((entry) => entry.path && entry.branch);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The checkout the report lives in.
+ *
+ * A reader-set `reportRoot` wins, then what the plugin remembered, and only then does it ask: the worker's
+ * own working directory is Orca's, not a checkout's, so the path comes from Orca itself — the focused
+ * worktree's branch, resolved through the CLI to a path. The answer is remembered, so this costs one CLI call
+ * per checkout rather than one per wake.
+ */
+export async function findReportRoot({ orca, own = {}, log = () => {}, run: runCommand = run } = {}) {
+  const known = await readOwn({ orca, own, key: ROOT_KEY, log });
+  if (typeof known === "string" && known) return known;
+
+  const context = await readContext(orca, log);
+  if (!context?.branch) return null;
+
+  const listed = runCommand(ORCA_CLI, ["worktree", "list", "--json"]);
+  if (listed.code !== 0) {
+    log(`could not ask Orca for its worktrees: ${firstLine(listed.stderr || listed.stdout)}`);
+    return null;
+  }
+  const match = parseWorktrees(listed.stdout).find((entry) => entry.branch === context.branch);
+  if (!match) {
+    log(`no worktree in Orca is on ${context.branch}`);
+    return null;
+  }
+  await writeStored({ orca, key: ROOT_KEY, value: match.path, log });
+  return match.path;
+}
+
+const loadBakerFrom = (root) => import(pathToFileURL(path.join(root, "scripts", "report-panel.mjs")).href);
+
+/**
+ * Bake the panel, wherever the report lives.
+ *
+ * The baker is the repository's own module, imported from the checkout: one implementation of "what the panel
+ * holds" serves the server and the plugin, and a panel that cannot be baked is a log line, never a failed
+ * command.
+ */
+export async function bakePanel({ orca, own = {}, log = () => {}, run: runCommand = run, loadBaker = loadBakerFrom } = {}) {
+  const root = await findReportRoot({ orca, own, log, run: runCommand });
+  if (!root) {
+    log("no report checkout yet: open a workspace in Orca, or set the plugin's reportRoot");
+    return { baked: false, reason: "no checkout" };
+  }
+  try {
+    const { bakeIfStale } = await loadBaker(root);
+    const result = bakeIfStale({
+      root: path.join(root, ".x-skills", "daily"),
+      dist: path.join(root, "tools", "report-app", "dist-panel"),
+      out: path.join(root, "tools", "orca-plugin", "panel.html"),
+    });
+    log(result.baked ? `baked the panel for ${result.stamp}` : `panel is current (${result.stamp})`);
+    return result;
+  } catch (error) {
+    log(`could not bake the panel: ${error?.message ?? error}`);
+    return { baked: false, reason: String(error?.message ?? error) };
+  }
 }
 
 /**
@@ -518,7 +616,7 @@ export function makePathNote({ log }) {
 }
 
 /** Orca's events: the plugin looks when something happens, and stays quiet when nothing is there. */
-function subscribeToEvents({ orca, binding, log, now, intervalMs }) {
+function subscribeToEvents({ orca, binding, log, now, intervalMs, bake }) {
   const notePath = makePathNote({ log });
   const noteFailure = makeFailureLog({ log });
   const onEvent = makeEventCheck({
@@ -526,8 +624,10 @@ function subscribeToEvents({ orca, binding, log, now, intervalMs }) {
     intervalMs,
     log,
     check: async () => {
-      const result = await checkNewDay({ orca, ...(await binding()) });
+      const bound = await binding();
+      const result = await checkNewDay({ orca, ...bound });
       if (!result.checked) noteFailure(result.reason);
+      await bake(bound);
       return result;
     },
   });
@@ -540,7 +640,7 @@ function subscribeToEvents({ orca, binding, log, now, intervalMs }) {
 }
 
 /** The object a caller drives: one function per decision, without the palette in the way. */
-function pluginSurface({ orca, binding, commands, now, intervalMs }) {
+function pluginSurface({ orca, binding, commands, now, intervalMs, bake }) {
   return {
     probe: async () => {
       const report = await binding();
@@ -550,7 +650,7 @@ function pluginSurface({ orca, binding, commands, now, intervalMs }) {
     open: commands["report-open"],
     register: () => {
       for (const [id, handler] of Object.entries(commands)) orca.commands.register(id, handler);
-      subscribeToEvents({ orca, binding, log: logTo(orca), now, intervalMs });
+      subscribeToEvents({ orca, binding, log: logTo(orca), now, intervalMs, bake });
     },
   };
 }
@@ -564,11 +664,13 @@ export function createPlugin({
   timeoutMs = PROBE_TIMEOUT_MS,
   now = Date.now,
   intervalMs = EVENT_CHECK_INTERVAL_MS,
+  bake = null,
 } = {}) {
   let pending = null;
   const binding = () => (pending ??= bindReport({ orca, fetchImpl, url, timeoutMs }));
-  const commands = commandTable({ binding, orca, startDeps: startDepsFor(orca) });
-  return pluginSurface({ orca, binding, commands, now, intervalMs });
+  const rebake = bake ?? ((bound) => bakePanel({ orca, own: bound.own, log: bound.log }));
+  const commands = commandTable({ binding, orca, startDeps: startDepsFor(orca), bake: rebake });
+  return pluginSurface({ orca, binding, commands, now, intervalMs, bake: rebake });
 }
 
 /** Orca's worker entry. The second argument is ours: tests inject a fetch and a timeout. */
@@ -576,5 +678,7 @@ export default function activate(orca, deps = {}) {
   const plugin = createPlugin({ orca, ...deps });
   plugin.register();
   orca.log(`${NAME}: worker cwd ${process.cwd()}`);
+  const bake = deps.bakePanel ?? (({ own, log }) => bakePanel({ orca, own, log }));
+  void bake({ own: {}, log: (line) => orca.log(`${NAME}: ${line}`) });
   return plugin;
 }

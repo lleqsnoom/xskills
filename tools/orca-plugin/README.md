@@ -48,13 +48,24 @@ npm run report:panel   # build the panel bundle, then bake the snapshot into too
 A panel is a sandboxed document with `connect-src 'none'`, so it cannot fetch. What it can do is run inline
 script and style, and Orca re-reads its entry file on every open — so the app answers from `window.__REPORT__`
 (a snapshot of movement, days, todos, the newest day, its sessions and the skills in use) instead of from the
-network. `npm run report` bakes that snapshot on start, after every `/api/refresh`, and **again whenever the
-packs change** (a five-second comparison of the newest pack's fingerprint), so the panel is never older than
-the last thing written under `.x-skills/daily`.
+network.
+
+**Two callers keep that snapshot current, and they share one baker** (`scripts/report-panel.mjs`, the same
+module the standalone report uses):
+
+| Caller | When it bakes |
+|---|---|
+| the report server, while it runs | on start, after every `/api/refresh`, and whenever the packs change (a five-second comparison of the newest pack's fingerprint) |
+| this plugin's worker, whenever Orca wakes it | on activation, on every command, and on any event, each time asking the baker first whether the panel is behind the record |
+
+So the panel works with no server running at all, and it stays current when the server is running. The worker
+finds the checkout by asking rather than guessing: `workspace.readContext` gives the focused branch, and
+`orca worktree list --json` turns a branch into a path. A `reportRoot` setting wins over that, and the answer
+is remembered in the plugin's own storage, so a wake with nothing to bake costs one stat.
 
 **A panel that is already open keeps the snapshot it was opened with.** The host reads the entry file when the
-panel opens, and nothing in a panel can reload itself, so the way to pick up a new day is to close and reopen
-the panel — or read the live report in a tab.
+panel opens (its effect depends only on the plugin and panel identity), and nothing in a panel can reload
+itself — so a new day arrives when the panel is next mounted, which switching the sidebar away and back does.
 
 The panel is generated and not committed (`panel.html` is gitignored): a clone that has not baked has no
 entry file, which shows as an empty panel rather than a broken plugin.
