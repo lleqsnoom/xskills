@@ -751,6 +751,7 @@ describe("the chart's geometry — what a hundred days do to the axis", async ()
 describe("report:panel — the app running on a snapshot", async () => {
   const baked = await import(path.join(ROOT, "tools", "report-app", "src", "baked.mjs"));
   const baker = await import(path.join(ROOT, "scripts", "report-panel.mjs"));
+  const SERVER_MODULE = await import(SERVER);
 
   const snapshot = {
     bakedAt: "2026-09-17T21:40:12.000Z",
@@ -910,6 +911,47 @@ describe("report:panel — the app running on a snapshot", async () => {
     } finally {
       plain.close();
     }
+  });
+
+  it("fingerprints the newest pack, so a change under it is visible", () => {
+    const srv = SERVER_MODULE;
+    const root = dailyRoot();
+    const first = srv.packFingerprint(root);
+    assert.match(first, /^2026-09-17:/, "the newest pack and what it holds");
+
+    fs.appendFileSync(path.join(root, "2026-09-17", "summary.json"), "\n");
+    assert.notEqual(srv.packFingerprint(root), first, "a rewritten pack is a new fingerprint");
+    assert.match(srv.packFingerprint(path.join(root, "nowhere")), /^none$/, "no packs is a fingerprint too");
+  });
+
+  it("re-bakes when the packs change, once per change", async () => {
+    const srv = SERVER_MODULE;
+    const root = dailyRoot();
+    let tick = null;
+    const baked = [];
+    const follower = srv.followPacks({
+      root,
+      rebake: async () => {
+        baked.push(srv.packFingerprint(root));
+      },
+      timer: (fn) => {
+        tick = fn;
+        return 1;
+      },
+      clear: () => {},
+    });
+
+    await tick();
+    assert.equal(baked.length, 0, "nothing has changed yet");
+
+    fs.appendFileSync(path.join(root, "2026-09-17", "summary.json"), "\n");
+    await tick();
+    assert.equal(baked.length, 1, "a new pack re-bakes the panel the reader will open next");
+
+    await tick();
+    assert.equal(baked.length, 1, "an unchanged record is not a bake");
+
+    follower.stop();
   });
 
   it("answers the refresh even when the bake fails", async () => {

@@ -48,8 +48,13 @@ npm run report:panel   # build the panel bundle, then bake the snapshot into too
 A panel is a sandboxed document with `connect-src 'none'`, so it cannot fetch. What it can do is run inline
 script and style, and Orca re-reads its entry file on every open — so the app answers from `window.__REPORT__`
 (a snapshot of movement, days, todos, the newest day, its sessions and the skills in use) instead of from the
-network. `npm run report` bakes that snapshot on start and after every `/api/refresh`, so the panel is never
-older than the last recording.
+network. `npm run report` bakes that snapshot on start, after every `/api/refresh`, and **again whenever the
+packs change** (a five-second comparison of the newest pack's fingerprint), so the panel is never older than
+the last thing written under `.x-skills/daily`.
+
+**A panel that is already open keeps the snapshot it was opened with.** The host reads the entry file when the
+panel opens, and nothing in a panel can reload itself, so the way to pick up a new day is to close and reopen
+the panel — or read the live report in a tab.
 
 The panel is generated and not committed (`panel.html` is gitignored): a clone that has not baked has no
 entry file, which shows as an empty panel rather than a broken plugin.

@@ -23,6 +23,9 @@ import { openReport, safePath } from "./report-open.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DAILY_ROOT = path.join(REPO_ROOT, ".x-skills", "daily");
+
+/** How often the server looks at the packs while it is running, to keep the panel's snapshot current. */
+const PACK_POLL_MS = 5000;
 const APP_DIST = path.join(REPO_ROOT, "tools", "report-app", "dist");
 
 const TYPES = {
@@ -53,6 +56,55 @@ export function newestPack(root = DAILY_ROOT) {
 
 export function packFile(root, date) {
   return path.join(root, date, "summary.json");
+}
+
+/**
+ * What the record looks like right now: the newest pack, and the size and mtime of the file that carries it.
+ *
+ * A panel is baked from these files, and a panel that is already open cannot be asked to re-read them, so the
+ * server watches this string and re-bakes when it changes. `none` is a record with no packs yet.
+ */
+export function packFingerprint(root = DAILY_ROOT) {
+  const newest = newestPack(root);
+  if (!newest) return "none";
+  const file = packFile(root, newest);
+  if (!fs.existsSync(file)) return `${newest}:missing`;
+  const { size, mtimeMs } = fs.statSync(file);
+  return `${newest}:${size}:${Math.round(mtimeMs)}`;
+}
+
+/**
+ * Re-bake whenever the record changes under us, so the panel a reader opens next is never older than the packs.
+ *
+ * Polling rather than `fs.watch`: recursive watching is not available on every platform Node 18 supports, a
+ * pack arrives as several files, and one stat a few seconds apart costs less than chasing events. The interval,
+ * the timer and the fingerprint are injectable so a test can drive the whole thing.
+ */
+export function followPacks({
+  root = DAILY_ROOT,
+  rebake,
+  intervalMs = PACK_POLL_MS,
+  fingerprint = packFingerprint,
+  timer = setInterval,
+  clear = clearInterval,
+} = {}) {
+  let seen = fingerprint(root);
+
+  const tick = async () => {
+    const current = fingerprint(root);
+    if (current === seen) return false;
+    seen = current;
+    try {
+      await rebake();
+      return true;
+    } catch (error) {
+      process.stderr.write(`panel not baked: ${error?.message ?? error}\n`);
+      return false;
+    }
+  };
+
+  const handle = timer(tick, intervalMs);
+  return { tick, stop: () => clear(handle) };
 }
 
 /** One day's pack, or null. Trimmed to what a UI reads: transcript paths are machine-local noise. */
@@ -511,12 +563,15 @@ function main() {
         built ? "  app built — open the URL above" : "  app not built yet: npm run report:build (the API answers now)",
         `  api       http://127.0.0.1:${actual}/api/movement`,
         `  raw data  http://127.0.0.1:${actual}/history.jsonl`,
-        rebake ? "  panel     baked now, and after every refresh" : "  panel     not baked (--no-panel)",
+        rebake ? "  panel     baked now, after every refresh, and when the packs change" : "  panel     not baked (--no-panel)",
         `  ctrl-c to stop`,
         "",
       ].join("\n")
     );
-    if (rebake) void bakeQuietly(rebake);
+    if (rebake) {
+      void bakeQuietly(rebake);
+      followPacks({ root, rebake });
+    }
   });
   return 0;
 }
