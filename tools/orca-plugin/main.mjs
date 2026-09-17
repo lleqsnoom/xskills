@@ -10,6 +10,10 @@
 
 export const DEFAULT_URL = "http://127.0.0.1:8787";
 export const PROBE_TIMEOUT_MS = 1500;
+export const EVENT_CHECK_INTERVAL_MS = 60_000;
+
+/** The events Orca offers, all three of them: a worktree coming or going, and an agent changing state. */
+export const PLUGIN_EVENTS = ["worktree.created", "worktree.removed", "agent.status.changed"];
 
 const DAYS_PATH = "/api/days";
 const REFRESH_PATH = "/api/refresh";
@@ -429,8 +433,110 @@ function commandTable({ binding, startDeps, orca }) {
   };
 }
 
+/**
+ * One check per interval, whatever the event volume.
+ *
+ * The newest day changes about once a day and an agent fleet changes state constantly, so the interval is what
+ * keeps a busy workspace from becoming a busy plugin. There is no timer here: `now` is read when an event
+ * arrives, so a worker that slept cannot drift and nothing keeps its process alive.
+ */
+/** The window a check opens: one run, then a wait, and a count of what arrived while it waited. */
+class CheckWindow {
+  constructor({ now, intervalMs }) {
+    this.now = now;
+    this.intervalMs = intervalMs;
+    this.lastRun = -Infinity;
+    this.coalesced = 0;
+    this.inFlight = false;
+  }
+
+  due() {
+    return !this.inFlight && this.now() - this.lastRun >= this.intervalMs;
+  }
+
+  skip() {
+    this.coalesced += 1;
+  }
+
+  /** Opens the window, and hands back how many events it swallowed since the last run. */
+  open() {
+    this.lastRun = this.now();
+    this.inFlight = true;
+    const swallowed = this.coalesced;
+    this.coalesced = 0;
+    return swallowed;
+  }
+
+  close() {
+    this.inFlight = false;
+  }
+}
+
+export function makeEventCheck({ check, now = Date.now, log, intervalMs = EVENT_CHECK_INTERVAL_MS }) {
+  const gate = new CheckWindow({ now, intervalMs });
+
+  return async () => {
+    if (!gate.due()) {
+      gate.skip();
+      return { ran: false };
+    }
+    const swallowed = gate.open();
+    if (swallowed > 0) log(`${swallowed} events coalesced`);
+    try {
+      await check();
+    } finally {
+      gate.close();
+    }
+    return { ran: true };
+  };
+}
+
+/** A failure that keeps failing is one line, not one per event; a different failure is its own line. */
+export function makeFailureLog({ log }) {
+  let previous = null;
+  return (reason) => {
+    if (reason === previous) return false;
+    previous = reason;
+    log(reason);
+    return true;
+  };
+}
+
+/** The first time a worktree is heard about is the useful time: after that, the path is noise. */
+export function makePathNote({ log }) {
+  const seen = new Set();
+  return ({ path } = {}) => {
+    if (!path || seen.has(path)) return false;
+    seen.add(path);
+    log(`worktree at ${path}`);
+    return true;
+  };
+}
+
+/** Orca's events: the plugin looks when something happens, and stays quiet when nothing is there. */
+function subscribeToEvents({ orca, binding, log, now, intervalMs }) {
+  const notePath = makePathNote({ log });
+  const noteFailure = makeFailureLog({ log });
+  const onEvent = makeEventCheck({
+    now,
+    intervalMs,
+    log,
+    check: async () => {
+      const result = await checkNewDay({ orca, ...(await binding()) });
+      if (!result.checked) noteFailure(result.reason);
+      return result;
+    },
+  });
+
+  const handle = async (payload) => {
+    notePath(payload);
+    await onEvent();
+  };
+  for (const name of PLUGIN_EVENTS) orca.events.on(name, handle);
+}
+
 /** The object a caller drives: one function per decision, without the palette in the way. */
-function pluginSurface({ orca, binding, commands }) {
+function pluginSurface({ orca, binding, commands, now, intervalMs }) {
   return {
     probe: async () => {
       const report = await binding();
@@ -440,6 +546,7 @@ function pluginSurface({ orca, binding, commands }) {
     open: commands["report-open"],
     register: () => {
       for (const [id, handler] of Object.entries(commands)) orca.commands.register(id, handler);
+      subscribeToEvents({ orca, binding, log: logTo(orca), now, intervalMs });
     },
   };
 }
@@ -451,11 +558,13 @@ export function createPlugin({
   fetch: fetchImpl = fetch,
   url,
   timeoutMs = PROBE_TIMEOUT_MS,
+  now = Date.now,
+  intervalMs = EVENT_CHECK_INTERVAL_MS,
 } = {}) {
   let pending = null;
   const binding = () => (pending ??= bindReport({ orca, fetchImpl, url, timeoutMs }));
   const commands = commandTable({ binding, orca, startDeps: startDepsFor(orca) });
-  return pluginSurface({ orca, binding, commands });
+  return pluginSurface({ orca, binding, commands, now, intervalMs });
 }
 
 /** Orca's worker entry. The second argument is ours: tests inject a fetch and a timeout. */

@@ -843,3 +843,154 @@ describe("orca plugin — it speaks once when a day lands", async () => {
     assert.match(host.logs.join("\n"), /storage was not granted/);
   });
 });
+
+describe("orca plugin — Orca's events wake the check, and a down server is silence", async () => {
+  const worker = await import(WORKER);
+
+  const DAYS_TODAY = { dates: ["2026-09-16", "2026-09-17"], recent: [], calendar: {} };
+  const MOVEMENT = { days: 3, movement: [{ latestScore: 80 }], todos: [] };
+  const stored = (value) => ({ "storage.get": { ok: true, value: { value } } });
+  const manifest = () => JSON.parse(fs.readFileSync(MANIFEST, "utf8"));
+
+  /** A plugin wired into Orca, with a clock the test owns. */
+  function wired({ answers = {}, fetch: fetchImpl, clock = { at: 0 } } = {}) {
+    const host = makeHost({ ...stored("2026-09-16"), ...answers });
+    const fetchStub =
+      fetchImpl ??
+      makeFetch([
+        { url: `${ORIGIN}/api/days`, body: DAYS_TODAY },
+        { url: `${ORIGIN}/api/movement`, body: MOVEMENT },
+      ]);
+    const instance = worker.createPlugin({
+      orca: host.orca,
+      fetch: fetchStub,
+      now: () => clock.at,
+      intervalMs: 1000,
+    });
+    instance.register();
+    return {
+      host,
+      clock,
+      fetchStub,
+      emit: (name, payload) => host.events.get(name)(payload),
+      probes: () => fetchStub.calls.filter((call) => call.href.endsWith("/api/days")).length,
+      logs: () => host.logs.join("\n"),
+    };
+  }
+
+  it("contributes all three events, and the capability to hear them", () => {
+    assert.deepEqual(manifest().contributes.events, [
+      { on: "worktree.created" },
+      { on: "worktree.removed" },
+      { on: "agent.status.changed" },
+    ]);
+    assert.ok(manifest().capabilities.some((entry) => entry.kind === "events:subscribe"));
+  });
+
+  it("checks once when events arrive, and not again inside the interval", async () => {
+    const { emit, probes } = wired();
+
+    await emit("worktree.created", { worktreeId: "w1", path: "/repo/one", branch: "main" });
+    await emit("agent.status.changed", { worktreeId: "w1", paneKey: "p1", state: "running" });
+    await emit("agent.status.changed", { worktreeId: "w1", paneKey: "p1", state: "idle" });
+
+    assert.equal(probes(), 1);
+  });
+
+  it("reports how many events it coalesced when the window closes", async () => {
+    const { emit, probes, logs, clock } = wired();
+
+    await emit("worktree.created", { worktreeId: "w1", path: "/repo/one", branch: "main" });
+    await emit("agent.status.changed", { worktreeId: "w1", paneKey: "p1", state: "running" });
+    await emit("agent.status.changed", { worktreeId: "w1", paneKey: "p1", state: "idle" });
+
+    clock.at = 2000;
+    await emit("agent.status.changed", { worktreeId: "w1", paneKey: "p1", state: "running" });
+
+    assert.equal(probes(), 2);
+    assert.match(logs(), /2 events coalesced/);
+  });
+
+  it("notes a worktree path once, however many times it hears about it", async () => {
+    const { emit, logs } = wired();
+
+    await emit("worktree.created", { worktreeId: "w1", path: "/repo/one", branch: "main" });
+    await emit("worktree.removed", { worktreeId: "w1", path: "/repo/one" });
+
+    assert.equal(logs().split("/repo/one").length - 1, 1);
+  });
+
+  it("stays silent when the report is not answering, and logs one line per distinct reason", async () => {
+    const refusingStub = async (url) => {
+      refusingStub.calls.push({ href: String(url) });
+      throw Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:8787"), { code: "ECONNREFUSED" });
+    };
+    refusingStub.calls = [];
+    const { emit, host } = wired({ fetch: refusingStub });
+
+    await emit("worktree.created", { worktreeId: "w1", path: "/repo/one", branch: "main" });
+    await emit("agent.status.changed", { worktreeId: "w1", paneKey: "p1", state: "idle" });
+
+    assert.equal(host.notifications.length, 0);
+    const failures = host.logs.filter((line) => /not answering|could not be reached/.test(line));
+    assert.equal(failures.length, 1);
+
+    const stranger = wired({
+      fetch: makeFetch([{ url: `${ORIGIN}/api/days`, body: "hello", contentType: "text/html" }]),
+    });
+    await stranger.emit("worktree.created", { worktreeId: "w2", path: "/repo/two", branch: "main" });
+    assert.equal(stranger.host.notifications.length, 0, "an event never notifies");
+  });
+
+  it("does not start a second check while one is in flight", async () => {
+    let release;
+    const held = new Promise((resolve) => {
+      release = resolve;
+    });
+    const slow = async (url) => {
+      slow.calls.push({ href: String(url) });
+      await held;
+      return respond({ dates: DAYS_TODAY.dates, recent: [], calendar: {} });
+    };
+    slow.calls = [];
+    const { emit, probes } = wired({ fetch: slow });
+
+    const first = emit("worktree.created", { worktreeId: "w1", path: "/repo/one", branch: "main" });
+    await emit("agent.status.changed", { worktreeId: "w1", paneKey: "p1", state: "idle" });
+    release();
+    await first;
+
+    assert.equal(probes(), 1);
+  });
+
+  it("says nothing at all when no event arrives", async () => {
+    const { fetchStub, host } = wired();
+
+    assert.equal(fetchStub.calls.length, 0);
+    assert.deepEqual(host.notifications, []);
+    const source = fs.readFileSync(WORKER, "utf8");
+    for (const timer of ["setTimeout", "setInterval"]) {
+      assert.doesNotMatch(source, new RegExp(`\\b${timer}\\s*\\(`), `the worker must not keep a ${timer}`);
+    }
+  });
+
+  it("keeps checking after a check that threw", async () => {
+    const clock = { at: 0 };
+    let calls = 0;
+    const check = worker.makeEventCheck({
+      now: () => clock.at,
+      log: () => {},
+      intervalMs: 1000,
+      check: async () => {
+        calls += 1;
+        if (calls === 1) throw new Error("the movement read exploded");
+      },
+    });
+
+    await assert.rejects(check(), /exploded/);
+    clock.at = 2000;
+    await check();
+
+    assert.equal(calls, 2, "one bad check must not wedge the plugin");
+  });
+});

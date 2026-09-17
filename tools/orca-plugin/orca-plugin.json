@@ -16,13 +16,19 @@
       { "id": "report-refresh", "title": "x-skills report: Record the newest day" },
       { "id": "report-start", "title": "x-skills report: Start the server here" }
     ],
-    "keybindings": [{ "command": "report-open", "key": "Mod+Alt+X", "when": "global" }]
+    "keybindings": [{ "command": "report-open", "key": "Mod+Alt+X", "when": "global" }],
+    "events": [
+      { "on": "worktree.created" },
+      { "on": "worktree.removed" },
+      { "on": "agent.status.changed" }
+    ]
   },
   "capabilities": [
     { "kind": "notifications:show" },
     { "kind": "settings:own" },
     { "kind": "storage" },
     { "kind": "workspace:read" },
-    { "kind": "terminal:send" }
+    { "kind": "terminal:send" },
+    { "kind": "events:subscribe" }
   ]
 }
