@@ -1,0 +1,16 @@
+{
+  "manifestVersion": 1,
+  "id": "x-skills-report",
+  "publisher": "lleqsnoom",
+  "name": "x-skills report",
+  "version": "0.1.0",
+  "description": "The x-skills daily report in Orca: open it full-area, and hear when a new day lands.",
+  "repository": "https://github.com/lleqsnoom/xskills",
+  "engines": { "orca": ">=1.4.0" },
+  "pluginApi": 1,
+  "main": "main.mjs",
+  "contributes": {
+    "commands": [{ "id": "report-open", "title": "x-skills report: Open" }]
+  },
+  "capabilities": [{ "kind": "notifications:show" }]
+}
