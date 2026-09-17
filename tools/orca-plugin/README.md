@@ -65,7 +65,8 @@ default`), so a server on another port is a visible fact rather than a mystery.
   (`default-src 'none'; connect-src 'none'`), mounted in the right sidebar, with no host-to-panel data channel;
   it cannot be a full-area tab and it cannot reach a loopback server. So the report opens as an Orca **browser
   tab** — the same pane type a terminal uses — and the live pane is a request to Orca rather than something
-  this plugin can do today.
+  this plugin can do today: see [PANE-REQUEST.md](PANE-REQUEST.md), which quotes the host lines that block it
+  and the two designs that would unblock it.
 
 ## What the worker sees
 
