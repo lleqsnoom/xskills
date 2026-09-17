@@ -2,10 +2,13 @@
 
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const path = require("node:path");
 
 const ROOT = path.join(__dirname, "..");
-const WORKER = path.join(ROOT, "tools", "orca-plugin", "main.mjs");
+const PLUGIN = path.join(ROOT, "tools", "orca-plugin");
+const WORKER = path.join(PLUGIN, "main.mjs");
+const MANIFEST = path.join(PLUGIN, "orca-plugin.json");
 const ORIGIN = "http://127.0.0.1:8787";
 
 /** A Response good enough for the worker: `ok`, `status`, `json()` and `text()`. */
@@ -563,5 +566,132 @@ describe("orca plugin — status, refresh and start", async () => {
     for (const call of ["spawn", "exec", "execSync", "execFile", "fork"]) {
       assert.doesNotMatch(source, new RegExp(`\\b${call}\\s*\\(`), `main.mjs must not call ${call}()`);
     }
+  });
+});
+
+describe("orca plugin — the manifest and the key it answers to", async () => {
+  const CONTRIBUTIONS = new Set([
+    "panels",
+    "commands",
+    "events",
+    "languagePacks",
+    "keybindings",
+    "vmRecipes",
+    "agents",
+  ]);
+  const CAPABILITIES = new Set([
+    "workspace:read",
+    "terminal:send",
+    "notifications:show",
+    "storage",
+    "secrets",
+    "events:subscribe",
+    "settings:own",
+  ]);
+  const EVENTS = new Set(["worktree.created", "worktree.removed", "agent.status.changed"]);
+  const SLUG = /^[a-z0-9][a-z0-9.-]*$/;
+  const SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
+  const bindingKey = (binding) =>
+    typeof binding.key === "string"
+      ? binding.key
+      : [binding.key?.darwin, binding.key?.linux, binding.key?.win32].join("|");
+
+  /** The rules Orca's schema enforces, checked here so a typo fails a test instead of a plugin load. */
+  function manifestIssues(manifest, { exists = fs.existsSync } = {}) {
+    const issues = [];
+    const contributes = manifest.contributes ?? {};
+    if (manifest.manifestVersion !== 1) issues.push("manifestVersion must be 1");
+    if (!SLUG.test(manifest.id ?? "")) issues.push("id must be a slug");
+    if (!SLUG.test(manifest.publisher ?? "")) issues.push("publisher must be a slug");
+    if (!SEMVER.test(manifest.version ?? "")) issues.push("version must be semver");
+    if (typeof manifest.engines?.orca !== "string") issues.push("engines.orca must be a range");
+    if (manifest.pluginApi !== 1) issues.push("pluginApi must be 1");
+
+    for (const key of Object.keys(contributes)) {
+      if (!CONTRIBUTIONS.has(key)) issues.push(`contributes.${key} is not a contribution`);
+    }
+    for (const capability of manifest.capabilities ?? []) {
+      if (!CAPABILITIES.has(capability?.kind)) issues.push(`unknown capability ${capability?.kind}`);
+    }
+    for (const event of contributes.events ?? []) {
+      if (!EVENTS.has(event?.on)) issues.push(`unknown event ${event?.on}`);
+    }
+
+    const files = [manifest.main, ...(contributes.panels ?? []).map((panel) => panel.entry)];
+    for (const file of files.filter(Boolean)) {
+      if (!exists(path.join(PLUGIN, file))) issues.push(`missing file ${file}`);
+    }
+
+    const commands = new Set((contributes.commands ?? []).map((command) => command.id));
+    const keys = new Map();
+    for (const binding of contributes.keybindings ?? []) {
+      if (!commands.has(binding.command)) {
+        issues.push(`keybinding ${binding.command} is not a contributed command`);
+      }
+      const key = bindingKey(binding);
+      if (keys.has(key)) issues.push(`duplicate keybinding ${key}: ${keys.get(key)} and ${binding.command}`);
+      keys.set(key, binding.command);
+    }
+    return issues;
+  }
+
+  /** The shipped manifest, as a fresh object each time so a test can mutate it safely. */
+  const shipped = () => JSON.parse(fs.readFileSync(MANIFEST, "utf8"));
+
+  it("passes every rule, with every declared file on disk", () => {
+    assert.deepEqual(manifestIssues(shipped()), []);
+  });
+
+  it("puts the report on Mod+Alt+X", () => {
+    assert.deepEqual(shipped().contributes.keybindings, [
+      { command: "report-open", key: "Mod+Alt+X", when: "global" },
+    ]);
+  });
+
+  it("catches a pluginApi the host would reject", () => {
+    const manifest = shipped();
+    manifest.pluginApi = 2;
+    assert.deepEqual(manifestIssues(manifest), ["pluginApi must be 1"]);
+  });
+
+  it("catches a main file that is not there", () => {
+    const manifest = shipped();
+    manifest.main = "renamed.mjs";
+    assert.ok(manifestIssues(manifest).includes("missing file renamed.mjs"));
+  });
+
+  it("catches a capability the host does not have", () => {
+    const manifest = shipped();
+    manifest.capabilities = [...manifest.capabilities, { kind: "net:fetch" }];
+    assert.ok(manifestIssues(manifest).includes("unknown capability net:fetch"));
+  });
+
+  it("catches a contribution the host does not have", () => {
+    const manifest = shipped();
+    manifest.contributes.views = [];
+    assert.ok(manifestIssues(manifest).includes("contributes.views is not a contribution"));
+  });
+
+  it("catches a keybinding on a command that does not exist", () => {
+    const manifest = shipped();
+    manifest.contributes.keybindings = [{ command: "report-open", key: "Mod+Alt+X" }];
+    manifest.contributes.commands = manifest.contributes.commands.filter((c) => c.id !== "report-open");
+    assert.ok(manifestIssues(manifest).includes("keybinding report-open is not a contributed command"));
+  });
+
+  it("catches two commands on one key", () => {
+    const manifest = shipped();
+    manifest.contributes.keybindings = [
+      { command: "report-open", key: "Mod+Alt+X" },
+      { command: "report-status", key: "Mod+Alt+X" },
+    ];
+    assert.ok(manifestIssues(manifest).includes("duplicate keybinding Mod+Alt+X: report-open and report-status"));
+  });
+
+  it("says nothing about a manifest that ships no panels and no capabilities", () => {
+    const manifest = shipped();
+    delete manifest.contributes.panels;
+    delete manifest.capabilities;
+    assert.deepEqual(manifestIssues(manifest), []);
   });
 });

@@ -15,7 +15,8 @@
       { "id": "report-status", "title": "x-skills report: Status" },
       { "id": "report-refresh", "title": "x-skills report: Record the newest day" },
       { "id": "report-start", "title": "x-skills report: Start the server here" }
-    ]
+    ],
+    "keybindings": [{ "command": "report-open", "key": "Mod+Alt+X", "when": "global" }]
   },
   "capabilities": [
     { "kind": "notifications:show" },

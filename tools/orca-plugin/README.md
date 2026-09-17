@@ -29,8 +29,27 @@ npm run report
 | Command | Does |
 |---|---|
 | `x-skills report: Open` | Probes the report and asks the server to show or focus it in a full-area Orca tab |
+| `x-skills report: Status` | Says whether it is answering, where the plugin is looking, which day is newest, and how many days the record holds |
+| `x-skills report: Record the newest day` | Asks the server to record the newest pack into the day-by-day history, and repeats what it said |
+| `x-skills report: Start the server here` | Types `npm run report` into a terminal in the focused worktree, and names the terminal it used |
 
-A command with no report answering says so, and says what to run.
+A command that finds nothing answering says so, and says what to run. `Record` never retries: it writes
+`history.jsonl`, and a retry loop would rewrite it.
+
+## Keybinding
+
+`Mod+Alt+X` opens the report. The bundled `orca-navigation-shortcuts` plugin holds `Mod+Alt+T` (tasks),
+`Mod+Alt+F` (search) and `Mod+Alt+G` (source control), so `X` is outside the set that ships with Orca. If
+Orca ever reports a clash in this plugin's log, the key is one line of `orca-plugin.json` — change it and
+change this section with it.
+
+## Settings
+
+The plugin reads the report's address from its own settings first, then from its own storage, then falls back
+to `http://127.0.0.1:8787` — the port `npm run report` uses. Only `127.0.0.1` and `localhost` are accepted; a
+value pointing anywhere else is refused, with the reason written to the plugin's log, and the default is used
+instead. **Status** names which of the three the address came from (`from settings`, `from storage`, `from
+default`), so a server on another port is a visible fact rather than a mystery.
 
 ## What it may not do
 
