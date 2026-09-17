@@ -12,8 +12,11 @@ export const DEFAULT_URL = "http://127.0.0.1:8787";
 export const PROBE_TIMEOUT_MS = 1500;
 
 const DAYS_PATH = "/api/days";
+const REFRESH_PATH = "/api/refresh";
 const OPEN_PATH = "/api/open";
 const NAME = "x-skills report";
+const START_TEXT = "npm run report";
+const NOTIFY_BODY_LIMIT = 1000;
 const TIMEOUT_NAMES = new Set(["AbortError", "TimeoutError"]);
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const ADDRESS_KEY = "url";
@@ -87,6 +90,15 @@ async function readJson(response) {
   }
 }
 
+/** A notification body the host will take: its own limit, honoured here rather than discovered by refusal. */
+function trimBody(text) {
+  return text.length <= NOTIFY_BODY_LIMIT ? text : `${text.slice(0, NOTIFY_BODY_LIMIT - 1)}…`;
+}
+
+const logTo = (orca) => (message) => orca.log(`${NAME}: ${message}`);
+const notifyVia = (orca) => (body) =>
+  orca.host.call("notifications.show", { title: NAME, body: trimBody(body) });
+
 /** The one place a request leaves the worker: JSON, and never without a deadline. */
 function makeRequest({ origin, fetchImpl, timeoutMs }) {
   return (path, options = {}) =>
@@ -143,7 +155,7 @@ async function probeReport({ origin, request, timeoutMs }) {
   if (!days) {
     return { up: false, kind: "wrong-service", origin, reason: `${origin} answered, but not the report` };
   }
-  return { up: true, origin, day: days.day };
+  return { up: true, origin, day: days.day, dates: days.dates };
 }
 
 /** What to tell the reader when the report is not there, in the words each cause deserves. */
@@ -152,6 +164,96 @@ function notFoundMessage({ kind, origin }) {
     return `${origin} answered, but not the report — something else is using that port`;
   }
   return `not answering at ${origin} — run: npm run report`;
+}
+
+/** One line saying what the report holds, and which of the plugin's stores pointed at it. */
+async function reportStatus({ origin, request, timeoutMs, source, notify, refused }) {
+  if (refused) {
+    await notify(refused.reason);
+    return { status: "refused", reason: refused.reason };
+  }
+  const found = await probeReport({ origin, request, timeoutMs });
+  if (!found.up) {
+    await notify(notFoundMessage(found));
+    return { status: "down", reason: found.reason };
+  }
+  const held = found.dates.length
+    ? `newest day ${found.day} · ${found.dates.length} days recorded`
+    : "no day recorded yet";
+  await notify(`up at ${origin} (from ${source})\n${held}`);
+  return { status: "up", day: found.day };
+}
+
+/** The server's answer to a recording request, as either the result or the reason there is none. */
+async function refreshAnswer({ origin, request }) {
+  let response;
+  try {
+    response = await request(REFRESH_PATH);
+  } catch {
+    return { ok: false, kind: "unreachable" };
+  }
+  const answer = (await readJson(response)) ?? {};
+  if (!response.ok || typeof answer.ok !== "boolean") return { ok: false, kind: "wrong-service" };
+  return answer.ok ? { ok: true, ...answer } : { ok: false, reason: String(answer.reason ?? "the server did not say why") };
+}
+
+/** The sentence a recording deserves, from what the server said. */
+function recordedMessage(answer) {
+  const packs = Array.isArray(answer.packs) ? answer.packs.length : 0;
+  return `recorded ${answer.day} · ${packs} ${packs === 1 ? "pack" : "packs"} · ${answer.inUse} in use`;
+}
+
+/** Record the newest day, and repeat what the server said about it. */
+async function reportRefresh({ origin, request, notify }) {
+  const answer = await refreshAnswer({ origin, request });
+  await notify(answer.ok ? recordedMessage(answer) : answer.reason ?? notFoundMessage({ ...answer, origin }));
+  return answer.ok ? { recorded: true, day: answer.day } : { recorded: false, reason: answer.reason };
+}
+
+/** Where the start command should be typed, or the sentence explaining there is nowhere. */
+async function startTarget(orca, log) {
+  const context = await readContext(orca, log);
+  if (!context) return { reason: "no worktree is focused in Orca, so there is no terminal to start the report in" };
+  const terminal = (context.terminals ?? [])[0];
+  return terminal ? { terminal } : { reason: "this worktree has no terminal to start the report in" };
+}
+
+/** The focused worktree's terminals, or null when nothing is focused. */
+async function readContext(orca, log) {
+  try {
+    const answer = await orca.host.call("workspace.readContext", {});
+    return answer?.ok === true ? answer.value : null;
+  } catch (error) {
+    log(`could not read the workspace context: ${error?.message ?? error}`);
+    return null;
+  }
+}
+
+/**
+ * Start the report the reader's way: type the command into a terminal they can see.
+ *
+ * The plugin has no process of its own to start, so this is the whole of "start" — the server exists because
+ * someone ran that command, not because this plugin did.
+ */
+async function reportStart({ orca, notify, log }) {
+  const target = await startTarget(orca, log);
+  if (!target.terminal) {
+    await notify(target.reason);
+    return { sent: false, reason: target.reason };
+  }
+  const answer = await orca.host.call("terminal.sendText", {
+    terminalId: target.terminal.id,
+    text: START_TEXT,
+    enter: true,
+  });
+  if (answer?.ok !== true) {
+    const reason = answer?.error ?? "the terminal refused the text";
+    await notify(reason);
+    return { sent: false, reason };
+  }
+  log(`typed ${START_TEXT} into ${target.terminal.id}`);
+  await notify(`sent ${START_TEXT} to ${target.terminal.id} — watch it there`);
+  return { sent: true, terminalId: target.terminal.id };
 }
 
 /** The server's answer to an open request, as either an opener or a reason to show. */
@@ -192,7 +294,7 @@ async function openReport({ origin, request, timeoutMs, notify, log, refused }) 
 
 /** Everything a command needs, resolved once per activation. */
 async function bindReport({ orca, fetchImpl, url, timeoutMs }) {
-  const log = (message) => orca.log(`${NAME}: ${message}`);
+  const log = logTo(orca);
   const address = url === undefined ? await resolveUrl({ orca, log }) : explicitAddress(url);
   return {
     source: address.source,
@@ -201,7 +303,7 @@ async function bindReport({ orca, fetchImpl, url, timeoutMs }) {
     refused: address.refused ?? null,
     timeoutMs,
     log,
-    notify: (body) => orca.host.call("notifications.show", { title: NAME, body }),
+    notify: notifyVia(orca),
   };
 }
 
@@ -213,6 +315,16 @@ function explicitAddress(url) {
     : { origin: null, refused: { up: false, kind: "bad-origin", origin: String(url), reason: allowed.reason } };
 }
 
+/** The palette, as Orca sees it: one entry per contributed command. */
+function commandTable({ binding, startDeps }) {
+  return {
+    "report-open": async () => openReport(await binding()),
+    "report-status": async () => reportStatus(await binding()),
+    "report-refresh": async () => reportRefresh(await binding()),
+    "report-start": async () => reportStart(startDeps),
+  };
+}
+
 export function createPlugin({
   orca,
   fetch: fetchImpl = fetch,
@@ -221,15 +333,16 @@ export function createPlugin({
 } = {}) {
   let pending = null;
   const binding = () => (pending ??= bindReport({ orca, fetchImpl, url, timeoutMs }));
-  const open = async () => openReport(await binding());
-
+  const commands = commandTable({ binding, startDeps: { orca, notify: notifyVia(orca), log: logTo(orca) } });
   return {
     probe: async () => {
       const report = await binding();
       return report.refused ?? probeReport(report);
     },
-    open,
-    register: () => orca.commands.register("report-open", open),
+    open: commands["report-open"],
+    register: () => {
+      for (const [id, handler] of Object.entries(commands)) orca.commands.register(id, handler);
+    },
   };
 }
 

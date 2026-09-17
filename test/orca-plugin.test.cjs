@@ -89,7 +89,7 @@ describe("orca plugin — the report in an Orca tab", async () => {
     const host = makeHost();
     worker.default(host.orca, { fetch: makeFetch([]) });
 
-    assert.deepEqual([...host.commands.keys()], ["report-open"]);
+    assert.ok(host.commands.has("report-open"), "the palette entry this layer promised");
     assert.match(host.logs.join("\n"), new RegExp(process.cwd().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   });
 
@@ -98,7 +98,12 @@ describe("orca plugin — the report in an Orca tab", async () => {
     const fetchStub = makeFetch([{ url: `${ORIGIN}/api/days`, body: DAYS }]);
     const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub });
 
-    assert.deepEqual(await plugin.probe(), { up: true, origin: ORIGIN, day: "2026-09-17" });
+    assert.deepEqual(await plugin.probe(), {
+      up: true,
+      origin: ORIGIN,
+      day: "2026-09-17",
+      dates: DAYS.dates,
+    });
   });
 
   it("opens through the server's own opener, not its own tab", async () => {
@@ -127,7 +132,7 @@ describe("orca plugin — the report in an Orca tab", async () => {
     ]);
     const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub });
 
-    assert.deepEqual(await plugin.probe(), { up: true, origin: ORIGIN, day: null });
+    assert.deepEqual(await plugin.probe(), { up: true, origin: ORIGIN, day: null, dates: [] });
     await plugin.open();
     assert.equal(fetchStub.calls.filter((call) => call.method === "POST").length, 1);
   });
@@ -366,5 +371,197 @@ describe("orca plugin — the report's address comes from the plugin's own setti
       fetchStub.calls.every((call) => call.href.startsWith("http://127.0.0.1:9000")),
       "every request went to the resolved address, not the default"
     );
+  });
+});
+
+describe("orca plugin — status, refresh and start", async () => {
+  const worker = await import(WORKER);
+
+  const settings = (value) => ({
+    "settings.get": { ok: true, value: { settings: value === undefined ? {} : { url: value } } },
+  });
+  const REPORT = [
+    { url: `${ORIGIN}/api/days`, body: DAYS },
+    {
+      url: `${ORIGIN}/api/refresh`,
+      body: { ok: true, day: "2026-09-17", packs: ["2026-09-17"], skills: 11, inUse: 4 },
+    },
+  ];
+
+  /** A registered plugin whose commands are invoked the way Orca invokes them. */
+  function plugin({ answers = {}, routes = [], fetch: fetchImpl, url } = {}) {
+    const host = makeHost(answers);
+    const fetchStub = fetchImpl ?? makeFetch(routes);
+    const instance = worker.createPlugin({ orca: host.orca, fetch: fetchStub, url });
+    instance.register();
+    return { host, fetchStub, run: (id) => host.commands.get(id)() };
+  }
+
+  it("registers all four commands", () => {
+    const { host } = plugin();
+    assert.deepEqual([...host.commands.keys()], [
+      "report-open",
+      "report-status",
+      "report-refresh",
+      "report-start",
+    ]);
+  });
+
+  it("describes the report, and says where its address came from", async () => {
+    const { host, run } = plugin({
+      answers: settings("http://127.0.0.1:9000"),
+      routes: [{ url: "http://127.0.0.1:9000/api/days", body: DAYS }],
+    });
+
+    await run("report-status");
+
+    const body = host.notifications[0].body;
+    assert.match(body, /up at http:\/\/127\.0\.0\.1:9000/);
+    assert.match(body, /from settings/);
+    assert.match(body, /2026-09-17/);
+    assert.match(body, /2 days/);
+  });
+
+  it("says no day is recorded rather than showing an empty count", async () => {
+    const { host, run } = plugin({
+      routes: [{ url: `${ORIGIN}/api/days`, body: { dates: [], recent: [], calendar: {} } }],
+    });
+
+    await run("report-status");
+
+    assert.match(host.notifications[0].body, /no day recorded yet/);
+    assert.doesNotMatch(host.notifications[0].body, /undefined|NaN/);
+  });
+
+  it("says what to run when status finds nothing answering", async () => {
+    const { host, run } = plugin({ fetch: refusing() });
+
+    await run("report-status");
+
+    assert.match(host.notifications[0].body, /not answering at/);
+    assert.match(host.notifications[0].body, /npm run report/);
+  });
+
+  it("repeats what the server recorded", async () => {
+    const { host, run } = plugin({ routes: REPORT });
+
+    await run("report-refresh");
+
+    const body = host.notifications[0].body;
+    assert.match(body, /recorded 2026-09-17/);
+    assert.match(body, /1 pack\b/);
+    assert.match(body, /4 in use/);
+  });
+
+  it("repeats the server's own reason verbatim, once", async () => {
+    const reason = "no pack under .x-skills/daily; run the collector first";
+    const { host, fetchStub, run } = plugin({
+      routes: [{ url: `${ORIGIN}/api/refresh`, body: { ok: false, reason } }],
+    });
+
+    await run("report-refresh");
+
+    assert.equal(host.notifications[0].body, reason);
+    assert.equal(fetchStub.calls.length, 1, "a recording is never retried");
+  });
+
+  it("says what to run when refresh finds nothing answering", async () => {
+    const { host, fetchStub, run } = plugin({ fetch: refusing() });
+
+    await run("report-refresh");
+
+    assert.match(host.notifications[0].body, /npm run report/);
+    assert.equal(fetchStub.calls.length, 1);
+  });
+
+  it("truncates a body the host would refuse", async () => {
+    const reason = "x".repeat(1500);
+    const { host, run } = plugin({
+      routes: [{ url: `${ORIGIN}/api/refresh`, body: { ok: false, reason } }],
+    });
+
+    await run("report-refresh");
+
+    const body = host.notifications[0].body;
+    assert.ok(body.length <= 1000, `body was ${body.length} characters`);
+    assert.ok(body.endsWith("…"));
+  });
+
+  it("starts the server in a terminal, and says which one", async () => {
+    const { host, run } = plugin({
+      answers: {
+        "workspace.readContext": { ok: true, value: { branch: "main", displayName: "xskills", terminals: [{ id: "term_1" }] } },
+        "terminal.sendText": { ok: true, value: { accepted: true } },
+      },
+    });
+
+    await run("report-start");
+
+    const sent = host.calls.find((call) => call.method === "terminal.sendText");
+    assert.deepEqual(sent.params, { terminalId: "term_1", text: "npm run report", enter: true });
+    assert.match(host.notifications[0].body, /term_1/);
+  });
+
+  it("sends to exactly one terminal when there are several", async () => {
+    const terminals = [{ id: "term_1" }, { id: "term_2" }, { id: "term_3" }];
+    const { host, run } = plugin({
+      answers: {
+        "workspace.readContext": { ok: true, value: { branch: "main", displayName: "x", terminals } },
+        "terminal.sendText": { ok: true, value: { accepted: true } },
+      },
+    });
+
+    await run("report-start");
+
+    const sent = host.calls.filter((call) => call.method === "terminal.sendText");
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].params.terminalId, "term_1");
+    assert.match(host.notifications[0].body, /term_1/);
+  });
+
+  it("sends nothing when there is no worktree to send to", async () => {
+    for (const answer of [
+      { ok: false, code: "capability_denied", error: "workspace:read was not granted" },
+      { ok: true, value: null },
+    ]) {
+      const { host, run } = plugin({ answers: { "workspace.readContext": answer } });
+
+      await run("report-start");
+
+      assert.equal(host.calls.some((call) => call.method === "terminal.sendText"), false);
+      assert.match(host.notifications[0].body, /no worktree is focused/i);
+    }
+  });
+
+  it("sends nothing when the worktree has no terminal", async () => {
+    const { host, run } = plugin({
+      answers: { "workspace.readContext": { ok: true, value: { branch: "main", displayName: "x", terminals: [] } } },
+    });
+
+    await run("report-start");
+
+    assert.equal(host.calls.some((call) => call.method === "terminal.sendText"), false);
+    assert.match(host.notifications[0].body, /no terminal/i);
+  });
+
+  it("repeats the host's own reason when the terminal refuses the text", async () => {
+    const { host, run } = plugin({
+      answers: {
+        "workspace.readContext": { ok: true, value: { branch: "main", displayName: "x", terminals: [{ id: "term_1" }] } },
+        "terminal.sendText": { ok: false, code: "invalid_params", error: "text: too long" },
+      },
+    });
+
+    await run("report-start");
+
+    assert.equal(host.calls.filter((call) => call.method === "terminal.sendText").length, 1);
+    assert.match(host.notifications[0].body, /text: too long/);
+  });
+
+  it("never spawns a process", () => {
+    const source = require("node:fs").readFileSync(WORKER, "utf8");
+    for (const call of ["spawn", "exec", "execSync", "execFile", "fork"]) {
+      assert.doesNotMatch(source, new RegExp(`\\b${call}\\s*\\(`), `main.mjs must not call ${call}()`);
+    }
   });
 });

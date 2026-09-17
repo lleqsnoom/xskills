@@ -10,7 +10,18 @@
   "pluginApi": 1,
   "main": "main.mjs",
   "contributes": {
-    "commands": [{ "id": "report-open", "title": "x-skills report: Open" }]
+    "commands": [
+      { "id": "report-open", "title": "x-skills report: Open" },
+      { "id": "report-status", "title": "x-skills report: Status" },
+      { "id": "report-refresh", "title": "x-skills report: Record the newest day" },
+      { "id": "report-start", "title": "x-skills report: Start the server here" }
+    ]
   },
-  "capabilities": [{ "kind": "notifications:show" }, { "kind": "settings:own" }, { "kind": "storage" }]
+  "capabilities": [
+    { "kind": "notifications:show" },
+    { "kind": "settings:own" },
+    { "kind": "storage" },
+    { "kind": "workspace:read" },
+    { "kind": "terminal:send" }
+  ]
 }
