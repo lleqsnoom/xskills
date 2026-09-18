@@ -1,17 +1,25 @@
 # What Orca would have to add for the report to live in a pane
 
-The plugin opens the report as a full-area Orca **browser tab**, and that is as far as it can go. A plugin
-**panel** cannot show a page from a local server, and this file is the request that would change that: it is
-written to be filed on `github.com/stablyai/orca/issues` as it stands, and nothing here is speculation about
-the host.
+The plugin puts the report in Orca three ways: a **browser tab** (`Open`, live and writable), a **terminal pane**
+running `scripts/report-console.mjs` (`Console`, live and writable), and its **right-sidebar panel**, which is a
+*copy* — the record rendered into the panel file by `scripts/report-panel.mjs`, because a panel cannot fetch and
+cannot read a file. This file is the request that would let the panel itself be the live one: it is written to be
+filed on `github.com/stablyai/orca/issues` as it stands, and nothing here is speculation about the host.
 
-The panel this plugin ships today is a consequence of that limit: a small, static document that names the
-report's address, the focused worktree and the two ways to open the report. It carries no data — a snapshot
-would have to be *written into the plugin's files*, and Orca binds a reader's consent to the hash of those
-files, so a panel refreshed by a bake is a plugin that asks to be installed again on every data change.
+**Two shapes would do it**, and either is enough:
+
+- **A. a declared origin** — `contributes.panels[]` gains an optional `src` (mutually exclusive with `entry`), or
+  `capabilities[]` gains a scoped `net:fetch` (`{ "kind": "net:fetch", "hosts": ["http://127.0.0.1:8787"] })`:
+  the panel loads the live report and can write to it.
+- **B. a declared directory to read** — a scoped `fs:read` (for example the workspace's `.x-skills/daily`), so a
+  panel can answer from the record itself with no server anywhere in the path.
 
 Verified against Orca 1.4.199 (`/usr/lib/orca-ide/app.asar`) and `github.com/stablyai/orca`
-(`src/shared/plugins/`, `src/main/plugins/`) on 2026-09-17.
+(`src/shared/plugins/`, `src/main/plugins/`) on 2026-09-17. The panel's isolation was then *measured*, not only
+read: in a copy of the host's own shell (its CSP meta plus its guard prelude), a panel loading `fetch`, `XHR`,
+`navigator.sendBeacon`, `<img>`, `<iframe>`, `<script src>`, `<object>`, `location.assign`/`href`/`replace`, a
+`<meta http-equiv="refresh">`, a form submit and an `<a href>` click made **zero** requests — every one was
+refused by the policy or cancelled by the guard.
 
 ## Why a pane is not possible today
 
@@ -78,11 +86,11 @@ style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-
 >
 > ### What I will do when it lands
 >
-> Ship the pane behind a probe: the panel fetches the report from the declared origin and falls back to the card
-> it shows today — the address and the two ways in — when the request fails, naming the two possible causes
-> (blocked, or not running). Because the loaded page is the app the server serves, the pane reads *and writes*:
-> `+ to-do`, `remove` and `clear` work in the panel, and nothing about the record is copied into the plugin.
-> The commands, the keybinding, the notifications and the browser-tab path all stay, so an Orca without it is
+> Ship it behind a probe: the panel loads the report from the declared origin and falls back to what it shows
+> today — the rendered record, or the signpost when there is none — naming the two possible causes (blocked, or
+> not running) when the request fails. Because the loaded page is the app the server serves, the pane then reads
+> *and writes*: `+ to-do`, `remove` and `clear` work in the panel, and the baker, the snapshot and the read-only
+> states all go. The commands, the notifications and the browser-tab path stay, so an Orca without it is
 > unaffected.
 >
 > ### If the answer is no
@@ -97,3 +105,16 @@ Nothing here needs editing to be posted. File it as an issue on `stablyai/orca`,
 asking for a webview panel or a URL panel — the evidence above is what makes it checkable rather than
 aspirational. When it is filed, replace this section with the URL so the plugin's README can point at a live
 discussion instead of a file.
+
+**Status: not filed yet.** No issue has been opened on another repository from this checkout. To file it:
+
+```bash
+gh issue create --repo stablyai/orca \
+  --title "Plugin panels cannot reach a loopback service or read a file, so a local dashboard cannot live in a pane" \
+  --body-file tools/orca-plugin/PANE-REQUEST.md
+```
+
+What the plugin does meanwhile, so this is a request rather than a blocker: the worker resolves the focused
+worktree's record and starts the report server itself when the port is quiet; `Open` shows the live, writable
+report as a tab; `Console` puts the same record, live and writable, in a terminal pane; the sidebar panel stays
+the copy it can only be today.

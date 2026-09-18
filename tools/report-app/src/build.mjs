@@ -7,11 +7,12 @@
  * `index.html` asks for (`GET /api/version`), and those two names differ exactly when the page is older than
  * the app. Then the page reloads itself once, and the reader gets what they were promised.
  *
- * Under `vite dev` the app runs from `/src/main.tsx`, which is not a build: a name that is not a bundle is a
- * name that says nothing about staleness.
+ * Nothing here runs in a snapshot: a panel is a document with no network, and its code is inlined into
+ * `panel.html`, so it has no hashed bundle name to compare. Under `vite dev` the app runs from `/src/main.tsx`,
+ * which is not a build either — a name that is not a bundle is a name that says nothing about staleness.
  */
 
-/** A built bundle's file name, or null when the url is not one (a dev module, a plain page). */
+/** A built bundle's file name, or null when the url is not one (a dev module, a panel, a plain page). */
 export function bundleName(url) {
   try {
     const name = new URL(url, "http://localhost").pathname.split("/").pop() ?? "";
@@ -39,7 +40,7 @@ export function watchBuild({
   gapMs = 5_000,
   now = () => Date.now(),
 } = {}) {
-  // No bundle name, no check: a dev server, or a plain page that is not a build of this app.
+  // No bundle name, no check: a dev server, or a panel that cannot reach the server anyway.
   if (!own || !check || typeof document === "undefined") return () => {};
 
   let last = 0;

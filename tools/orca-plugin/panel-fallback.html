@@ -42,14 +42,16 @@
 </head>
 <body>
 <p class="context" id="context">Reading the focused worktree…</p>
-<p class="lead">The report is a live page at <code>http://127.0.0.1:8787</code> — its default address, which
-<em>Status</em> confirms — and it is the only thing that reads the record or writes to it: the to-do buttons
-work in the tab, and a pane cannot write. Open it from Orca's quick actions —
-<kbd id="palette">Ctrl+J</kbd>, then “x-skills report: Open”.</p>
-<p class="note">The keybinding <kbd id="key">Ctrl+Alt+X</kbd> does the same thing. This panel is a document,
-not a browser: Orca gives it no network and cancels its navigations, so it shows where the report is and never
-a stale copy of what it holds. The plugin's own commands — <em>Status</em>, and <em>Record the newest day</em> —
-answer from the server too, and never from this file.</p>
+<p class="lead">The report has not been rendered into this pane yet. It is a live page at
+<code>http://127.0.0.1:8787</code> in the meantime — and that page is the only thing that reads the record or
+writes to it, so the to-do buttons work there and not here. Orca's palette opens either live surface:
+<kbd id="palette">Ctrl+J</kbd>, then “x-skills report: Open” for the report as a tab, or
+“x-skills report: Console” for the same record in a pane you can type at — <kbd>t</kbd> keeps a proposal,
+<kbd>d</kbd> drops it.</p>
+<p class="note">The record itself arrives on the next bake: <code>npm run report:panel</code> renders the
+numbers, the days and their proposals into this file, and the report's worker and server re-render it
+whenever the packs change. This file is not part of the plugin's approval — Orca binds that to the
+capabilities this plugin declares — so a new day never asks you to install it again.</p>
 <script>
   "use strict";
 
@@ -59,7 +61,6 @@ answer from the server too, and never from this file.</p>
   var isMac = /mac/i.test(navigator.platform || "");
 
   document.getElementById("palette").textContent = isMac ? "⌘J" : "Ctrl+J";
-  document.getElementById("key").textContent = isMac ? "⌘⌥X" : "Ctrl+Alt+X";
 
   // The frame has an opaque origin, so the host is addressed as the parent window and verifies the sender.
   function call(action, params) {

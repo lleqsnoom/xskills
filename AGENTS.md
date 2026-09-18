@@ -39,7 +39,7 @@ xskills/
 │   └── daily-reflection/     # 05:00 Orca job: collect last 24h sessions from every CLI, write a digest
 ├── scripts/                  # Repo tooling: sync-run-folders.js, dev.mjs, report-server.mjs, report-open.mjs (not published)
 ├── tools/report-app/         # The report app: Solid + Tailwind, controls in src/ui/, styled in Orca's design language
-│                             # (dist/ and node_modules/ are gitignored)
+│                             # (dist/, dist-panel/ and node_modules/ are gitignored)
 └── skills/                   # Skill packages (published as part of the npm package)
     ├── x-commit/             # Conventional commit message helper
     │   ├── SKILL.md          # Required: YAML frontmatter + instructions
@@ -277,6 +277,7 @@ database behind it, whose storage is those JSON files.
 npm run report:install              # once: the app's own dependencies
 npm run dev                         # work on the app: server (restarting on change) + Vite hot reload
 npm run report:build                # once, and after any change under tools/report-app
+npm run report:panel                # the Orca plugin's panel: the same app, rendered with the record in it
 npm run report                      # http://127.0.0.1:8787/
 npm run report -- --days 30 --port 8080
 npm run report -- --no-refresh      # answer from disk without recording the newest day first
@@ -293,8 +294,8 @@ packs so it survives a restart. Everything is answered `no-store`, because the a
 with every fix merged and none of it on screen, which is what "it is still broken" was. The bundle knows its own
 name (`/assets/index-<hash>.js`), the server reports the name its `index.html` asks for (`GET /api/version`), and
 when the two differ the page reloads once. Checked on the next focus or visibility change, and at most once a
-minute, so a page left open costs nothing. A dev server opts out by construction: `main.tsx` is not a bundle
-name, and the plugin's panel is a separate static document with no network to ask over anyway.
+minute, so a page left open costs nothing. A dev server and the plugin's panel both opt out by construction:
+`main.tsx` and `panel.html` are not bundle names, and a panel has no network to ask over anyway.
 
 | Route | What it is |
 |-------|------------|
@@ -403,9 +404,10 @@ an accent fill.
 **The shell is Orca's too.** `.app` is a grid: a 240px rail on `--sidebar`, and the routed view beside it — no
 action bar above the view. `Run` and `window` used to have one (a pane title bar carrying `components/App.tsx`'s
 `.topbar-label` and the two buttons), and it was removed: it took a row off every screen and asked the server for
-something the address bar already does. `POST /api/open` and `npm run report:open` stay — the plugin uses them —
-but nothing in the page does, and the snapshot line that bar left behind (`.snapshot`, "when the numbers were
-taken") went with it: the app is the live page, in the only surface it is read in.
+something the address bar already does. `POST /api/open` and `npm run report:open` stay — the plugin and the shell
+use them — but nothing in the page does. The one line worth keeping from that bar survives as `.snapshot`, under
+the tabs, and only a snapshotted panel renders it: when its numbers were taken, and that the live report (Orca's
+palette) is the copy that writes.
 
 **Three tabs are the whole navigation.** `Skills`, `Days` and `To-do` — no lists hang off the rail, because the
 lists that used to (the recent days, the skills in use) are the screens themselves, and the skills screen is the
@@ -601,6 +603,48 @@ orca automations list                                            # confirm the s
 Sessions are scoped per project directory and per CLI, so discovery walks every detected host and unions
 what it finds by host and uuid — the same uuid under two CLIs is two sessions. Crush's own walk is
 per project in `projects.json` (newest first, `--project-lookback-hours`, default 72).
+
+### The Orca plugin, and why it has no keybinding
+
+`tools/orca-plugin/` puts the report in Orca: five commands, a new-day notification, and a right-sidebar
+**panel** that is the app rendered into one file. A panel is a sandboxed document — `default-src 'none'`,
+`connect-src 'none'`, no navigation, no `window.open`, three callable host actions and no host-to-panel data
+channel — and it cannot read a file either: `fetch`, `XHR`, `sendBeacon`, `<img>`, `<iframe>`, `<script src>`,
+`<object>` and every self-navigation were tried against the host's own shell and **none of them left the pane**.
+So the record cannot be fetched into a panel; it has to be *rendered into the file*, which is what
+`scripts/report-panel.mjs` does (`npm run report:panel`, the server while it runs, and the worker whenever Orca
+wakes it).
+
+That re-rendering is cheap in approval terms only because the manifest contributes **no keybinding, VM recipe or
+agent**. Orca's consent fingerprint is
+`sha256(capabilities + trusted-worker + instructional-content:treeHash)` (`plugin-consent-fingerprint.ts`,
+verified in Orca 1.4.199), where *instructional* is exactly those three; a plugin with none of them is approved
+on its capabilities and its files may change under it. With a keybinding, every re-rendered panel would no longer
+match the reader's stored consent and Orca would ask for a re-approval — the "install it again" this panel used
+to cause. The test `contributes no instructional content, so a re-rendered panel is not a re-approval` fails if
+one is added back.
+
+**The live surfaces are a page and a process, not the panel.** `x-skills report: Open` (palette) opens the report
+as a browser tab: revalidates the current screen on focus and every 30 s, and `+ to-do` writes through
+`POST /api/todos`. `x-skills report: Console` opens a terminal running `scripts/report-console.mjs`, a *client* of
+the same API (`j`/`k` move, `t` keep, `d` drop, `r` refresh, `q` quit; one summary line and exit 0 when stdout is
+not a TTY). The plugin resolves the record root from the focused worktree and starts
+`scripts/report-server.mjs` itself when the port is quiet — detached, once per activation, logged with its pid,
+never adopting a port something else holds (`resolveRecordRoot`, `startReportServer`, `makeEnsurer` in
+`main.mjs`; `test/orca-plugin.test.cjs` pins start-once and stranger-refused). The worker starts exactly one
+process through one seam, and `report-start` now means "bring it up" rather than "type this into a terminal".
+
+Two consequences worth keeping: the panel is **read-only** (its write controls are disabled with a title naming
+the console and the live report), and a checkout that has never baked shows the committed
+`panel-fallback.html` signpost rather than an empty pane.
+
+**One app, two backends.** `tools/report-app/src/backend.mjs` is where the app's data comes from: `http` (the
+served app — `fetch` per route with a shared cache, `POST /api/todos`, `/api/version` so a stale tab reloads
+itself) and `snapshot` (a panel — the payloads the worker rendered in, `bundleName` null, and `write` refusing
+because a pane has nowhere to write). The interface is `backend.d.mts`; `api.ts` is written against it and knows
+nothing else, and the screens ask `canWrite()` rather than "am I a snapshot", because that is the question a
+write control's presence hangs on. A host-granted panel origin would add a third backend here and change nothing
+above it — which is the point of the seam.
 
 ## Release Workflow
 

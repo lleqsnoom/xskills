@@ -18,9 +18,10 @@
     "report:open": "node scripts/report-open.mjs",
     "report:window": "node scripts/report-open.mjs --window",
     "report:install": "npm --prefix tools/report-app install",
-    "report:build": "npm --prefix tools/report-app run build",
+    "report:build": "npm --prefix tools/report-app run build && npm run report:panel",
     "report:dev": "npm --prefix tools/report-app run dev",
-    "report:typecheck": "npm --prefix tools/report-app run typecheck"
+    "report:typecheck": "npm --prefix tools/report-app run typecheck",
+    "report:panel": "npm --prefix tools/report-app run build:panel && node scripts/report-panel.mjs"
   },
   "keywords": [
     "agentic",
