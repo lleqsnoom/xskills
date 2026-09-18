@@ -9,7 +9,7 @@ user-invocable: true
 
 # X-Epic — Layer-Based Epic Definition
 
-`<run folder>/E<nn>-epic.md`, where the run folder is `.x-skills/runs/YYYY-MM-DD-hhmm-R<nn>-<topic>/`. One epic per topic. Reference the spec; don't repeat it. Follow pipeline order from `.agents/rules/xskills.md`.
+`<run folder>/E<nn>-epic.md`, where the run folder is `.x-skills/runs/YYYY-MM-DD-hhmm-R<nn>-<topic>/`. One epic per topic. Reference the spec; don't repeat it. Pipeline order: `x-plan → x-epic → x-decompose → x-implement`.
 
 ## Workflow
 

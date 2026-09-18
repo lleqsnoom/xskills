@@ -47,10 +47,11 @@ function makeRepo({ withBad }) {
 
   if (withBad) {
     const bad = path.join(root, "skills", "x-bad-name");
-    fs.mkdirSync(bad, { recursive: true });
+    fs.mkdirSync(path.join(bad, "scripts", ".x-skills", "debug"), { recursive: true });
+    fs.writeFileSync(path.join(bad, "scripts", ".x-skills", "debug", "report.md"), "# Debug\n");
     fs.writeFileSync(
       path.join(bad, "SKILL.md"),
-      `---\nname: x-wrong-name\ndescription: Broken\n---\n\nRun \`scripts/missing.mjs\`.\n\n</gate>\n`,
+      `---\nname: x-wrong-name\ndescription: Broken\n---\n\nRun \`scripts/missing.mjs\`.\n\nFollow the order in \`.agents/rules/xskills.md\`.\n\n</gate>\n`,
     );
     // x-bad-name intentionally omitted from the README table
   }
@@ -73,11 +74,18 @@ describe("x-skill-lint lintRepo", async () => {
     }
   });
 
-  it("flags name mismatch, missing ref, stray token and README gaps", () => {
+  it("flags name mismatch, missing ref, repo-only ref, stray run folder, stray token and README gaps", () => {
     const root = makeRepo({ withBad: true });
     try {
       const rules = mod.lintRepo(root).violations.filter((v) => v.skill === "x-bad-name").map((v) => v.rule).sort();
-      assert.deepEqual(rules, ["missing-ref", "name-mismatch", "readme", "stray-token"]);
+      assert.deepEqual(rules, [
+        "missing-ref",
+        "name-mismatch",
+        "readme",
+        "repo-only-ref",
+        "stray-run-folder",
+        "stray-token",
+      ]);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

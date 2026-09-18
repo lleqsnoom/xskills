@@ -45,6 +45,34 @@ export function refsForSkill(text, skillName) {
 // Files that must stay byte-identical across the skills that share them.
 const SHARED_SCRIPTS = ["scripts/check-questions.mjs", "references/questions.md", "references/research-first.md"];
 
+/**
+ * Trees that exist in this repository and nowhere else. `package.json` publishes `bin/`, `lib/`,
+ * `skills/` and `docs/`, and a global install is a copy of `skills/`, so a SKILL.md that sends the
+ * agent into `.agents/rules/` sends it into a file it cannot read.
+ */
+const REPO_ONLY_TREES = [".agents/rules/"];
+
+/** The first repo-only path a SKILL.md names, or null. */
+function repoOnlyRef(text) {
+  return REPO_ONLY_TREES.find((tree) => text.includes(tree)) ?? null;
+}
+
+/**
+ * Run folders that landed inside a skill tree. A skill executed from its own `scripts/` directory writes
+ * its artifacts there, which puts them inside the directory `package.json` publishes. A global ignore
+ * hides them from `git status` without keeping them out of the package, so the lint is the durable half.
+ */
+function strayRunFolders(dir, prefix = "") {
+  const out = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.name === ".x-skills") out.push(rel);
+    else out.push(...strayRunFolders(path.join(dir, entry.name), rel));
+  }
+  return out;
+}
+
 function scriptFiles(dir) {
   const scriptsDir = path.join(dir, "scripts");
   if (!fs.existsSync(scriptsDir)) return [];
@@ -129,6 +157,13 @@ export function lintRepo(root = REPO_ROOT) {
       if (!fm.description) violations.push({ skill: name, rule: "description", detail: "missing description" });
     }
     if (/<\/gate>/.test(text)) violations.push({ skill: name, rule: "stray-token", detail: "contains stray </gate>" });
+    if (repoOnlyRef(text)) {
+      violations.push({
+        skill: name,
+        rule: "repo-only-ref",
+        detail: `names ${repoOnlyRef(text)}, which ships in neither the npm package nor a global install`,
+      });
+    }
     // Shared files are governed by copy-drift, not by per-skill existence, so a skill
     // may document them without shipping them.
     for (const ref of refsForSkill(text, name)) {
@@ -138,6 +173,9 @@ export function lintRepo(root = REPO_ROOT) {
       }
     }
     if (!inReadme.has(name)) violations.push({ skill: name, rule: "readme", detail: "not listed in README skills table" });
+    for (const rel of strayRunFolders(dir)) {
+      violations.push({ skill: name, rule: "stray-run-folder", detail: `${rel}/ holds run artifacts inside the published tree` });
+    }
     for (const hit of crossSkillImports(dir, name)) {
       violations.push({ skill: name, rule: "cross-skill-import", file: hit.file, detail: `imports ${hit.spec}` });
     }
