@@ -10,6 +10,7 @@ const path = require("node:path");
 
 const SKILL = path.join(__dirname, "..", "skills", "x-review");
 const ANALYSIS = path.join(SKILL, "scripts", "analyze-complexity.js");
+const DUPLICATION = path.join(SKILL, "scripts", "check-duplication.js");
 const SAVE_PLAN = path.join(SKILL, "scripts", "save-plan.js");
 const CONFIG = JSON.parse(fs.readFileSync(path.join(SKILL, "assets", "config.json"), "utf8"));
 
@@ -37,6 +38,25 @@ const FIXTURE = [
   "    else if (item > 100) total -= item;",
   "  }",
   "  return total;",
+  "}",
+  "",
+].join("\n");
+
+const DUPLICATE_FIXTURE = [
+  "function a() {",
+  "  const x = 1;",
+  "  const y = 2;",
+  "  const z = 3;",
+  "  const w = 4;",
+  "  return x + y + z + w;",
+  "}",
+  "",
+  "function b() {",
+  "  const x = 1;",
+  "  const y = 2;",
+  "  const z = 3;",
+  "  const w = 4;",
+  "  return x + y + z + w;",
   "}",
   "",
 ].join("\n");
@@ -152,5 +172,37 @@ describe("x-review save-plan", () => {
     } finally {
       await fsp.rm(dir, { recursive: true, force: true }).catch(() => {});
     }
+  });
+});
+
+// ── documented JSON shapes ───────────────────────────────────────────
+
+describe("x-review — the JSON shapes its SKILL.md documents", () => {
+  const keys = (value) => Object.keys(value).sort();
+
+  it("emits the key sets the SKILL.md names, for both analyzers", async () => {
+    await withFixture(async ({ dir, file }) => {
+      const complexity = JSON.parse((await run(ANALYSIS, [file])).stdout);
+      assert.deepEqual(keys(complexity), ["files", "summary"], "functions are nested in a file, never at the top level");
+      assert.deepEqual(keys(complexity.files[0]), ["file", "functionCount", "functions"]);
+      assert.deepEqual(keys(complexity.files[0].functions[0]), ["complexity", "issues", "length", "line", "name", "paramCount"]);
+      assert.deepEqual(keys(complexity.summary), ["highComplexity", "language", "longFunctions", "thresholds", "tooManyParams", "totalFiles", "totalFunctions"]);
+
+      const dupFile = path.join(dir, "dup.js");
+      fs.writeFileSync(dupFile, DUPLICATE_FIXTURE);
+      const duplication = JSON.parse((await run(DUPLICATION, [dupFile])).stdout);
+      assert.deepEqual(keys(duplication), ["duplicatedBlocks", "duplicates", "totalFiles"]);
+      assert.equal(typeof duplication.duplicatedBlocks, "number", "duplicatedBlocks is a count, not the block list");
+      assert.ok(Array.isArray(duplication.duplicates) && duplication.duplicates.length > 0, "duplicates is the list");
+      assert.deepEqual(keys(duplication.duplicates[0]), ["file", "lines", "occurrences", "sample"]);
+
+      const skill = fs.readFileSync(path.join(SKILL, "SKILL.md"), "utf8");
+      const documented = [
+        "functions: [ { name, line, length, complexity, paramCount, issues[] } ]",
+        "duplicates: [ { file, lines, occurrences[], sample } ]",
+      ];
+      const missing = documented.filter((shape) => !skill.includes(shape));
+      assert.deepEqual(missing, [], "a shape the script emits is not the shape the SKILL.md shows");
+    });
   });
 });
