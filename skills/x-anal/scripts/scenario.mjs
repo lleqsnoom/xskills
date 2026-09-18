@@ -256,7 +256,9 @@ export function upsertScenario(text, mermaid) {
 
 function loadState(dir) {
   const file = path.join(dir, "state.json");
-  if (!fs.existsSync(file)) throw new Error(`no state.json in ${dir}`);
+  if (!fs.existsSync(file)) {
+    throw new Error(`no state.json in ${dir}; run \`node scenario.mjs start --slug <slug>\` first`);
+  }
   return JSON.parse(fs.readFileSync(file, "utf8"));
 }
 

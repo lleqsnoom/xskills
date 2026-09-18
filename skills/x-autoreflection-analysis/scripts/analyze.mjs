@@ -3,7 +3,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * x-autoreflection-analysis — traverse past sessions across every CLI and write the skill-health
@@ -39,7 +41,7 @@ export const CHANGE_HINT = {
 
 export const SEVERITY_WEIGHT = { high: 3, medium: 2, low: 1 };
 const MAX_EVIDENCE = 5;
-const SPLIT_MIN_KINDS = 3;
+const DELETE_MIN_RECURRENCE = 2;
 
 /** The signals that are not gaps: expected-exit is an answer, not a failure. */
 const NON_GAP_KINDS = new Set(["expected-exit"]);
@@ -91,31 +93,39 @@ export function aggregate(scans, { hours = 24 } = {}) {
   }
 
   // Group signals by (kind, primary suspect) so the same gap in two sessions is one finding.
+  // `skill-unused` is grouped per skill, not per the whole suspect list: a signal names every unused
+  // skill at once, and grouping the whole list would split one skill's recurrence across subsets.
   const groups = new Map();
+  const ensureGroup = (key, signal, session, shape) => {
+    if (!groups.has(key)) {
+      groups.set(key, { ...shape, sessionSet: new Set(), count: 0, severity: "low", summaries: [], evidence: [] });
+    }
+    const group = groups.get(key);
+    group.sessionSet.add(session.id);
+    group.count += signal.count ?? 1;
+    if (SEVERITY_WEIGHT[signal.severity] > SEVERITY_WEIGHT[group.severity]) group.severity = signal.severity;
+    if (signal.summary) group.summaries.push(signal.summary);
+    for (const ev of signal.evidence ?? []) {
+      if (group.evidence.length < MAX_EVIDENCE) group.evidence.push({ session: session.id, message: ev.message, excerpt: ev.excerpt ?? "" });
+    }
+  };
+
   for (const session of sessions) {
     for (const signal of session.signals) {
       if (NON_GAP_KINDS.has(signal.kind)) continue;
+      if (signal.kind === "skill-unused") {
+        for (const name of signal.suspects ?? []) {
+          ensureGroup(`skill-unused|${name}`, signal, session, { kind: signal.kind, skill: name, suspects: [name] });
+        }
+        continue;
+      }
       const primary = (signal.suspects && signal.suspects[0]) || null;
-      const key = signal.kind === "skill-unused"
-        ? `skill-unused|${(signal.suspects ?? []).sort().join(",")}`
-        : `${signal.kind}|${primary ?? "(none)"}`;
-      if (!groups.has(key)) {
-        groups.set(key, { kind: signal.kind, skill: primary, suspects: signal.suspects ?? [], sessionSet: new Set(), count: 0, severity: "low", summaries: [], evidence: [] });
-      }
-      const group = groups.get(key);
-      group.sessionSet.add(session.id);
-      group.count += signal.count ?? 1;
-      if (SEVERITY_WEIGHT[signal.severity] > SEVERITY_WEIGHT[group.severity]) group.severity = signal.severity;
-      if (signal.summary) group.summaries.push(signal.summary);
-      for (const ev of signal.evidence ?? []) {
-        if (group.evidence.length < MAX_EVIDENCE) group.evidence.push({ session: session.id, message: ev.message, excerpt: ev.excerpt ?? "" });
-      }
+      ensureGroup(`${signal.kind}|${primary ?? "(none)"}`, signal, session, { kind: signal.kind, skill: primary, suspects: signal.suspects ?? [] });
     }
   }
 
   const findings = [];
   const portfolio = [];
-  const skillKindCounts = new Map();
   let fi = 0;
   let pi = 0;
 
@@ -123,11 +133,11 @@ export function aggregate(scans, { hours = 24 } = {}) {
     const recurrence = group.sessionSet.size;
 
     if (group.kind === "skill-unused") {
-      for (const name of group.suspects) {
+      if (recurrence >= DELETE_MIN_RECURRENCE) {
         portfolio.push({
           id: `PF${++pi}`,
           action: "delete",
-          skills: [name],
+          skills: [group.skill],
           reason: `loaded but never used in ${recurrence} session(s)`,
           evidence: group.evidence.slice(0, 2),
         });
@@ -151,11 +161,6 @@ export function aggregate(scans, { hours = 24 } = {}) {
     };
     findings.push(finding);
 
-    if (group.skill) {
-      if (!skillKindCounts.has(group.skill)) skillKindCounts.set(group.skill, new Set());
-      skillKindCounts.get(group.skill).add(group.kind);
-    }
-
     // A failure no skill names is a gap no skill covers: a create candidate.
     if (!group.skill && (group.kind === "tool-failure" || group.kind === "user-correction") && recurrence >= 2) {
       portfolio.push({
@@ -164,19 +169,6 @@ export function aggregate(scans, { hours = 24 } = {}) {
         skills: [],
         reason: `recurring ${group.kind} names no skill, so no skill owns this gap`,
         evidence: group.evidence.slice(0, 2),
-      });
-    }
-  }
-
-  // A skill whose findings span enough kinds is over-triggering: a split candidate.
-  for (const [name, kinds] of skillKindCounts) {
-    if (kinds.size >= SPLIT_MIN_KINDS) {
-      portfolio.push({
-        id: `PF${++pi}`,
-        action: "split",
-        skills: [name],
-        reason: `findings span ${kinds.size} kinds, so the skill mixes ${kinds.size} jobs`,
-        evidence: [],
       });
     }
   }
@@ -402,9 +394,11 @@ export function listWindow({ hours, host, scripts }) {
 }
 
 /** Scan one session into a signals file, returning the parsed scan. */
-export function scanOne({ host, id, skillsDir, scripts, workDir, out }) {
+export function scanOne({ host, id, skillsDir, scripts, workDir, out, hours = 24 }) {
   const transcript = path.join(workDir, "session.json");
-  runNode(path.join(scripts, "read-session.mjs"), ["--session", String(id), "--host", host, "--out", transcript]);
+  // `--hours` sets the project lookback, not the session window: `--session` reads any id, but the
+  // crush adapter only lists projects touched within the lookback, so a 72h window must look back 72h.
+  runNode(path.join(scripts, "read-session.mjs"), ["--session", String(id), "--host", host, "--hours", String(hours), "--out", transcript]);
   const args = ["--input", transcript, "--out", out];
   if (skillsDir) args.push("--skills-dir", skillsDir);
   runNode(path.join(scripts, "scan-session.mjs"), args);
@@ -445,6 +439,8 @@ function main() {
 
     let scans = [];
     let hosts = [];
+    let reportWarnings = [];
+    let reportFailed = 0;
     if (typeof args.scans === "string") {
       const dir = path.resolve(args.scans);
       for (const name of fs.readdirSync(dir).sort()) {
@@ -456,15 +452,24 @@ function main() {
       const listed = listWindow({ hours, host: args.host || null, scripts });
       hosts = listed.hosts;
       const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "xskills-analysis-"));
+      const warnings = [];
+      let failed = 0;
       try {
         for (const session of listed.sessions.slice(0, max)) {
           const safe = String(session.id).replace(/[^A-Za-z0-9._-]/g, "_");
           const out = path.join(workDir, `${session.host}--${safe}.signals.json`);
-          scans.push(scanOne({ host: session.host, id: session.id, skillsDir: args["skills-dir"] || null, scripts, workDir, out }));
+          try {
+            scans.push(scanOne({ host: session.host, id: session.id, skillsDir: args["skills-dir"] || null, scripts, workDir, out, hours }));
+          } catch (err) {
+            failed++;
+            if (warnings.length < 20) warnings.push({ session: `${session.host}:${session.id}`, reason: err.message.slice(0, 120) });
+          }
         }
       } finally {
         fs.rmSync(workDir, { recursive: true, force: true });
       }
+      reportWarnings = warnings;
+      reportFailed = failed;
     }
 
     const report = aggregate(scans, { hours });
@@ -474,6 +479,8 @@ function main() {
       report.window.until = new Date().toISOString();
       report.hosts = hosts;
     }
+    if (reportFailed) report.stats.failed = reportFailed;
+    if (reportWarnings.length) report.warnings = reportWarnings;
 
     const runDir = args.out
       ? path.resolve(args.out)

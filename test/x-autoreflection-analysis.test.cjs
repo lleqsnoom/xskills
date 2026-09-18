@@ -74,6 +74,19 @@ describe("x-autoreflection-analysis aggregate", async () => {
     assert.deepEqual(deletes[0].skills, ["x-triage"]);
   });
 
+  it("gates delete at two sessions, and groups skill-unused per skill", () => {
+    const unusedSignal = (suspects) => ({ id: "S1", kind: "skill-unused", severity: "low", summary: "unused", count: suspects.length, suspects, evidence: [] });
+    const scans = [
+      scan("s1", [unusedSignal(["x-a", "x-b"])], { loaded: ["x-a", "x-b"], used: [], unused: ["x-a", "x-b"] }),
+      scan("s2", [unusedSignal(["x-a"])], { loaded: ["x-a"], used: [], unused: ["x-a"] }),
+    ];
+    const report = aggregate(scans, { hours: 24 });
+    const deletes = report.portfolio.filter((item) => item.action === "delete");
+    assert.equal(deletes.length, 1, "only x-a recurs across two sessions");
+    assert.deepEqual(deletes[0].skills, ["x-a"]);
+    assert.equal(deletes[0].reason, "loaded but never used in 2 session(s)");
+  });
+
   it("proposes a create item for a recurring failure no skill names", () => {
     const scans = [
       scan("s1", [signal("tool-failure", { suspect: null })], { loaded: [], used: [] }),
@@ -83,7 +96,7 @@ describe("x-autoreflection-analysis aggregate", async () => {
     assert.ok(report.portfolio.some((item) => item.action === "create"));
   });
 
-  it("proposes a split when one skill spans three kinds", () => {
+  it("does not auto-emit split from a skill spanning many friction kinds", () => {
     const scans = [
       scan(
         "s1",
@@ -96,7 +109,7 @@ describe("x-autoreflection-analysis aggregate", async () => {
       ),
     ];
     const report = aggregate(scans, { hours: 24 });
-    assert.ok(report.portfolio.some((item) => item.action === "split" && item.skills.includes("x-plan")));
+    assert.ok(!report.portfolio.some((item) => item.action === "split"), "split is a manual observation, not a mechanical one");
   });
 
   it("ranks findings recurrence first", () => {
