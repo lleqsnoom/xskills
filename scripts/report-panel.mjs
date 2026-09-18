@@ -22,8 +22,10 @@ import { apiDay, apiDays, apiMovement, apiSession, apiSkill, apiTodos, newestPac
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const DEFAULT_ROOT = path.join(REPO_ROOT, ".x-skills", "daily");
 export const DEFAULT_DIST = path.join(REPO_ROOT, "tools", "report-app", "dist-panel");
+/** The manifest's panel entry. Committed, because Orca validates every declared artifact when it loads the
+ *  plugin: a panel the file system cannot resolve is a plugin that does not load at all. */
 export const DEFAULT_OUT = path.join(REPO_ROOT, "tools", "orca-plugin", "panel.html");
-/** What the panel shows before the report has ever been rendered into it: a hand-written signpost. */
+/** The signpost, kept beside the panel it is committed as: what a reader sees before the record is rendered in. */
 export const DEFAULT_FALLBACK = path.join(REPO_ROOT, "tools", "orca-plugin", "panel-fallback.html");
 const MAX_DAYS = 14;
 /**
@@ -154,16 +156,32 @@ export function withSnapshot(html, snapshot) {
 /**
  * Put the signpost in place when there is no panel at all.
  *
- * A plugin ships its panel file and Orca reads it when the panel opens; this plugin's is *rendered* from the
- * record, so a checkout that has never baked one has no file to show. Rather than a blank pane, that state gets
- * the fallback document: where the report is, how to open it, and what a bake will do. It never overwrites a
- * panel that exists, so a failed bake cannot take the last good one away.
+ * A plugin ships its panel file and Orca reads it when the panel opens, so a declared entry that is not there is
+ * a plugin Orca refuses to load — which is why the signpost is committed as `panel.html` rather than only copied
+ * into place. This is the repair for a copy of the plugin whose panel went missing anyway: a directory that is
+ * not a git checkout, or one whose panel was deleted by hand. It never overwrites a panel that exists, so a
+ * failed bake cannot take the last good one away.
  */
 export function ensureFallback({ out = DEFAULT_OUT, fallback = DEFAULT_FALLBACK } = {}) {
   if (fs.existsSync(out) || !fs.existsSync(fallback)) return { written: false, out };
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.copyFileSync(fallback, out);
   return { written: true, out };
+}
+
+/**
+ * The panel file as the marker names it: which bytes are there, not only which record they came from.
+ *
+ * Size and mtime are what a stat can answer, and they are enough to tell the file the baker wrote from the
+ * committed signpost a clone starts with — replacing one with the other moves both.
+ */
+function panelStamp(file) {
+  try {
+    const { size, mtimeMs } = fs.statSync(file);
+    return `${size}:${mtimeMs}`;
+  } catch {
+    return "absent";
+  }
 }
 
 /** Build the snapshot, write the panel, and answer the path that was written. */
@@ -229,11 +247,13 @@ export function renderHash({ root = DEFAULT_ROOT, maxDays = MAX_DAYS, budget = M
 /**
  * Bake only if the panel would show something else than what it shows now.
  *
- * The marker beside the panel holds what was last rendered rather than when, so a change the app does not read
- * — a markdown nobody renders, a file rewritten with the same content — is not a repaint, and a reader who is
- * in the middle of the panel keeps their place. The marker is a sibling file rather than plugin storage because
- * this runs in a plain Node process as often as in a worker, and it is what keeps two callers from baking each
- * other's work away.
+ * The marker beside the panel holds what was last rendered *and* the file it was rendered into, so a change the
+ * app does not read — a markdown nobody renders, a file rewritten with the same content — is not a repaint, and a
+ * reader who is in the middle of the panel keeps their place. The file's own size and mtime are in there because
+ * the panel is committed: a clone, or a checkout that restored the signpost from git, has a panel the baker never
+ * wrote, and a marker that only knew the record would call that panel current and never render the record into it.
+ * The marker is a sibling file rather than plugin storage because this runs in a plain Node process as often as in
+ * a worker, and it is what keeps two callers from baking each other's work away.
  */
 export function bakeIfStale({
   root = DEFAULT_ROOT,
@@ -247,10 +267,11 @@ export function bakeIfStale({
   const stamp = renderHash({ root, maxDays, budget });
   const marker = `${out}.fingerprint`;
   const seen = fs.existsSync(marker) ? fs.readFileSync(marker, "utf8").trim() : null;
-  if (!force && seen === stamp && fs.existsSync(out)) return { baked: false, reason: "current", stamp };
+  const written = `${stamp}:${panelStamp(out)}`;
+  if (!force && seen === written) return { baked: false, reason: "current", stamp };
   ensureFallback({ out });
   bake({ root, dist, out, maxDays, budget, now });
-  fs.writeFileSync(marker, `${stamp}\n`);
+  fs.writeFileSync(marker, `${stamp}:${panelStamp(out)}\n`);
   return { baked: true, stamp, out };
 }
 

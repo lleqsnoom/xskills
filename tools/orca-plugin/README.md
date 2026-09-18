@@ -114,12 +114,17 @@ the "install it again" this panel used to ask for. The shortcut this gives up is
 *"x-skills report: Open"*, which is also what the panel and its signpost name. If you would rather have the key
 back, put the `keybindings` entry in `orca-plugin.json` and expect a re-approval whenever the panel is re-baked.
 
-**Before the first bake the panel shows a signpost.** A checkout that has never baked has no `panel.html` at all,
-so the baker copies the committed `panel-fallback.html` into place — where the report is, how to open it, and what
-a bake will do. It is written only when there is no panel, so a bake that fails cannot take the last good one away.
+**Before the first bake the panel shows a signpost.** `panel.html` is committed as the signpost document — where
+the report is, how to open it, and what a bake will do — because Orca validates every declared artifact when it
+loads the plugin: it realpaths the panel entry, and a file it cannot resolve is *"A declared worker or panel file
+is missing or unsafe"*, with the plugin not loading at all. So the declared entry is in every checkout, baked or
+not, and the first bake replaces it with the app.
 
-The panel is generated and not committed (`panel.html` is gitignored): a clone that has not baked has no
-entry file, which shows as an empty panel rather than a broken plugin.
+That makes the panel a tracked file the baker rewrites, so a bake shows as a modified `panel.html`;
+`npm run dev` bakes only when asked (`--panel`), and `git checkout -- tools/orca-plugin/panel.html` puts the
+signpost back. `panel-fallback.html` stays beside it as the repair for a copy of the plugin whose panel went
+missing anyway: a directory that is not a git checkout, or one whose panel was deleted by hand. It is written
+only when there is no panel, so a bake that fails cannot take the last good one away.
 
 ### What the panel's own host does to it
 
@@ -208,8 +213,8 @@ machine yet; the line exists so that the first run records it rather than leavin
 |---|---|
 | `orca-plugin.json` | The manifest: identity, the four commands, the panel, the events, the capabilities — and no keybinding, so the panel may be re-rendered freely |
 | `main.mjs` | The worker: the probe, the commands, the new-day check, the bake, and the rules they obey |
-| `panel.html` | The report's own UI, baked with a snapshot (generated: `npm run report:panel`; Re-rendered by the worker and the server) |
-| `panel-fallback.html` | The signpost a not-yet-baked panel shows: the address, and how to open the live report |
+| `panel.html` | The manifest's panel entry: the report's own UI, baked with a snapshot, and the signpost until the first bake — rewritten by `npm run report:panel`, the worker and the server |
+| `panel-fallback.html` | The signpost the panel starts as, and the document the baker restores a missing `panel.html` from |
 | `PANE-REQUEST.md` | What Orca would have to add for the report to live in a pane, and why it cannot today |
 | `../../scripts/report-console.mjs` | The console pane: the report as text, with keys, as a client of the same API |
 | `../../test/orca-plugin.test.cjs` | The tests: the worker against a stubbed host, the panel and manifest as source audits |

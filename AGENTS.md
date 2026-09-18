@@ -635,8 +635,11 @@ never adopting a port something else holds (`resolveRecordRoot`, `startReportSer
 process through one seam, and `report-start` now means "bring it up" rather than "type this into a terminal".
 
 Two consequences worth keeping: the panel is **read-only** (its write controls are disabled with a title naming
-the console and the live report), and a checkout that has never baked shows the committed
-`panel-fallback.html` signpost rather than an empty pane.
+the console and the live report), and `panel.html` is **committed** as the `panel-fallback.html` signpost, because
+Orca realpaths every declared artifact when it loads the plugin — a panel entry that is missing is a plugin that
+does not load, not an empty pane. The baker then rewrites that tracked file, so a bake reads as a modified panel;
+the marker beside it names both the record it rendered and the file it wrote, so a checkout that restored the
+signpost is re-baked rather than trusted.
 
 **One app, two backends.** `tools/report-app/src/backend.mjs` is where the app's data comes from: `http` (the
 served app — `fetch` per route with a shared cache, `POST /api/todos`, `/api/version` so a stale tab reloads

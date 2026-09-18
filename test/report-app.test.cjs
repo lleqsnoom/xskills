@@ -1052,6 +1052,21 @@ describe("report:panel — the app running on a snapshot", async () => {
     assert.equal(fs.existsSync(`${out}.fingerprint`), true, "the marker keeps two callers from fighting");
   });
 
+  it("bakes into a panel that is only the signpost, marker or not", () => {
+    const root = dailyRoot();
+    const dist = panelBundle();
+    const out = path.join(tmp(), "panel.html");
+
+    // The panel is committed as the signpost, so a checkout can hold a panel the baker never wrote while the
+    // marker beside it still names the record. A marker that only knew the record would call that panel current
+    // and leave the signpost on screen.
+    assert.equal(baker.bakeIfStale({ root, dist, out }).baked, true);
+    fs.copyFileSync(path.join(ROOT, "tools", "orca-plugin", "panel-fallback.html"), out);
+
+    assert.equal(baker.bakeIfStale({ root, dist, out }).baked, true, "the signpost is not the baked panel");
+    assert.match(fs.readFileSync(out, "utf8"), /window\.__REPORT__/);
+  });
+
   it("leaves the panel alone when the record moved but nothing it shows did", () => {
     const root = dailyRoot();
     const dist = panelBundle();

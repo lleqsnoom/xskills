@@ -7,7 +7,7 @@
  * edit to a component hot-reloads the page without a restart. Vite proxies `/api` and `/history.jsonl` to
  * the report server (see `tools/report-app/vite.config.ts`), which is why one URL answers with both.
  *
- * The panel is not baked here. The server bakes it by default, and a bake is a write to
+ * The panel is not baked here. The server bakes it by default, and a bake is a write to the committed
  * `tools/orca-plugin/panel.html` on every restart, which turns a dev loop into a dirty worktree. Pass
  * `--panel` to bake it anyway; `npm run report` still bakes it beside the built app.
  *
