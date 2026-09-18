@@ -49,6 +49,27 @@ node <skill>/scripts/scenario.mjs record --dir <dir> --to <node>
 node <skill>/scripts/scenario.mjs verify --dir <dir>   # exit 0 iff the stop is justified
 ```
 
+The guard that refuses a transition reads an event, so recording the right kind is not optional — the
+gate you did not feed is the gate that stops the run. These are the kinds `applyEvent` accepts, and the
+guard each one satisfies:
+
+| Kind | Records | Satisfies |
+|------|---------|-----------|
+| `confirm` | the user's confirmation of your restatement in `--data` | `intent_confirmed` |
+| `research` | one finding (or `--status not-run --reason "<why>"`) | `research_recorded` |
+| `question` | one open question, numbered `Q<n>` in `--target` | `no_open_questions` |
+| `answer --target Q<n>` | the answer to that question | `no_open_questions` |
+| `evidence --target "<file:line\|url>"` | one claim and the source that backs it | `evidence_cited` |
+| `check --data "<command>" --reason "<result>"` | the mechanical check and its output, or `--status not-run --reason "<why>"` | `check_recorded` |
+| `confidence --data "high\|medium\|low"` | your confidence level | `confidence_ok` |
+| `option` | one solution with its trade-off | `three_options` |
+| `decide` | the route the user picked | `decision_made` |
+| `route --data "<fix\|tasks\|plan\|investigate\|defer>"` | where the run hands off | `route_chosen` |
+
+`verify` answers only one question — whether the run is finished — so mid-run it exits 1 even when every
+guard passes, which is the normal case and not a failure. To ask about a single gate while the run is
+still going, use `guard --gate <name>`: it exits 0 or 1 on that gate alone.
+
 | Gate | Passes when |
 |------|-------------|
 | `intent_confirmed` | the user confirmed your restatement |
@@ -59,11 +80,14 @@ node <skill>/scripts/scenario.mjs verify --dir <dir>   # exit 0 iff the stop is 
 | `confidence_ok` | confidence is high or medium |
 | `three_options` | three distinct solutions are recorded |
 | `decision_made` | the user picked a route |
-| `route_chosen` | the route is recorded and `analysis-<slug>.md` is written |
+| `route_chosen` | the route is recorded |
 
 Research before the first question (`references/research-first.md`), ask every question as a panel
 (`references/questions.md`), then let `scripts/check-questions.mjs` check your questions before you ask
-them. Completion: `verify` exits 0 at a route stop.
+them. Completion: `verify` exits 0 at a route stop, which also requires the route to be recorded and the
+analysis file to be non-empty. A mid-run `verify` exits 1 even when every guard passes — it answers only
+whether the run is finished, and mid-run it is not. That is the normal state, not a failure, and
+`guard --gate <name>` is the check that answers mid-run.
 
 ## Workflow (5 Phases)
 

@@ -152,7 +152,7 @@ export function createState({ slug, goal = null, root = REPORT_ROOT, now = new D
     confidence: "low",
     route: null,
     runDir: path.relative(process.cwd(), runDirAbs) || runDirAbs,
-    report: path.relative(process.cwd(), reportAbs) || reportAbs,
+    report: path.basename(reportAbs),
     events: [],
   };
 }
@@ -260,8 +260,14 @@ function loadState(dir) {
   return JSON.parse(fs.readFileSync(file, "utf8"));
 }
 
-function reportTextFor(state) {
-  return fs.existsSync(state.report) ? fs.readFileSync(state.report, "utf8") : "";
+/**
+ * The analysis lives inside the run folder, so it is named, not located: `report` holds a file name and
+ * the directory comes from the `--dir` the command was given. A cwd-relative path here made every
+ * command depend on the directory it ran from, which is the one thing a run folder must not do.
+ */
+function reportTextFor(dir, state) {
+  const file = path.join(dir, state.report);
+  return fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
 }
 
 function writeMemory(dir, state, fromIndex) {
@@ -271,15 +277,19 @@ function writeMemory(dir, state, fromIndex) {
   if (lines) fs.appendFileSync(file, `${lines}\n`);
 }
 
+/**
+ * The report is written before the memory and the state, so a write that fails leaves the node where it
+ * was. Committing the state first reported failure for a transition that had already happened.
+ */
 function persist(dir, state, { fromIndex, writeReport }) {
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, "state.json"), `${JSON.stringify(state, null, 2)}\n`);
-  writeMemory(dir, state, fromIndex);
   if (writeReport) {
-    const text = reportTextFor(state);
+    const text = reportTextFor(dir, state);
     const body = upsertScenario(text || `# Analysis — ${state.slug}\n`, renderGraphMermaid(state));
-    fs.writeFileSync(state.report, body);
+    fs.writeFileSync(path.join(dir, state.report), body);
   }
+  writeMemory(dir, state, fromIndex);
+  fs.writeFileSync(path.join(dir, "state.json"), `${JSON.stringify(state, null, 2)}\n`);
 }
 
 function parseArgs(args) {
@@ -340,7 +350,7 @@ function commandRecord(args) {
     });
   }
   if (args.to !== undefined) {
-    const result = transition(state, args.to, { reportText: reportTextFor(state) });
+    const result = transition(state, args.to, { reportText: reportTextFor(args.dir, state) });
     if (!result.ok) throw new Error(result.error);
     state = result.state;
   }
@@ -351,7 +361,7 @@ function commandRecord(args) {
 function commandGuard(args) {
   if (!args.dir || args.dir === true) throw new Error("--dir is required");
   const state = loadState(args.dir);
-  const verdict = computeGuards(state, { reportText: reportTextFor(state) })[args.gate];
+  const verdict = computeGuards(state, { reportText: reportTextFor(args.dir, state) })[args.gate];
   if (!verdict) throw new Error(`unknown gate "${args.gate}"`);
   process.stdout.write(`${JSON.stringify({ gate: args.gate, ...verdict }, null, 2)}\n`);
   process.exit(verdict.pass ? 0 : 1);
@@ -386,7 +396,7 @@ function main() {
     if (command === "verify") {
       if (!args.dir || args.dir === true) throw new Error("--dir is required");
       const state = loadState(args.dir);
-      const result = verifyState(state, { reportText: reportTextFor(state) });
+      const result = verifyState(state, { reportText: reportTextFor(args.dir, state) });
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
       process.exit(result.ok ? 0 : 1);
     }
