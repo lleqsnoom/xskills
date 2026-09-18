@@ -993,8 +993,6 @@ describe("orca plugin — the manifest and the approval it answers to", async ()
     "settings:own",
   ]);
   const EVENTS = new Set(["worktree.created", "worktree.removed", "agent.status.changed"]);
-  /** Declared by the manifest and written by the tooling rather than by hand, so a clone may not have it. */
-  const GENERATED = new Set(["panel.html"]);
   const SLUG = /^[a-z0-9][a-z0-9.-]*$/;
   const SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
   const bindingKey = (binding) =>
@@ -1025,9 +1023,8 @@ describe("orca plugin — the manifest and the approval it answers to", async ()
 
     const files = [manifest.main, ...(contributes.panels ?? []).map((panel) => panel.entry)];
     for (const file of files.filter(Boolean)) {
-      // The panel is generated (gitignored): a clone that has not baked yet has no file, and that is a panel
-      // with nothing in it rather than a plugin that does not load. The baker has its own tests.
-      if (GENERATED.has(file)) continue;
+      // Orca realpaths every declared artifact when it loads the plugin, so a panel that is not on disk is not an
+      // empty pane: it is "A declared worker or panel file is missing or unsafe" and the plugin does not load.
       if (!exists(path.join(PLUGIN, file))) issues.push(`missing file ${file}`);
     }
 
@@ -1405,8 +1402,16 @@ describe("orca plugin — Orca's events wake the check, and a down server is sil
 
 describe("orca plugin — the panel tab", async () => {
   const PANEL = path.join(PLUGIN, "panel.html");
+  const SIGNPOST = path.join(PLUGIN, "panel-fallback.html");
   const manifest = () => JSON.parse(fs.readFileSync(MANIFEST, "utf8"));
   const gitignore = () => fs.readFileSync(path.join(ROOT, ".gitignore"), "utf8");
+
+  /** The panel a reader sees: the app once a bake has rendered the record in, null while it is the signpost. */
+  function bakedPanel() {
+    if (!fs.existsSync(PANEL)) return null;
+    const html = fs.readFileSync(PANEL, "utf8");
+    return html.includes("window.__REPORT__") ? html : null;
+  }
 
   it("is contributed as a panel named after the plugin", () => {
     assert.deepEqual(manifest().contributes.panels, [
@@ -1414,16 +1419,16 @@ describe("orca plugin — the panel tab", async () => {
     ]);
   });
 
-  it("is generated, so a clone that has not baked has no panel yet", () => {
-    assert.match(gitignore(), /tools\/orca-plugin\/panel\.html/, "the baked panel is not committed");
+  it("is committed, because a declared artifact Orca cannot resolve is a plugin that does not load", () => {
+    assert.doesNotMatch(gitignore(), /^\/tools\/orca-plugin\/panel\.html$/m, "the panel entry is tracked");
+    assert.ok(fs.existsSync(PANEL), "so every checkout has the file the manifest declares, baked or not");
     assert.equal(manifest().contributes.panels[0].entry, "panel.html");
   });
 
-  it("has a signpost to show until the record has been rendered into it", () => {
-    const fallback = path.join(PLUGIN, "panel-fallback.html");
-    assert.ok(fs.existsSync(fallback), "the not-yet-baked panel is a committed document");
+  it("is the signpost until the record has been rendered into it", () => {
+    assert.ok(fs.existsSync(SIGNPOST), "the not-yet-baked panel is a committed document");
 
-    const html = fs.readFileSync(fallback, "utf8");
+    const html = fs.readFileSync(SIGNPOST, "utf8");
     assert.match(html, /127\.0\.0\.1:8787/, "it names the live report");
     assert.match(html, /x-skills report: Open/, "and how to open it without a keybinding");
     assert.match(html, /x-skills report: Console/, "and that a pane can be live and writable");
@@ -1438,11 +1443,17 @@ describe("orca plugin — the panel tab", async () => {
       assert.doesNotMatch(html, external, "the panel policy is default-src 'none'");
     }
     assert.deepEqual([...new Set([...html.matchAll(/call\(\s*"([^"]+)"/g)].map((m) => m[1]))], ["workspace.readContext"]);
+
+    // The committed panel starts as this document, so a clone that has not baked still shows a reader where the
+    // report is. A checkout that has baked carries the app instead, and the baker's tests cover that.
+    if (bakedPanel() === null) {
+      assert.equal(fs.readFileSync(PANEL, "utf8"), html, "an unbaked panel is the signpost, byte for byte");
+    }
   });
 
   it("is the app on a snapshot once it is baked: one file, no external reference", () => {
-    if (!fs.existsSync(PANEL)) return; // generated: the baker, and its tests, live in test/report-app.test.cjs
-    const html = fs.readFileSync(PANEL, "utf8");
+    const html = bakedPanel();
+    if (html === null) return; // the baker, and its tests, live in test/report-app.test.cjs
 
     assert.match(html, /window\.__REPORT__ = \{/, "the snapshot the app answers from");
     assert.match(html, /"\/api\/movement"/);
@@ -1457,10 +1468,11 @@ describe("orca plugin — the panel tab", async () => {
   });
 
   it("hands a link that lost its href the pointer its role promises", () => {
-    if (!fs.existsSync(PANEL)) return;
+    const html = bakedPanel();
+    if (html === null) return;
     // The host swallows clicks on `<a href>`, so the panel's links carry a role instead — and a browser gives
     // an anchor without an href the text cursor, which is what "every button shows an I-beam" was.
-    assert.match(fs.readFileSync(PANEL, "utf8"), /a\[role=["']?link["']?\]\s*\{[^}]*cursor:\s*pointer/);
+    assert.match(html, /a\[role=["']?link["']?\]\s*\{[^}]*cursor:\s*pointer/);
   });
 });
 

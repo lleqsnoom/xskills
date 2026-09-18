@@ -130,8 +130,9 @@ something else holds.
 **The manifest contributes no keybinding**, which is what makes that re-rendering free: Orca binds a reader's
 approval to the hash of every file in a plugin that contributes a keybinding, VM recipe or agent, so a
 re-rendered panel would be a plugin asking to be installed again. Approval therefore rests on this plugin's
-declared capabilities, and the report opens from Orca's palette: `Ctrl+J` → *x-skills report: Open*. Before the
-first bake the panel shows a committed signpost (`panel-fallback.html`) instead of an empty pane. A panel
+declared capabilities, and the report opens from Orca's palette: `Ctrl+J` → *x-skills report: Open*. The panel
+entry is committed as a signpost (the same document as `panel-fallback.html`), because Orca refuses to load a
+plugin whose declared files it cannot resolve; the first bake replaces it with the report. A panel
 cannot be a full-area tab and cannot fetch, so the report also opens as a live **browser tab**, which is where
 `+ to-do` works — see [`tools/orca-plugin/PANE-REQUEST.md`](tools/orca-plugin/PANE-REQUEST.md) and
 [`tools/orca-plugin/README.md`](tools/orca-plugin/README.md).
