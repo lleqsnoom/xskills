@@ -1,3 +1,8 @@
+## [5.29.0] - 2026-09-18
+
+* Merge pull request #61 from lleqsnoom/feat/orca-panel-and-console (577d727)
+* feat(orca-plugin): bake the report panel and add a console command (38f5d7d)
+
 ## [5.28.0] - 2026-09-18
 
 * Merge pull request #60 from lleqsnoom/refactor/live-only-report (dea6c84)
