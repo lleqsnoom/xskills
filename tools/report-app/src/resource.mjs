@@ -7,8 +7,8 @@
  * earlier: a spinner that never turns into a message. A memo that reads it does the same thing from further
  * away, which is why the guard has to be shared rather than spelled out at each call site.
  *
- * `.mjs` rather than `.ts`, like `baked.mjs`: the app is bundled and the rules are not, so a test can call
- * them directly.
+ * `.mjs` rather than `.ts`, like `brief.mjs` and `chart-scale.mjs`: the app is bundled and the rules are not,
+ * so a test can call them directly.
  */
 
 /** A failure, a fetch in flight, a settled answer with nothing in it, or a value. */

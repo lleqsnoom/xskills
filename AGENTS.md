@@ -22,7 +22,7 @@ The package has **zero dependencies** — it uses only Node.js built-ins (`fs/pr
 | `node bin/install.js install-all --global --force` | Refreshes every installed skill, replacing existing copies |
 | `node bin/install.js <name>` | Shortcut: installs the named skill |
 | `node bin/install.js help` | Shows usage info |
-| `npm run dev` | Works on the report app: the server under `node --watch` plus Vite with hot reload — `-- --port 8080 --panel` |
+| `npm run dev` | Works on the report app: the server under `node --watch` plus Vite with hot reload — `-- --port 8080` |
 | `npm run report` | Serves the daily metrics on <http://127.0.0.1:8787> — `-- --port 8080 --days 14` |
 | `npm run report:open` | Starts the report if it is not answering, then opens it in an Orca browser tab — `-- --window` for a window with no browser controls |
 
@@ -39,7 +39,7 @@ xskills/
 │   └── daily-reflection/     # 05:00 Orca job: collect last 24h sessions from every CLI, write a digest
 ├── scripts/                  # Repo tooling: sync-run-folders.js, dev.mjs, report-server.mjs, report-open.mjs (not published)
 ├── tools/report-app/         # The report app: Solid + Tailwind, controls in src/ui/, styled in Orca's design language
-│                             # (dist/, dist-panel/ and node_modules/ are gitignored)
+│                             # (dist/ and node_modules/ are gitignored)
 └── skills/                   # Skill packages (published as part of the npm package)
     ├── x-commit/             # Conventional commit message helper
     │   ├── SKILL.md          # Required: YAML frontmatter + instructions
@@ -277,7 +277,6 @@ database behind it, whose storage is those JSON files.
 npm run report:install              # once: the app's own dependencies
 npm run dev                         # work on the app: server (restarting on change) + Vite hot reload
 npm run report:build                # once, and after any change under tools/report-app
-npm run report:panel                # the Orca plugin's panel: the same app, baked with a snapshot
 npm run report                      # http://127.0.0.1:8787/
 npm run report -- --days 30 --port 8080
 npm run report -- --no-refresh      # answer from disk without recording the newest day first
@@ -294,8 +293,8 @@ packs so it survives a restart. Everything is answered `no-store`, because the a
 with every fix merged and none of it on screen, which is what "it is still broken" was. The bundle knows its own
 name (`/assets/index-<hash>.js`), the server reports the name its `index.html` asks for (`GET /api/version`), and
 when the two differ the page reloads once. Checked on the next focus or visibility change, and at most once a
-minute, so a page left open costs nothing. A dev server and a snapshot both opt out by construction: `main.tsx`
-and `panel.html` are not bundle names, and a panel has no network to ask over anyway.
+minute, so a page left open costs nothing. A dev server opts out by construction: `main.tsx` is not a bundle
+name, and the plugin's panel is a separate static document with no network to ask over anyway.
 
 | Route | What it is |
 |-------|------------|
@@ -404,9 +403,9 @@ an accent fill.
 **The shell is Orca's too.** `.app` is a grid: a 240px rail on `--sidebar`, and the routed view beside it — no
 action bar above the view. `Run` and `window` used to have one (a pane title bar carrying `components/App.tsx`'s
 `.topbar-label` and the two buttons), and it was removed: it took a row off every screen and asked the server for
-something the address bar already does. `POST /api/open` and `npm run report:open` stay — the plugin and the shell
-use them — but nothing in the page does. The one line worth keeping from that bar survives as `.snapshot`, under
-the tabs, and only a baked panel renders it: when its numbers were taken.
+something the address bar already does. `POST /api/open` and `npm run report:open` stay — the plugin uses them —
+but nothing in the page does, and the snapshot line that bar left behind (`.snapshot`, "when the numbers were
+taken") went with it: the app is the live page, in the only surface it is read in.
 
 **Three tabs are the whole navigation.** `Skills`, `Days` and `To-do` — no lists hang off the rail, because the
 lists that used to (the recent days, the skills in use) are the screens themselves, and the skills screen is the

@@ -1,6 +1,5 @@
 import { Match, Show, Switch, onMount } from "solid-js";
-import { api, isSnapshot } from "./api";
-import { bakedReport } from "./baked.mjs";
+import { api } from "./api";
 import { watchBuild } from "./build.mjs";
 import { current, linkProps, type Route } from "./router";
 import { DaysView } from "./components/DaysView";
@@ -21,13 +20,12 @@ import { TodosView } from "./components/TodosView";
  *
  * Nothing else is chrome. `Run` and `window` used to have a bar of their own across the top of the view, to
  * ask the server to show this page in an Orca browser tab or in a window without browser controls — a row off
- * every screen to duplicate what the address bar already does. The one thing worth keeping from that bar
- * stays, below: a baked panel still says when its numbers were taken.
+ * every screen to duplicate what the address bar already does.
  */
 export function App() {
   const route = () => current();
   // A tab that is focused rather than reloaded keeps the bundle it was opened with; this is what tells it that
-  // the app has moved on. A snapshot has nothing to ask, and nothing to compare, so it never starts.
+  // the app has moved on.
   onMount(() => watchBuild({ check: async () => (await api.version()).build }));
   return (
     <div class="app">
@@ -40,10 +38,6 @@ export function App() {
           <Nav to={{ name: "days" }} label="Days" route={route()} also={["day", "session"]} />
           <Nav to={{ name: "todos" }} label="To-do" route={route()} />
         </nav>
-
-        <Show when={isSnapshot()}>
-          <Snapshot />
-        </Show>
       </aside>
 
       <main class="main">
@@ -75,15 +69,6 @@ export function App() {
       </main>
     </div>
   );
-}
-
-/**
- * The one line kept from the action bar: a panel cannot reach the server, so what a reader needs to know about
- * the numbers is when they were taken. Only a baked panel renders this.
- */
-function Snapshot() {
-  const bakedAt = bakedReport()?.bakedAt;
-  return <span class="snapshot">snapshot · {bakedAt ? new Date(bakedAt).toLocaleString() : "unknown"}</span>;
 }
 
 /**

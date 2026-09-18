@@ -2,7 +2,7 @@
  * The types the app reads `resource.mjs` through.
  *
  * The rules live in plain JavaScript so a test can call them without a build step (the same reason
- * `baked.mjs` exists), and a declaration beside them is how TypeScript still knows what they hand back.
+ * `brief.mjs` exists), and a declaration beside them is how TypeScript still knows what they hand back.
  */
 import type { Resource } from "solid-js";
 
