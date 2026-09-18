@@ -123,6 +123,13 @@ describe("x-review save-plan", () => {
     assert.doesNotMatch(header, /unknown/);
   });
 
+  it("says its counts are repo-wide, not the scope that was asked for", () => {
+    const header = plan.generatePlanHeader(stats, "main", []);
+    assert.match(header, /\*\*Counts below:\*\* repo-wide \(`--all`\)/, "a scoped review must not read these as its own numbers");
+    const skill = fs.readFileSync(path.join(SKILL, "SKILL.md"), "utf8");
+    assert.match(skill, /\*\*Counts below:\*\* repo-wide/, "the template an agent rewrites carries the label too");
+  });
+
   it("never prints a zero for an analysis that failed", () => {
     const failed = [{ ok: false, script: "analyze-complexity.js", error: "Error: lines is not defined" }];
     const header = plan.generatePlanHeader({ ...stats, functionsHighComplexity: 0 }, "main", failed);
