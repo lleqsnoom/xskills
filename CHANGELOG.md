@@ -1,3 +1,9 @@
+## [5.30.1] - 2026-09-18
+
+* Merge pull request #64 from lleqsnoom/feat/autoreflection-heal (d369e11)
+* fix(autoreflection-analysis): dedupe portfolio and widen session lookback (0214d14)
+* fix(x-anal): point the record guard at the start step (5b93ec3)
+
 ## [5.30.0] - 2026-09-18
 
 * Merge pull request #63 from lleqsnoom/feat/autoreflection-heal (259d0c2)
