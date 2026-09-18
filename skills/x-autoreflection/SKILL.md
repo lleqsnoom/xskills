@@ -256,6 +256,7 @@ Completion: the user picked, and each chosen proposal has a route and a next act
 
 - Reporting the scanner's output as the analysis
 - A proposal with no target file ("the docs should be better")
+- Charting a rate without its denominator — a count that ran 174 times and one that ran 66 are not comparable
 - Treating every non-zero exit as a defect — `diff` and `grep` exit 1 to mean "different" and "absent"
 - Reflecting on a session you never read, from memory or from the summary
 - Proposing a new skill when a sentence in an existing one is the fix
@@ -268,5 +269,7 @@ Completion: the user picked, and each chosen proposal has a route and a next act
 - `scripts/save-reflection.mjs` — writes `<run folder>/E<nn>-reflection.md`.
 - `scripts/check-reflection.mjs` — fails while a proposal is unshaped or a high signal has no verdict.
 - `scripts/check-questions.mjs` — enforces the panel rules on your questions file.
+- `scripts/metrics.mjs` — scores every skill in a window of packs: five rates, published weights, a sample floor, and the day-by-day `history.jsonl` that outlives a pruned pack.
+- `scripts/derive.mjs` — the movement, the calendar and the bands the report UI reads. Data only: the app under `tools/report-app/` draws, this decides what is true.
 - `references/gap-taxonomy.md` — signal kind → the improvement that answers it.
 - `references/questions.md` — how to ask as a panel, and when to stop asking.

@@ -226,6 +226,7 @@ function generatePlanHeader(stats, branch, failed = []) {
   lines.push("");
   lines.push(`**Date:** ${getTimestamp()}`);
   lines.push(`**Branch:** ${branch}`);
+  lines.push("**Counts below:** repo-wide (`--all`), so they describe the whole repository, not the scope you were asked to review.");
   lines.push(`**Total files analyzed:** ${totalFiles}`);
   lines.push(metric("Functions with complexity > 5", stats.functionsHighComplexity, "analyze-complexity.js"));
   lines.push(metric("Functions longer than 20 lines", stats.functionsLong, "analyze-complexity.js"));

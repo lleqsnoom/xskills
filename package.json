@@ -1,7 +1,7 @@
 {
   "name": "@lleqsnoom/x-skills",
   "version": "5.26.0",
-  "description": "Cross-CLI agentic skills — install once, use with 45+ compatible AI coding tools",
+  "description": "Cross-CLI agentic skills \u2014 install once, use with 45+ compatible AI coding tools",
   "main": "lib/install.js",
   "bin": {
     "xskills": "./bin/install.js"
@@ -12,7 +12,16 @@
   "scripts": {
     "test": "node --test test/*.test.cjs",
     "sync:run-folders": "node scripts/sync-run-folders.js",
-    "check:run-folders": "node scripts/sync-run-folders.js --check"
+    "check:run-folders": "node scripts/sync-run-folders.js --check",
+    "dev": "node scripts/dev.mjs",
+    "report": "node scripts/report-server.mjs",
+    "report:open": "node scripts/report-open.mjs",
+    "report:window": "node scripts/report-open.mjs --window",
+    "report:install": "npm --prefix tools/report-app install",
+    "report:build": "npm --prefix tools/report-app run build && npm run report:panel",
+    "report:dev": "npm --prefix tools/report-app run dev",
+    "report:typecheck": "npm --prefix tools/report-app run typecheck",
+    "report:panel": "npm --prefix tools/report-app run build:panel && node scripts/report-panel.mjs"
   },
   "keywords": [
     "agentic",

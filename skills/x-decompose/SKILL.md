@@ -9,7 +9,7 @@ user-invocable: true
 
 # X-Decompose — Layer-Based Task Decomposition
 
-One task file per sub-step, organized by layer. Each task is a self-contained, testable increment that builds on the previous one. Follow pipeline order from `.agents/rules/xskills.md`.
+One task file per sub-step, organized by layer. Each task is a self-contained, testable increment that builds on the previous one. Pipeline order: `x-plan → x-epic → x-decompose → x-implement`.
 
 ## Decomposition Rule
 

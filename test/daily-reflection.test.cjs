@@ -1191,4 +1191,26 @@ posixOnly("daily-reflection CLI", () => {
       assert.match(run.stderr, /no x-\* skills found/);
     });
   });
+
+  it("records the day under --out, never into the repository", async () => {
+    await withTmpDir("record", async (dir) => {
+      const out = path.join(dir, "2026-01-02");
+      await fsp.mkdir(out, { recursive: true });
+      fs.writeFileSync(
+        path.join(out, "summary.json"),
+        JSON.stringify({ pack: "2026-01-02", window: { hours: 24 }, counts: {}, sessions: [], signals: [], skills: { touched: [], idle: [] } })
+      );
+      const repoHistory = path.join(mod.REPO_ROOT, ".x-skills", "daily", "history.jsonl");
+      const before = fs.existsSync(repoHistory) ? fs.readFileSync(repoHistory, "utf8") : null;
+
+      const summary = { warnings: [], sessions: [] };
+      mod.writePages(summary, { out });
+
+      assert.ok(fs.existsSync(path.join(dir, "history.jsonl")), "the record lands in the pack's parent");
+      assert.equal(summary.pages.days, 1, "and the day is counted");
+      assert.equal(fs.existsSync(path.join(out, "report.html")), false, "no HTML: the app renders");
+      const after = fs.existsSync(repoHistory) ? fs.readFileSync(repoHistory, "utf8") : null;
+      assert.equal(after, before, "a run pointed elsewhere writes nothing into the repository");
+    });
+  });
 });

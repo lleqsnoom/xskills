@@ -1,0 +1,372 @@
+/* The report app borrows Orca's design language, so a reader stepping out of the IDE into this page is still
+   reading one application. Every colour here is a value from Orca's own theme (dark and light are the same
+   token set it ships, values copied rather than invented), the type is Geist — the font Orca sets as its app
+   font — and the surfaces follow its recipes: a sidebar, a pane title bar, cards on `--card` with a 1px
+   `--border`, badges as colour at 10% with a 25% edge.
+
+   Type has four sizes with one job each: the page headline, a section heading, body, and chrome (labels,
+   table heads, buttons). Body is 14px rather than Orca's denser 12px because this screen is read, not
+   scanned, and muted is a colour — never a smaller size. Orca's 11px meta is the one literal outside those
+   four, and the chart labels and the tab segments are what wear it. */
+@font-face {
+  font-family: "Geist";
+  src: url("./assets/geist-var.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+:root {
+  color-scheme: light dark;
+  /* Orca light theme (its `:root`), value for value. */
+  --background: #fff; --foreground: #0a0a0a;
+  --card: #fff; --card-foreground: #0a0a0a;
+  /* One step darker than Orca's #737373, which is 4.35:1 on its own `--muted` surface — and this app puts
+     muted text on that surface (a hovered row, an inline `code` chip), so Orca's value would fail AA there. */
+  --muted: #f5f5f5; --muted-foreground: #6d6d6d;
+  --secondary: #f5f5f5; --secondary-foreground: #171717;
+  --accent: #f5f5f5; --accent-foreground: #171717;
+  --primary: #171717; --primary-foreground: #fafafa;
+  --destructive: #e40014;
+  --border: #e5e5e5; --input: #e5e5e5; --ring: #a1a1a1;
+  --sidebar: #fafafa; --sidebar-border: #e5e5e5; --sidebar-accent: #f5f5f5; --sidebar-accent-foreground: #171717;
+  /* The four states a score can be in, taken from the same palette Orca paints status with. Measured on
+     white and on the badge's own 10% tint, because the tint is what a band is usually read on: these are the
+     light-theme steps that clear 4.5:1 on both (emerald-700, amber-800, red-700, and zinc-500 pulled down
+     until it carries its own tint). */
+  --good: #007956; --fair: #953d01; --weak: #bf000f; --unknown: #6b6b73;
+  /* The link pair Orca renders markdown with (GitHub's), so a link looks the same in both surfaces. */
+  --link: #0969da;
+  --scroll: #c2c7d1; --scroll-track: #f0f0f0;
+  --radius: .625rem; --radius-sm: calc(var(--radius) * .6); --radius-md: calc(var(--radius) * .8);
+  --gap: .75rem;
+  --t-title: 24px; --t-section: 16px; --t-body: 14px; --t-chrome: 12px;
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  /* Orca dark theme (its `.dark`), value for value. */
+  :root {
+    --background: #0a0a0a; --foreground: #fafafa;
+    --card: #171717; --card-foreground: #fafafa;
+    --muted: #262626; --muted-foreground: #a1a1a1;
+    --secondary: #262626; --secondary-foreground: #fafafa;
+    --accent: #404040; --accent-foreground: #fafafa;
+    --primary: #e5e5e5; --primary-foreground: #171717;
+    --destructive: #ff6568;
+    --border: #ffffff12; --input: #ffffff26; --ring: #737373;
+    --sidebar: #171717; --sidebar-border: #ffffff12; --sidebar-accent: #262626; --sidebar-accent-foreground: #fafafa;
+    --good: #86efac; --fair: #ffd236; --weak: #ff6568; --unknown: #a1a1a1;
+    --link: #58a6ff;
+    --scroll: #3f3f46; --scroll-track: #141414;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+/* A day is a very tall page, so the scrollbar is part of the affordance: always reserved, always visible.
+   Only the WebKit pseudo-elements are styled, and deliberately so — setting `scrollbar-width`/`scrollbar-color`
+   instead hands Chrome back its overlay bar, which floats over the content and fades out when idle. Styling
+   these switches the scroller to a real bar that takes layout space and stays on screen, and the root asks for
+   it on every screen so a short page and a 22000px day lay out the same. */
+html { overflow-y: scroll; }
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: var(--scroll-track); }
+::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 999px; border: 3px solid var(--scroll-track); }
+::-webkit-scrollbar-thumb:hover { background: var(--ring); }
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+/* Orca's base layer: Geist, 1.5 leading, antialiased, slightly open tracking. */
+body { background: var(--background); color: var(--foreground);
+  font: var(--t-body)/1.5 var(--font-sans); letter-spacing: .01em;
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+/* A link is coloured, and underlined only when pointed at: the browser underlines every `a` by default, so the
+   `none` is load-bearing — without it the tabs, the rows and the calendar all carry a stray hairline under
+   their text. `text-decoration-color` and the offset are for the hover underline, which is the soft one. */
+a { color: var(--link); text-decoration: none;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 2px; }
+a:hover { text-decoration: underline; }
+/* A baked panel's links carry no href — the host swallows those clicks — and a browser hands an href-less
+   anchor the text cursor, which is what "every button shows an I-beam" was. The role is what says it is still
+   a link, so the pointer hangs off the role; the served app's links keep the browser's own. */
+a[role="link"] { cursor: pointer; }
+code, .mono { font-family: var(--font-mono); overflow-wrap: anywhere; }
+code { background: var(--muted); padding: .05em .3em; border-radius: var(--radius-sm); }
+/* Charts are drawn at a fixed reading size and scale down rather than pushing the page sideways. */
+svg { max-width: 100%; height: auto; }
+h1 { font-size: var(--t-title); font-weight: 600; margin: 0; letter-spacing: -.01em; }
+h2 { font-size: var(--t-section); font-weight: 500; margin: 1.75rem 0 .5rem; padding-bottom: .35rem; border-bottom: 1px solid var(--border); }
+h3 { font-size: var(--t-body); font-weight: 500; margin: 0 0 .35rem; }
+h4 { font-size: var(--t-body); font-weight: 500; margin: 0; }
+/* Muted is a colour, never a size, and never bold. */
+.dim { color: var(--muted-foreground); font-weight: 400; }
+.empty { color: var(--muted-foreground); font-style: italic; }
+.loading { color: var(--muted-foreground); font-style: italic; }
+.failed { color: var(--weak); }
+.good { color: var(--good); } .fair { color: var(--fair); } .weak { color: var(--weak); } .unknown { color: var(--unknown); }
+
+/* shell: Orca's shape — a sidebar, and the pane body beside it. There is no action bar above the view: it
+   held `Run` and `window`, which duplicated the address bar at the cost of a row on every screen. */
+.app { display: grid; grid-template-columns: 15rem minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-height: 100vh; }
+.rail { grid-column: 1; grid-row: 1; background: var(--sidebar); border-right: 1px solid var(--sidebar-border);
+  padding: 1rem .9rem; position: sticky; top: 0; height: 100vh; overflow: auto; }
+.rail .brand { font-weight: 600; }
+.rail .dim { display: block; margin-bottom: 1rem; font-size: var(--t-chrome); }
+.rail nav { display: grid; gap: .1rem; }
+/* The four tabs are one control, not four links: Orca's segmented switch, the one its Explorer panel puts in
+   its own header (`right-sidebar/FileExplorerViewSwitch.tsx` — `h-7 … rounded-md bg-input/40 p-0.5`, each
+   segment `rounded-sm px-2 text-[11px] font-normal text-muted-foreground`, and the chosen one
+   `bg-background font-medium text-foreground shadow-xs`). So: a track in `--input` at 40% with 2px of air
+   around the segments and between them, 11px labels in sentence case, and the mark the raised segment itself —
+   no underline, no fill colour of its own. */
+.rail nav { display: grid; gap: 2px; padding: 2px; border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--input) 40%, transparent); }
+.rail nav a { display: flex; align-items: center; min-height: 28px; padding: 0 .5rem;
+  border-radius: var(--radius-sm); font-size: 11px; font-weight: 400; color: var(--muted-foreground);
+  text-decoration: none; }
+.rail nav a:hover { background: color-mix(in srgb, var(--background) 40%, transparent); color: var(--foreground);
+  text-decoration: none; }
+.rail nav a.active { background: var(--background); color: var(--foreground); font-weight: 500;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / .05); }
+/* A snapshot's own line: a panel cannot reach the server, so what a reader needs to know is when the numbers
+   were taken. It lives under the tabs, which is the only chrome the shell has left. */
+.rail .snapshot { display: block; margin-top: .75rem; font-size: var(--t-chrome); color: var(--muted-foreground); }
+.main { grid-column: 2; grid-row: 1; padding: 1.25rem 1.75rem 4rem; min-width: 0; }
+.facts { color: var(--muted-foreground); margin: .3rem 0 0; max-width: 90ch; }
+button, .button { font: inherit; font-size: var(--t-chrome); font-weight: 500; padding: .2rem .55rem; min-height: 26px;
+  border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--card); color: var(--foreground); cursor: pointer; }
+button:hover, .button:hover { background: var(--muted); text-decoration: none; }
+button[disabled] { opacity: .5; cursor: default; }
+button[disabled]:hover { background: var(--card); }
+/* The one solid control: the action a reader is actually here to take. */
+button.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); font-weight: 600; }
+button.primary:hover { background: color-mix(in srgb, var(--primary) 90%, transparent); }
+/* A preference, not a task: a chosen filter or shape is a tinted chip. */
+button.on { background: var(--accent); border-color: transparent; color: var(--accent-foreground); font-weight: 600; }
+/* `max-width` is what makes it a pane's control rather than the browser's own 236px box: a filter wider than
+   the pane it filters is the one thing on this screen that used to scroll the page sideways. */
+input[type="search"], input[type="text"] { font: inherit; font-size: var(--t-chrome); padding: .25rem .5rem; max-width: 100%;
+  border-radius: var(--radius-md); border: 1px solid var(--input); background: transparent; color: inherit; }
+input::placeholder { color: var(--muted-foreground); }
+.panel { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: .8rem; }
+.grid { display: grid; gap: var(--gap); grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); align-items: start; }
+.row { display: grid; align-items: center; gap: .6rem; padding: .22rem .35rem; border-radius: var(--radius-sm); }
+.row:hover { background: var(--muted); }
+.head { color: var(--muted-foreground); }
+table { width: 100%; border-collapse: collapse; }
+/* Wide tables scroll inside themselves; a page-wide horizontal scrollbar under a 24000px column is useless.
+   The wrapper is also the container its table asks about, so a table can react to the pane it is really in. */
+.table-wrap { overflow-x: auto; max-width: 100%; container-type: inline-size; }
+/* A cell breaks a long token rather than pushing its table wider: a session id or a path is one word, and one
+   unbreakable word is a table that pans whatever the pane is. */
+th, td { text-align: left; padding: .3rem .45rem; border-bottom: 1px solid var(--border); vertical-align: top; overflow-wrap: anywhere; }
+/* Column heads are chrome: 12px, muted, sentence case — uppercase everywhere is shouting. */
+th { color: var(--muted-foreground); font-weight: 500; font-size: var(--t-chrome); white-space: nowrap; }
+/* A header that cannot wrap is what sets a table's minimum width: "A session it was loaded in" is 163px on its
+   own, and five such labels made a record table 403px wide whatever the pane was. Under 34rem they wrap. */
+@container (max-width: 34rem) {
+  .table-wrap th { white-space: normal; }
+}
+/* Under 27.5rem (440px — the width a session's seven heads need, plus a little) a record row becomes a stack:
+   the head goes, and every cell carries its own label in the label column. The numbers stay on screen instead
+   of at the end of a pan, and the table needs no width of its own. Above it the table is a table, which reads
+   better than a stack whenever the columns fit. */
+@container (max-width: 27.5rem) {
+  .table-wrap.records thead { display: none; }
+  .table-wrap.records tbody tr { display: block; padding: .35rem .2rem; border-bottom: 1px solid var(--border); }
+  .table-wrap.records tbody tr:hover { background: none; }
+  .table-wrap.records td { display: grid; grid-template-columns: minmax(3.5rem, 5.5rem) minmax(0, 1fr);
+    gap: .4rem; padding: .06rem .2rem; border: 0; }
+  .table-wrap.records td::before { content: attr(data-label); color: var(--muted-foreground); font-size: var(--t-chrome); }
+  /* The first cell is the row's own name: it reads as the heading of the stack, not as a labelled value. */
+  .table-wrap.records tr > td:first-child { grid-template-columns: minmax(0, 1fr); }
+  .table-wrap.records tr > td:first-child::before { display: none; }
+}
+tbody tr:hover { background: var(--muted); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+dl.fields { margin: 0; display: grid; gap: .25rem; }
+dl.fields div { display: grid; grid-template-columns: 5rem minmax(0, 1fr); gap: .5rem;
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); padding-top: .2rem; }
+dl.fields dt { color: var(--muted-foreground); font-size: var(--t-chrome); }
+dl.fields dd { margin: 0; overflow-wrap: anywhere; }
+/* The one number a screen leads with. */
+.stat-value { font-size: var(--t-title); font-weight: 600; margin: 0; }
+@media (max-width: 860px) {
+  /* A narrow pane — a phone, or an Orca pane dragged in — gets the tabs as a bar across the top. The rail used
+     to stack above the content here as a 639px column of links, which put the report below the fold; the menus
+     are screens of their own now (Days, Skills), so the bar is one row of three, and it sticks while the report
+     scrolls under it. */
+  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .rail { grid-column: 1; grid-row: 1; position: sticky; top: 0; z-index: 10; height: auto;
+    padding: calc(.2rem + env(safe-area-inset-top, 0px)) calc(.25rem + env(safe-area-inset-right, 0px))
+      .2rem calc(.25rem + env(safe-area-inset-left, 0px));
+    border-right: 0; border-bottom: 1px solid var(--border); }
+  /* The wordmark and the caption are chrome for a pane with room for them. */
+  .rail .brand, .rail > .dim, .rail .dim { display: none; }
+  /* The same control across the top instead of down the side: three equal segments, same track, same 28px
+     height. Only the geometry changes with the orientation — a segmented control is one component. */
+  .rail nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .rail nav a { justify-content: center; padding: 0 .25rem; }
+  /* The panel's snapshot line, one line under the tabs. */
+  .rail .snapshot { margin: .35rem 0 0; text-align: center; }
+  .main { grid-column: 1; grid-row: 2; padding: .9rem .9rem 4rem; }
+  /* A thumb is not a mouse: controls grow, and an input at 16px is the size that stops iOS zooming the page
+     on focus. */
+  button, .button { min-height: 44px; }
+  input[type="search"], input[type="text"] { min-height: 44px; font-size: 16px; }
+}
+
+/* One panel, and the only shape an entry is drawn in: a skill in use, a day it was measured on, the scores of
+   one day, a proposal. `.cards` is the grid they live in and the card itself is a Tailwind component
+   (`components/Card.tsx`) on this app's tokens, so every list on every screen is the same object in the same
+   arrangement. Both stay here rather than in the component because they are layout, not a control: a track of
+   `min(22rem, 100%)` is what keeps a card inside a 200px pane, and the axes below are a drawing. */
+.cards { display: grid; gap: .6rem; grid-template-columns: repeat(auto-fill, minmax(min(22rem, 100%), 1fr)); align-items: start;
+  /* Whatever the list follows — a heading, a toolbar, a filter — it stands off it. A list flush against the
+     control above it is the thing a reader cannot tell apart from one cell of it. */
+  margin-top: .6rem; }
+/* The name is what the card is about, and the only thing in it that carries the link colour. */
+.card-name { color: var(--link); font-weight: 500; overflow-wrap: anywhere; }
+/* axes inline: a bar per axis with its number */
+.axes { display: flex; gap: .5rem; flex-wrap: nowrap; overflow: hidden; }
+.axis { display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap; }
+.axis-row { display: grid; grid-template-columns: 7rem auto 3rem; align-items: center; gap: .5rem; }
+/* A skill's top, in one panel: the gauge and the radar (the state now), then the score over time. Three views
+   of the same thing, in the order a reader asks for them.
+   The wrap does the responsive work rather than a breakpoint: the gauge is fixed, the radar asks for 300px and
+   wraps under it when the panel cannot pay, and the chart takes whatever width is left at any size. */
+.skill-top { display: grid; gap: .9rem; grid-template-columns: minmax(0, 1fr); }
+.status { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .9rem 1rem; }
+.radar-box { flex: 1 1 300px; max-width: 420px; }
+/* The one line under the gauge and the radar that says which day they describe, and what that day's number is
+   worth. It is the caveat the header used to carry, said where the number is instead of above it. */
+.day-note { margin: 0; text-align: center; font-size: var(--t-chrome); }
+.score-per-day { display: grid; gap: .2rem; min-width: 0; }
+.score-per-day h3 { margin: 0; }
+/* Both drawings are fixed in their own units and the browser scales them to the box, so the panel reacts to the
+   pane and to the resolution with no measurement in the middle. `inline-size` containment is what lets the box
+   below be asked about instead of the window: a chart is laid out inside a panel, and the panel is not the
+   viewport — in Orca a 1200px window holds a 500px pane. */
+.radar-box, .chart-box { min-width: 0; container-type: inline-size; }
+.radar-box .radar { display: block; width: min(100%, 420px); height: auto; margin: 0 auto; }
+.radar-list { display: none; margin: 0; gap: .1rem .6rem; grid-template-columns: auto auto; justify-content: center; }
+.radar-list > div { display: contents; }
+.radar-list dt { font-size: var(--t-chrome); }
+.radar-list dd { margin: 0; font-size: var(--t-chrome); }
+/* A labelled pentagon needs room for its labels; below that the numbers are the better drawing. */
+@container (max-width: 359px) {
+  .radar-box .radar { display: none; }
+  .radar-list { display: grid; }
+}
+/* The chart is one drawing in a 560x150 space, stretched to whatever the panel gives it: a time series wants
+   the width, and the lines keep their weight while the x axis stretches under them. */
+.chart-box { width: 100%; }
+/* The plot is a fixed height and its scale with it: the same number of pixels for the same score whatever the
+   panel is doing, so a move reads the same at any width. Only the x axis stretches.
+   The dates and the scores are HTML rather than text inside the drawing, because a stretched frame would
+   stretch the type with it; each is placed by a percentage of the frame, so no measurement is involved. */
+/* The labels are out of the flow so they can sit on the geometry, so an annotated chart reserves their room
+   itself; a plain sparkline is just the drawing at the size it was asked for. */
+.chart { position: relative; }
+.chart.annotated { padding-bottom: 18px; }
+.chart > canvas { display: block; width: 100%; height: var(--chart-plot, 150px); }
+.chart-values, .chart-dates { position: absolute; inset-inline: 0; pointer-events: none; }
+.chart-values { top: 0; height: var(--chart-plot, 150px); }
+.chart-values span, .chart-dates span { position: absolute; font-size: 11px;
+  white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* The score is the data, so it is read at the page's own ink; the dates are the axis and stay muted. It also
+   has to hold up over the hovered column's tint, where a muted label would fall under 4.5:1. */
+.chart-values span { transform: translate(-50%, -100%); color: var(--foreground); }
+.chart-dates span { color: var(--muted-foreground); }
+.chart-dates { top: calc(var(--chart-plot, 150px) + 2px); height: 16px; }
+.chart-dates span { transform: translateX(-50%); }
+.chart-dates span:first-child { transform: none; }
+.chart-dates span:last-child { transform: translateX(-100%); }
+/* The column a day answers to, in HTML so the target does not shrink with the frame: rolling over the plot
+   anywhere names a day, rather than asking a reader to find an 18px marker. */
+.chart-points { position: absolute; inset-inline: 0; top: 0; height: var(--chart-plot, 150px); }
+.chart-point { position: absolute; top: 0; height: 100%; cursor: crosshair; border-radius: var(--radius-sm); }
+.chart-point:hover, .chart-point:focus-visible { background: color-mix(in srgb, var(--foreground) 6%, transparent); }
+.chart-point:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+/* The day the pointer is on, marked down the plot: HTML, so it is exactly where the geometry says. */
+.chart-guide { position: absolute; top: 0; height: var(--chart-plot, 150px); width: 1px; border-left: 1px dashed var(--muted-foreground);
+  opacity: .65; pointer-events: none; }
+.status-score { flex: 0 0 auto; display: grid; justify-items: center; gap: .2rem; }
+/* The radar's spoke labels: the axis name and its rate, in the axis's own colour. */
+.radar-label { font-size: var(--t-chrome); fill: var(--muted-foreground); }
+.heat { display: inline-block; min-width: 2.6rem; text-align: right; padding: .1rem .35rem; border-radius: var(--radius-sm);
+  font-variant-numeric: tabular-nums; }
+.heat[data-step="0"] { background: color-mix(in srgb, var(--weak) 8%, transparent); }
+.heat[data-step="1"] { background: color-mix(in srgb, var(--weak) 20%, transparent); }
+.heat[data-step="2"] { background: color-mix(in srgb, var(--weak) 34%, transparent); }
+.heat[data-step="3"] { background: color-mix(in srgb, var(--fair) 32%, transparent); }
+.heat[data-step="4"] { background: color-mix(in srgb, var(--fair) 48%, transparent); }
+.heat[data-step="5"] { background: color-mix(in srgb, var(--good) 34%, transparent); }
+.heat[data-step="6"] { background: color-mix(in srgb, var(--good) 48%, transparent); }
+.heat[data-step="7"] { background: color-mix(in srgb, var(--good) 62%, transparent); }
+
+/* days: the list of what happened beside the calendar of what exists — one glance, not two scrolls */
+.days-split { display: grid; grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+@media (max-width: 640px) { .days-split { grid-template-columns: minmax(0, 1fr); } }
+ul.recent { list-style: none; margin: 0 0 .8rem; padding: 0; display: grid; gap: .1rem; }
+/* A day reads as a line with a sub-line: the date and its score, then what was in it. Two rows rather than
+   three columns because the list sits in a narrow column beside the calendar, where one line of meta would
+   otherwise wrap to three. */
+.day { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: .1rem .6rem;
+  padding: .25rem .4rem; border-radius: var(--radius-sm); }
+.day > :nth-child(3) { grid-column: 1 / -1; font-size: var(--t-chrome); }
+.day:hover { background: var(--muted); }
+/* auto-fit, not auto-fill: the months fill the column they are given instead of leaving empty tracks beside
+   a lone month. The 200px is a preference, not a floor — `min(200px, 100%)` is what keeps a month inside a
+   pane narrower than the month, where a bare 200px track hung 27px of itself off the page. */
+.calendars { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: .6rem; }
+.cal { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: .5rem .6rem; min-width: 0; }
+/* The days can shrink to nothing the pane does not have: 7 columns of `1fr` have a min-content floor, and at
+   200px a month's seven columns were 6px wider than the card they were in. */
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .12rem; }
+.cal-head { color: var(--muted-foreground); text-align: center; font-size: var(--t-chrome); }
+.cal-day { text-align: center; padding: .12rem 0; border-radius: var(--radius-sm); }
+.cal-blank { visibility: hidden; }
+.cal-has { display: block; background: var(--accent); color: var(--accent-foreground); font-weight: 600; }
+.cal-has:hover { background: color-mix(in srgb, var(--foreground) 14%, transparent); text-decoration: none; }
+/* the evidence: everything the pack holds, behind one control, closed by default */
+.evidence { margin-top: 2rem; }
+.evidence > summary { cursor: pointer; color: var(--muted-foreground); font-size: var(--t-chrome);
+  padding: .5rem .6rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+.evidence > summary:hover { color: var(--foreground); }
+.evidence[open] > summary { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.evidence > summary .mono { color: inherit; }
+
+/* A heading and its control: side by side when the pane can pay for both, the control under the heading when
+   it cannot. Three buttons are 146px, and a heading that will not give way beside them pushed the page 64px
+   wider than a 200px pane. */
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: .3rem 1rem; flex-wrap: wrap; }
+.section-head h2 { flex: 1; }
+.clamp-1, .clamp-2, .clamp-3 { display: block; overflow: hidden; }
+.clamp-1 { white-space: nowrap; text-overflow: ellipsis; }
+.clamp-2, .clamp-3 { display: -webkit-box; -webkit-box-orient: vertical; }
+.clamp-2 { -webkit-line-clamp: 2; }
+.clamp-3 { -webkit-line-clamp: 3; }
+.task-id { color: var(--muted-foreground); }
+.task-check { margin: .2rem 0 0; max-width: 90ch; }
+/* The importance badge: the word says it, the colour only agrees with it. */
+
+/* signals: a row a signal, its head beside the summary and above it when the width runs out. The summary
+   is never clipped — the number of lines follows the viewport, which is what keeps the row on screen. */
+.signals { display: grid; }
+.sig { display: grid; grid-template-columns: 20rem minmax(0, 1fr); gap: .15rem .8rem; align-items: baseline;
+  padding: .45rem .5rem; color: inherit; border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent); }
+.sig:last-child { border-bottom: 0; }
+.sig.linked:hover { background: var(--muted); text-decoration: none; }
+.sig.linked:hover .sig-text { text-decoration: underline; }
+.sig-head { display: flex; flex-wrap: wrap; gap: .2rem .5rem; align-items: baseline; font-size: var(--t-chrome); }
+.sig-sev { font-weight: 500; }
+.sig-count { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sig-where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.sig-text { overflow-wrap: anywhere; max-width: 90ch; }
+/* An excerpt is machine output, so it is one line with the whole text on hover; the summary above it is
+   prose and keeps every line the width gives it. */
+.sig-ev { display: block; margin-top: .2rem; font-family: var(--font-mono); font-size: var(--t-chrome);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1000px) {
+  .sig { grid-template-columns: minmax(0, 1fr); }
+}
+
+

@@ -27,6 +27,7 @@ import {
 import { normalizeSession, parseArgs } from "../../skills/x-autoreflection/scripts/read-session.mjs";
 import { scanSession, skillNamesOnDisk } from "../../skills/x-autoreflection/scripts/scan-session.mjs";
 import { timestamp } from "../../skills/x-autoreflection/scripts/save-reflection.mjs";
+import { historyLine, readHistory, scoresForSources, writeHistory } from "../../skills/x-autoreflection/scripts/metrics.mjs";
 
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const DEFAULT_HOURS = 24;
@@ -226,6 +227,8 @@ export function buildSummary({ results, window, hostStatuses = [], warnings, ski
     scan: scanPath ? path.relative(REPO_ROOT, scanPath) : null,
     stats: scan.stats,
     skills: scan.skills,
+    checks: scan.checks ?? [],
+    graphs: scan.graphs ?? [],
     runFolders: scan.runFolders ?? [],
     artifacts: scan.artifacts ?? [],
   }));
@@ -560,6 +563,37 @@ function writePack(summary, { out, keepDays, prune, now }) {
   fs.writeFileSync(path.join(out, "summary.md"), renderSummaryMarkdown(summary));
 }
 
+/**
+ * The pages and the day-by-day record, from the same pack the run just wrote. A render failure is a
+ * warning and not a failed collection: the evidence pack is the point of the run, the page is how it is
+ * read, and a broken template must not lose the day's evidence.
+ *
+ * The digest is written after this run, so a collection-time page carries derived items only. Re-running
+ * the renderer once the digest exists is what puts the proposals on it — see the runbook's last step.
+ */
+export function writePages(summary, { out }) {
+  const packDir = path.resolve(out);
+  const day = path.basename(packDir);
+  // The pack's parent is the daily root, so `--out` decides where the record goes rather than scattering
+  // it into the repository during a test run.
+  const root = path.dirname(packDir);
+  const historyFile = path.join(root, "history.jsonl");
+  try {
+    // The record is the day's own pack, never a rolling window: a trend over aggregates would write the
+    // same number under several dates. The UI reads this file; nothing here renders markup.
+    const dayScores = scoresForSources({ summaries: [path.join(packDir, "summary.json")] });
+    writeHistory(historyLine(dayScores, day), { file: historyFile });
+    summary.pages = {
+      history: path.relative(REPO_ROOT, historyFile),
+      days: readHistory(historyFile).size,
+    };
+  } catch (err) {
+    summary.pages = { error: firstLine(err.message) };
+    summary.warnings.push({ scope: "history", reason: `could not record the day: ${firstLine(err.message)}` });
+  }
+  fs.writeFileSync(path.join(packDir, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
+}
+
 function reportRun(summary, { out, json }) {
   if (json) {
     process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
@@ -602,6 +636,7 @@ export function run(options) {
 
   if (options.check) return reportCheck(summary, options);
   writePack(summary, options);
+  writePages(summary, options);
   reportRun(summary, options);
   return 0;
 }

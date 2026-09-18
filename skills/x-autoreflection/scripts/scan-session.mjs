@@ -193,6 +193,109 @@ function countRoles(messages) {
   };
 }
 
+/** A skill's own script, however a command names it. The install path differs per host, so match the tail. */
+const SKILL_SCRIPT_RE =
+  /(?:^|[\s"'=(])(?:[^\s"']*\/)?skills\/([a-z0-9-]+)\/scripts\/([A-Za-z0-9._-]+\.(?:mjs|js|cjs))\b/;
+
+/**
+ * Scripts whose exit code says whether the skill's work was acceptable. Named by convention for now —
+ * `check-*`, `validate-*`, `commit`, `lint`, `scenario`, `save-*`, `scan-session` — because no skill
+ * declares its own checks yet. A `checks.json` per skill would replace this list with what each one says.
+ */
+const CHECK_SCRIPT_RE = /^(?:check-[a-z-]+|validate-[a-z-]+|commit|lint|scenario|save-[a-z-]+|scan-session)\.(?:mjs|js|cjs)$/;
+
+/**
+ * `verify` reports whether a run is finished and `guard` whether one gate is met, so a non-zero exit from
+ * either is the answer to the question, not a defect — the same distinction `EXPECTED_NONZERO` makes for
+ * a shell command. Everything else that exits non-zero failed.
+ */
+const REFUSAL_SUBCOMMAND_RE = /\b(?:verify|guard)\b/;
+
+/** The two ways a run can move the graph wrongly: an edge that does not exist, and a gate not yet met. */
+const ILLEGAL_MOVE_RE = /no edge\s+\w+\s*->/i;
+const GATE_FAILED_RE = /\b([a-z_]+) failed\b/;
+
+/** The exit code a tool result reports, as the hosts write it. No marker is a zero. */
+export function exitCodeOf(content) {
+  const marker = String(content ?? "").match(/^(?:Exit code|exit status) ([1-9]\d*)\s*$/m);
+  return marker ? Number(marker[1]) : 0;
+}
+
+/**
+ * What the skills' own scripts answered, per skill: how many checks passed, were refused, or failed, and
+ * how the state-graph calls went.
+ *
+ * This is the one place a skill is judged by its own contract instead of by a failing command that
+ * happened to name it nearby. It is what makes `conformance` and `adherence` measurable at all: without
+ * it both are null, because a mention of a skill is not a statement about the skill.
+ */
+export function scanSkillScripts(messages) {
+  const calls = new Map();
+  for (const message of messages) {
+    for (const part of message.parts) {
+      if (part.type !== "tool_call") continue;
+      const command = commandOf(part.input);
+      const match = command ? command.match(SKILL_SCRIPT_RE) : null;
+      if (match) calls.set(part.id, { skill: match[1], script: match[2], command });
+    }
+  }
+
+  const checks = new Map();
+  const graphs = new Map();
+  const checkFor = (skill, script) => {
+    const key = `${skill}|${script}`;
+    if (!checks.has(key)) {
+      checks.set(key, { skill, script, calls: 0, passes: 0, refusals: 0, fails: 0, evidence: [] });
+    }
+    return checks.get(key);
+  };
+  const graphFor = (skill) => {
+    if (!graphs.has(skill)) {
+      graphs.set(skill, { skill, calls: 0, illegalMoves: 0, prematureTransitions: 0, evidence: [] });
+    }
+    return graphs.get(skill);
+  };
+
+  for (const message of messages) {
+    for (const part of message.parts) {
+      if (part.type !== "tool_result" || !calls.has(part.id)) continue;
+      const { skill, script, command } = calls.get(part.id);
+      const content = String(part.content ?? "");
+      const exit = exitCodeOf(content);
+
+      // Only an attempt to move the run counts as a graph call; `start` and `status` assert nothing.
+      if (script.startsWith("scenario.") && /\brecord\b/.test(command) && /--to\b/.test(command)) {
+        const graph = graphFor(skill);
+        graph.calls++;
+        if (ILLEGAL_MOVE_RE.test(content)) {
+          graph.illegalMoves++;
+          if (graph.evidence.length < MAX_EVIDENCE) {
+            graph.evidence.push({ message: message.index, kind: "illegal-move", detail: excerpt(content) });
+          }
+        } else if (GATE_FAILED_RE.test(content)) {
+          graph.prematureTransitions++;
+          if (graph.evidence.length < MAX_EVIDENCE) {
+            graph.evidence.push({ message: message.index, kind: "premature-transition", detail: excerpt(content) });
+          }
+        }
+      }
+
+      if (!CHECK_SCRIPT_RE.test(script)) continue;
+      const check = checkFor(skill, script);
+      check.calls++;
+      if (exit === 0) check.passes++;
+      else if (script.startsWith("scenario.") && REFUSAL_SUBCOMMAND_RE.test(command)) check.refusals++;
+      else {
+        check.fails++;
+        if (check.evidence.length < MAX_EVIDENCE) {
+          check.evidence.push({ message: message.index, exit, detail: excerpt(content) });
+        }
+      }
+    }
+  }
+  return { checks: [...checks.values()], graphs: [...graphs.values()] };
+}
+
 /** One pass over every part: tool calls, their results, repeated calls, and the paths they mention. */
 function scanParts(messages, keep) {
   const stats = { toolCalls: 0, toolResults: 0, toolFailures: 0, expectedExits: 0 };
@@ -433,6 +536,7 @@ export function scanSession(session, { skillNames = [], skillsSource = null } = 
   const partScan = scanParts(messages, keep);
   const users = scanUserMessages(messages);
   const turns = scanAssistantTurns(messages);
+  const scripts = scanSkillScripts(messages);
   const skills = collectSkills(session, keep);
   const stats = {
     ...countRoles(messages),
@@ -452,6 +556,8 @@ export function scanSession(session, { skillNames = [], skillsSource = null } = 
     stats,
     skillsSource,
     skills,
+    checks: scripts.checks,
+    graphs: scripts.graphs,
     runFolders: partScan.runFolders,
     artifacts: partScan.artifacts,
     signals: buildSignals({ partScan, users, turns, skills, keep }),
