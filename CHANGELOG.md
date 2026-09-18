@@ -1,3 +1,9 @@
+## [5.28.0] - 2026-09-18
+
+* Merge pull request #60 from lleqsnoom/refactor/live-only-report (dea6c84)
+* feat(orca-plugin): mark the report panel with the activity icon (21ef54f)
+* refactor(report): serve the report live only and drop the baked panel (df0c3c9)
+
 ## [5.27.0] - 2026-09-18
 
 * Merge pull request #59 from lleqsnoom/feat/gauge-report (eacfdc1)
