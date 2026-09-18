@@ -1,3 +1,9 @@
+## [5.30.0] - 2026-09-18
+
+* Merge pull request #63 from lleqsnoom/feat/autoreflection-heal (259d0c2)
+* fix(report): install the app without the parent's allow-scripts (6054547)
+* feat(autoreflection): add skill-health analysis and a heal skill (2c029bd)
+
 ## [5.29.0] - 2026-09-18
 
 * Merge pull request #61 from lleqsnoom/feat/orca-panel-and-console (577d727)
