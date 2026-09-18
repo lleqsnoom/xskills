@@ -16,13 +16,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { apiDay, apiDays, apiMovement, apiSession, apiSkill, apiTodos, newestPack, packFile } from "./report-server.mjs";
+import { apiBench, apiControl, apiDay, apiDays, apiFactors, apiFlow, apiInterval, apiLedger, apiMovement, apiRatchet, apiRecurrence, apiSchedule, apiSession, apiSkill, apiTodos, newestPack, packFile } from "./report-server.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const DEFAULT_ROOT = path.join(REPO_ROOT, ".x-skills", "daily");
 export const DEFAULT_DIST = path.join(REPO_ROOT, "tools", "report-app", "dist-panel");
 export const DEFAULT_OUT = path.join(REPO_ROOT, "tools", "orca-plugin", "panel.html");
 const MAX_DAYS = 14;
+/** The ledger reads a longer window than the movement table: a fix takes days to show up as held or flat. */
+const LEDGER_DAYS = 30;
 /**
  * How much snapshot the panel may carry.
  *
@@ -80,6 +82,17 @@ export function payloadTable({ root = DEFAULT_ROOT, maxDays = MAX_DAYS, budget =
     "/api/movement": movement,
     "/api/days": days,
     "/api/todos": apiTodos({ root }),
+    // The improvement views. They are derived from the same packs and cost a few kilobytes each, so a panel
+    // can answer every one of them without a network.
+    "/api/ledger": apiLedger({ root, maxDays: LEDGER_DAYS }),
+    "/api/ratchet": apiRatchet({ root, maxDays }),
+    "/api/bench": apiBench({ root, maxDays }),
+    "/api/recurrence": apiRecurrence({ root, maxDays }),
+    "/api/control": apiControl({ root, maxDays }),
+    "/api/interval": apiInterval({ root, maxDays }),
+    "/api/factors": apiFactors({ root, maxDays }),
+    "/api/flow": apiFlow({ root, maxDays }),
+    "/api/schedule": apiSchedule({ root, maxDays }),
     ...skillPayloads({ root, movement, maxDays }),
   };
   let bytes = 0;

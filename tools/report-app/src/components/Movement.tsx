@@ -1,12 +1,89 @@
-import { For, Show, createMemo, createResource, createSignal } from "solid-js";
+import { For, Match, Show, Switch, createMemo, createResource, createSignal } from "solid-js";
 import { api, type Band, type MovementPage, type MovementRow } from "../api";
 import { linkProps } from "../router";
 import { settled } from "../resource.mjs";
+import { currentHint, currentView, setCurrentView, VIEWS } from "../views";
+import { BenchView } from "./BenchView";
+import { LedgerView } from "./LedgerView";
+import { RatchetView } from "./RatchetView";
+import { RecurrenceView } from "./RecurrenceView";
+import { ControlView } from "./ControlView";
+import { IntervalView } from "./IntervalView";
+import { FactorsView } from "./FactorsView";
+import { FlowView } from "./FlowView";
+import { ScheduleView } from "./ScheduleView";
 import { Gauge, Sparkline } from "./charts";
 import { Loader } from "./Loader";
 
-/** The default screen: did anything in use get better or worse, and by which axis. */
+/**
+ * The main screen, in ten views with one goal: make the skills better.
+ *
+ * They answer different questions about the same record, so all ten ship and the reader picks. The first five
+ * measure the work: movement (did anything move), bench (what to do now), ledger (did the fixes hold), ratchet
+ * (has anything slipped below its floor), recurrence (what keeps coming back). The last five measure the
+ * measurement: control (is a move real, given the record's own noise), interval (what is a score worth),
+ * factors (why is it that number, in points), flow (is the fixing keeping up), schedule (what must be
+ * re-checked). The picker is a tab strip because that is what it is: the same screen, a different question. The
+ * choice rides in `?view=`, so a link can point at the view it argues for.
+ */
 export function Movement() {
+  return (
+    <>
+      <div class="view-tabs" role="tablist" aria-label="how to look at the record">
+        <span class="dim">Improving the skills, five ways</span>
+        <For each={VIEWS}>
+          {(option) => (
+            <button
+              role="tab"
+              aria-selected={currentView() === option.id}
+              class={currentView() === option.id ? "on" : ""}
+              title={option.hint}
+              onClick={() => setCurrentView(option.id)}
+            >
+              {option.label}
+            </button>
+          )}
+        </For>
+      </div>
+      <p class="dim view-hint">{currentHint()}</p>
+      <Switch>
+        <Match when={currentView() === "bench"}>
+          <BenchView />
+        </Match>
+        <Match when={currentView() === "ledger"}>
+          <LedgerView />
+        </Match>
+        <Match when={currentView() === "ratchet"}>
+          <RatchetView />
+        </Match>
+        <Match when={currentView() === "recurrence"}>
+          <RecurrenceView />
+        </Match>
+        <Match when={currentView() === "control"}>
+          <ControlView />
+        </Match>
+        <Match when={currentView() === "interval"}>
+          <IntervalView />
+        </Match>
+        <Match when={currentView() === "factors"}>
+          <FactorsView />
+        </Match>
+        <Match when={currentView() === "flow"}>
+          <FlowView />
+        </Match>
+        <Match when={currentView() === "schedule"}>
+          <ScheduleView />
+        </Match>
+        <Match when={currentView() === "movement"}>
+          <MovementTable />
+        </Match>
+      </Switch>
+    </>
+  );
+}
+
+/** The movement table: did anything in use get better or worse, and by which axis. */
+function MovementTable() {
   const [page] = createResource<MovementPage>(() => api.movement());
   const [filter, setFilter] = createSignal("");
   const [only, setOnly] = createSignal<"all" | "up" | "down">("all");

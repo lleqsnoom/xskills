@@ -1126,3 +1126,765 @@ describe("no view reads a resource where it cannot survive the read", async () =
     assert.match(loader, /settled\(props\.resource\)/, "and the value, through the guard");
   });
 });
+
+describe("report views — what a change to a skill did", async () => {
+  const v = await import(path.join(ROOT, "scripts", "report-views.mjs"));
+
+  it("reads the improvement class out of a title, and the file out of a target", () => {
+    assert.equal(v.classOf("script-hardening: resolve the report path"), "script-hardening");
+    assert.equal(v.classOf("doc-command-drift: document the JSON shape"), "doc-command-drift");
+    assert.equal(v.classOf("`x-decompose` / `x-epic`: delete the pipeline file"), "manual", "an older wording is not a class");
+    assert.equal(v.classOf(null), "manual");
+
+    assert.equal(v.pathOf("`skills/x-plan/SKILL.md:9`"), "skills/x-plan/SKILL.md");
+    assert.equal(
+      v.pathOf("`skills/x-anal/scripts/scenario.mjs:154-155` and `skills/x-plan/scripts/scenario.mjs:67-68`"),
+      "skills/x-anal/scripts/scenario.mjs",
+      "the first file named is the one the finding is about"
+    );
+    assert.equal(v.pathOf("no path at all"), null);
+    assert.equal(v.pathOf(null), null);
+  });
+
+  it("moves a day, and counts the days between two", () => {
+    assert.equal(v.shiftDays("2026-09-15", 1), "2026-09-16");
+    assert.equal(v.shiftDays("2026-09-15", -3), "2026-09-12");
+    assert.equal(v.shiftDays("2026-03-01", -1), "2026-02-28");
+    assert.equal(v.daysBetween("2026-09-15", "2026-09-17"), 2);
+    assert.equal(v.daysBetween("2026-09-15", "2026-09-10"), -5);
+  });
+
+  it("keeps only the session ids the day's own pack knows", () => {
+    const known = new Set(["109444fc8722edf6"]);
+    assert.deepEqual(v.sessionsIn("S36 in `109444fc8722edf6` (high, kept)", known), ["109444fc8722edf6"]);
+    assert.deepEqual(v.sessionsIn("S21 (high, kept)", known), [], "a signal id is not a session id");
+    assert.deepEqual(v.sessionsIn(null), []);
+  });
+
+  it("measures a window from the days that were measured, and says how many", () => {
+    const series = [
+      { date: "2026-09-13", score: 60, raw: 60, n: 6 },
+      { date: "2026-09-14", score: null, raw: 55, n: 2 },
+      { date: "2026-09-15", score: 70, raw: 70, n: 6 },
+      { date: "2026-09-16", score: null, raw: null, n: 0 },
+    ];
+    const window = v.windowMean(series, "2026-09-13", "2026-09-15");
+    assert.equal(window.days, 3);
+    assert.equal(window.mean, 61.7);
+    assert.equal(window.calls, 14);
+    assert.equal(window.thin, 1, "one of the three days was below the floor");
+    assert.deepEqual(v.windowMean(series, "2026-09-17", "2026-09-18"), { mean: null, days: 0, calls: 0, thin: 0, dates: [] });
+  });
+
+  it("waits for the whole window before calling a fix held or flat", () => {
+    const before = { mean: 60, days: 2 };
+    const at = { landed: "2026-09-15", needDays: 2 };
+    assert.equal(v.verdictFor({ ...at, before, after: { mean: 70, days: 1 } }), "measuring");
+    assert.equal(v.verdictFor({ ...at, before, after: { mean: 70, days: 2 } }), "held");
+    assert.equal(v.verdictFor({ ...at, before, after: { mean: 61, days: 2 } }), "flat", "a point of movement is noise");
+    assert.equal(v.verdictFor({ ...at, before, after: { mean: 50, days: 2 } }), "regressed");
+    assert.equal(v.verdictFor({ ...at, before: { mean: null, days: 0 }, after: { mean: 70, days: 2 } }), "unmeasured");
+    assert.equal(v.verdictFor({ ...at, landed: null, before, after: null }), "no-commit");
+  });
+
+  it("builds a floor from a run of days, never from one lucky one", () => {
+    const series = (values) =>
+      values.map((value, index) => ({ date: `2026-09-${String(10 + index).padStart(2, "0")}`, score: value, raw: value, n: 6 }));
+    const best = v.sustainedBest(series([70, 80, 90, 60]));
+    assert.equal(best.value, 80, "the best three-day run is 70, 80, 90");
+    assert.equal(best.basis, 3);
+    assert.equal(v.sustainedBest(series([90, 60])).value, 75, "two days are a run when the record only has two");
+    assert.equal(v.sustainedBest(series([90])), null, "one day is not a floor");
+    assert.equal(
+      v.sustainedBest([...series([80]), { date: "2026-09-11", score: null, raw: 95, n: 6 }, ...series([85])]),
+      null,
+      "a day below the floor breaks the run, so there is nothing to hold"
+    );
+    assert.equal(
+      v.sustainedBest([{ date: "2026-09-10", score: 90, raw: 90, n: 2 }, { date: "2026-09-11", score: 91, raw: 91, n: 2 }]),
+      null,
+      "two calls cannot hold a floor"
+    );
+  });
+
+  it("says how far below a floor a skill is, and refuses to let a thin day break it", () => {
+    const rows = [
+      { name: "x-a", band: { key: "fair" }, series: [{ date: "2026-09-16", score: 80, raw: 80, n: 6 }, { date: "2026-09-17", score: 70, raw: 70, n: 6 }] },
+      {
+        name: "x-b",
+        band: { key: "fair" },
+        series: [
+          { date: "2026-09-15", score: 80, raw: 80, n: 6 },
+          { date: "2026-09-16", score: 80, raw: 80, n: 6 },
+          { date: "2026-09-17", score: null, raw: 40, n: 2 },
+        ],
+      },
+      { name: "x-c", band: { key: "fair" }, series: [{ date: "2026-09-17", score: null, raw: 60, n: 1 }] },
+    ];
+    const ratchet = v.ratchetRows({ rows, window: 3 });
+    const [a, b, c] = ratchet.skills;
+    assert.equal(a.status, "below");
+    assert.equal(a.belowBy, 5, "80 held, 70 today");
+    assert.equal(b.floor.value, 80, "the run of two days is what it held");
+    assert.equal(b.belowBy, null, "a day below the sample floor cannot break a floor");
+    assert.equal(b.status, "held");
+    assert.equal(c.status, "thin", "a skill with no floor to hold is last, under the rows a reader can act on");
+    assert.equal(ratchet.below, 1, "and the one that is below is the one that is loud");
+  });
+
+  it("falls back to the whole window when the record is too short to hold a run", () => {
+    const rows = [{ name: "x-a", band: { key: "fair" }, latest: "2026-09-17", series: [{ date: "2026-09-17", score: 70, raw: 70, n: 6 }] }];
+    const auto = v.ratchetRows({ rows, windowScores: new Map([["x-a", { score: 78.3, n: 21, days: 14 }]]) });
+    assert.equal(auto.skills[0].floor.value, 78.3);
+    assert.equal(auto.skills[0].floor.source, "window");
+    assert.equal(auto.skills[0].floor.basis, 14);
+    assert.equal(auto.skills[0].belowBy, 8.3);
+
+    const reader = v.ratchetRows({
+      rows,
+      floors: { "x-a": { floor: 85, since: "2026-09-10", reason: "held after the parser fix" } },
+      windowScores: new Map([["x-a", { score: 78.3, n: 21, days: 14 }]]),
+    });
+    assert.equal(reader.skills[0].floor.value, 85, "a commitment beats an automatic floor");
+    assert.equal(reader.skills[0].floor.source, "reader");
+    assert.equal(reader.skills[0].floors, undefined);
+    assert.equal(reader.skills[0].regressions, 1, "the one day after the commitment was measured below it");
+
+    const none = v.ratchetRows({ rows: [{ ...rows[0], series: [{ date: "2026-09-17", score: null, raw: 70, n: 6 }] }] });
+    assert.equal(none.skills[0].floor, null);
+    assert.equal(none.skills[0].status, "thin");
+  });
+
+  it("turns a count of regressions into a decision", () => {
+    assert.equal(v.budgetState(2, 2).key, "at");
+    assert.equal(v.budgetState(3, 2).key, "over");
+    assert.equal(v.budgetState(1, 2).key, "under");
+  });
+
+  it("picks the next fix by severity, how often it was seen, and how cheap its check is", () => {
+    const ranked = v.rankCandidates([
+      { id: "P1", severity: "medium", recurrence: 1, expected: "npm test" },
+      { id: "P2", severity: "high", recurrence: 3, expected: "node lint.mjs" },
+      { id: "P3", severity: "high", recurrence: 1, expected: null },
+      { id: "P4", severity: "low", recurrence: 1, expected: "npm test" },
+    ]);
+    assert.deepEqual(ranked.map((c) => c.id), ["P2", "P1", "P3", "P4"], "a fix with no check costs three times as much to prove");
+    assert.match(ranked[0].why, /^picked because it is high, seen on 3 days, its check is one command\.$/);
+    assert.match(ranked[2].why, /states no check/);
+  });
+
+  const sighting = (date, over = {}) => ({
+    date,
+    id: "P1",
+    klass: "doc-command-drift",
+    path: "skills/x-plan/SKILL.md",
+    target: "skills/x-plan/SKILL.md:9",
+    skill: "x-plan",
+    severity: "high",
+    sessions: [],
+    ...over,
+  });
+
+  it("marks a finding that came back after a fix", () => {
+    const found = v.recurrenceFindings({
+      sightings: [sighting("2026-09-15"), sighting("2026-09-17")],
+      commits: () => ["2026-09-16T09:00:00Z", "2026-09-16T10:00:00Z"],
+      today: "2026-09-17",
+    });
+    assert.equal(found.findings.length, 1);
+    assert.equal(found.findings[0].status, "came-back");
+    assert.deepEqual(found.findings[0].attempts, ["2026-09-16"], "two commits on one day is one fix attempt, on that day");
+    assert.equal(found.findings[0].lastFix, "2026-09-16");
+    assert.equal(found.findings[0].sinceFix, 1, "one sighting since the fix attempt");
+    assert.equal(found.summary.cameBack, 1);
+  });
+
+  it("keeps a file's history when the class it is filed under is renamed", () => {
+    const found = v.recurrenceFindings({
+      sightings: [sighting("2026-09-16", { klass: "manual" }), sighting("2026-09-17", { klass: "doc-command-drift" })],
+      commits: () => [],
+      today: "2026-09-17",
+    });
+    assert.equal(found.findings.length, 1, "one file, one finding");
+    assert.equal(found.findings[0].klass, "doc-command-drift", "the newest name is the one it is shown under");
+    assert.deepEqual(found.findings[0].klasses, ["manual", "doc-command-drift"]);
+    assert.equal(found.findings[0].relabelled, true);
+    assert.equal(found.findings[0].status, "chronic");
+  });
+
+  it("closes a finding by evidence, and says how long the quiet has lasted", () => {
+    const found = v.recurrenceFindings({ sightings: [sighting("2026-09-15")], commits: () => ["2026-09-16T10:00:00Z"], today: "2026-09-24" });
+    assert.equal(found.findings[0].status, "closed");
+    assert.equal(found.findings[0].quietDays, 8);
+  });
+
+  it("orders what to look at: what came back, then what is chronic", () => {
+    const found = v.recurrenceFindings({
+      sightings: [
+        sighting("2026-09-16", { path: "skills/a/SKILL.md" }),
+        sighting("2026-09-17", { path: "skills/a/SKILL.md" }),
+        sighting("2026-09-15", { path: "skills/z/SKILL.md" }),
+        sighting("2026-09-17", { path: "skills/z/SKILL.md" }),
+      ],
+      commits: (file) => (file === "skills/z/SKILL.md" ? ["2026-09-16T10:00:00Z"] : []),
+      today: "2026-09-17",
+    });
+    assert.deepEqual(found.findings.map((f) => f.status), ["came-back", "chronic"]);
+    assert.equal(found.summary.open, 2);
+  });
+});
+
+describe("report views — over the record", async () => {
+  const srv = await import(SERVER);
+
+  /** Five days of one skill climbing, one pack, and one kept fix that landed on the 15th. */
+  function viewRoot({ digestOn = "2026-09-15" } = {}) {
+    const dir = tmp();
+    const values = [
+      ["2026-09-13", 60],
+      ["2026-09-14", 65],
+      ["2026-09-15", 70],
+      ["2026-09-16", 75],
+      ["2026-09-17", 80],
+    ];
+    fs.writeFileSync(
+      path.join(dir, "history.jsonl"),
+      values.map(([date, score]) => `${JSON.stringify(line(date, [scored("x-plan", score)], { sessions: 4 }))}\n`).join("")
+    );
+    writeDigest(dir, digestOn, "P1", "doc-command-drift", "skills/x-plan/SKILL.md:9", "do the thing");
+    return dir;
+  }
+
+  function writeDigest(dir, date, id, klass, target, change) {
+    const pack = path.join(dir, date);
+    fs.mkdirSync(pack, { recursive: true });
+    fs.writeFileSync(
+      path.join(pack, "summary.json"),
+      JSON.stringify({ pack: `.x-skills/daily/${date}`, counts: {}, skills: { touched: [], idle: [] }, sessions: [], signals: [], warnings: [], notes: [] })
+    );
+    fs.writeFileSync(
+      path.join(pack, "DIGEST.md"),
+      `# Daily\n\n## Proposals\n\n### ${id} — ${klass}: fix it\n**Signal:** S1 (high, kept)\n**Target:** \`${target}\`\n**Change:** ${change}\n**Check:** \`npm test\` exits 0\n`
+    );
+  }
+
+  const commits = (files) => (file) => files[file] ?? [];
+
+  const kept = (dir, over = {}) =>
+    srv.writeTodos(
+      [
+        {
+          id: "P1",
+          day: "2026-09-15",
+          skill: "x-plan",
+          change: "do the thing",
+          target: "skills/x-plan/SKILL.md:9",
+          expected: "`npm test` exits 0",
+          signal: "S1 (high, kept)",
+          ...over,
+        },
+      ],
+      dir
+    );
+
+  it("says a fix held, from the window either side of the day it landed", () => {
+    const dir = viewRoot();
+    kept(dir);
+    const ledger = srv.apiLedger({ root: dir, maxDays: 30, window: 2, commits: commits({ "skills/x-plan/SKILL.md": ["2026-09-15T10:00:00Z"] }) });
+    const item = ledger.items[0];
+    assert.equal(ledger.items.length, 1);
+    assert.equal(item.klass, "doc-command-drift", "the class comes from the proposal the item was kept from");
+    assert.equal(item.path, "skills/x-plan/SKILL.md");
+    assert.equal(item.landed, "2026-09-15");
+    assert.equal(item.before.mean, 62.5, "the two days before it landed");
+    assert.equal(item.after.mean, 77.5, "and the two after");
+    assert.equal(item.verdict, "held");
+    assert.deepEqual(ledger.summary, { shipped: 1, held: 1, flat: 0, regressed: 0, measuring: 0, notLanded: 0, cameBack: 0 });
+  });
+
+  it("waits for the measurement rather than calling it", () => {
+    const dir = viewRoot();
+    kept(dir);
+    const git = commits({ "skills/x-plan/SKILL.md": ["2026-09-17T10:00:00Z"] });
+    const ledger = srv.apiLedger({ root: dir, maxDays: 30, window: 2, commits: git });
+    assert.equal(ledger.items[0].verdict, "measuring", "landed today, so no day has been measured after it");
+    assert.equal(ledger.summary.measuring, 1);
+  });
+
+  it("will not credit a fix with a commit that predates it", () => {
+    const dir = viewRoot();
+    kept(dir, { day: "2026-09-16" });
+    const ledger = srv.apiLedger({ root: dir, maxDays: 30, commits: commits({ "skills/x-plan/SKILL.md": ["2026-09-15T10:00:00Z"] }) });
+    assert.equal(ledger.items[0].day, "2026-09-16");
+    assert.equal(ledger.items[0].landed, null);
+    assert.equal(ledger.items[0].verdict, "no-commit");
+    assert.equal(ledger.items[0].lastCommit, "2026-09-15", "the commit that is there is context, not a landing");
+    assert.equal(ledger.summary.notLanded, 1);
+  });
+
+  it("joins a finding that came back to the fix it came back from", () => {
+    const dir = viewRoot();
+    writeDigest(dir, "2026-09-17", "P1", "doc-command-drift", "skills/x-plan/SKILL.md:9", "do the thing");
+    const git = commits({ "skills/x-plan/SKILL.md": ["2026-09-15T10:00:00Z", "2026-09-16T09:00:00Z"] });
+
+    const found = srv.apiRecurrence({ root: dir, maxDays: 30, commits: git });
+    assert.equal(found.findings.length, 1, "one file, proposed on two days");
+    assert.equal(found.findings[0].days, 2);
+    assert.equal(found.findings[0].lastFix, "2026-09-16");
+    assert.equal(found.findings[0].status, "came-back");
+
+    kept(dir);
+    const ledger = srv.apiLedger({ root: dir, maxDays: 30, commits: git });
+    assert.equal(ledger.items[0].cameBack, true, "the ledger says the fix did not hold");
+    assert.equal(ledger.summary.cameBack, 1);
+  });
+
+  it("holds a floor in, and refuses to lower one in silence", () => {
+    const dir = viewRoot();
+    assert.equal(srv.holdFloor({ root: dir, skill: "x-nope" }).ok, false, "a skill with no movement has no floor to hold");
+
+    const held = srv.holdFloor({ root: dir, skill: "x-plan", reason: "the three days after the lint rule" });
+    assert.equal(held.ok, true);
+    assert.equal(held.floor.floor, 75, "the best sustained run: 70, 75, 80");
+    assert.equal(held.floor.basis, 3);
+
+    const view = srv.apiRatchet({ root: dir });
+    assert.equal(view.skills[0].floor.source, "reader");
+    assert.equal(view.skills[0].belowBy, null, "80 is above the floor it committed to");
+    assert.equal(view.skills[0].status, "held");
+
+    const silent = srv.lowerFloor({ root: dir, skill: "x-plan", value: 60, reason: "  " });
+    assert.equal(silent.ok, false);
+    assert.match(silent.reason, /with a reason/);
+
+    const lowered = srv.lowerFloor({ root: dir, skill: "x-plan", value: 60, reason: "the scoring weights changed" });
+    assert.equal(lowered.ok, true);
+    assert.equal(srv.readFloors(dir).skills["x-plan"].floor, 60);
+    assert.equal(srv.readFloors(dir).skills["x-plan"].reason, "the scoring weights changed", "the move is on the record");
+    assert.ok(fs.existsSync(path.join(dir, "ratchet.json")), "and it survives a restart, beside the packs");
+  });
+
+  it("reads a broken or absent floor file as no floors rather than throwing", () => {
+    const dir = tmp();
+    assert.deepEqual(srv.readFloors(dir), { updatedAt: null, skills: {} });
+    fs.writeFileSync(path.join(dir, "ratchet.json"), "not json");
+    assert.deepEqual(srv.readFloors(dir), { updatedAt: null, skills: {} });
+    fs.writeFileSync(path.join(dir, "ratchet.json"), JSON.stringify({ skills: { "x-plan": { floor: "nope" } } }));
+    assert.deepEqual(srv.readFloors(dir).skills, {}, "a floor that is not a number is not a floor");
+  });
+
+  it("puts the next fix on the bench and keeps the work in flight to one card", () => {
+    const dir = viewRoot();
+    writeDigest(dir, "2026-09-17", "P2", "panel-rule", "skills/x-fix/SKILL.md:20", "ask through a panel");
+    kept(dir);
+
+    const bench = srv.apiBench({ root: dir, maxDays: 14, commits: () => [] });
+    assert.equal(bench.now.id, "P2", "the kept proposal is not offered again");
+    assert.equal(bench.now.klass, "panel-rule");
+    assert.equal(bench.now.severity, "high");
+    assert.match(bench.now.why, /^picked because /);
+    assert.equal(bench.candidates, 1);
+    assert.equal(bench.doing.id, "P1", "the kept fix has no commit, so it is the work in flight");
+    assert.equal(bench.queued.length, 0);
+    assert.equal(bench.waiting.length, 0);
+
+    const landed = srv.apiBench({ root: dir, maxDays: 14, window: 3, commits: commits({ "skills/x-plan/SKILL.md": ["2026-09-15T10:00:00Z"] }) });
+    assert.equal(landed.doing, null, "nothing is in flight once it lands");
+    assert.equal(landed.waiting.length, 1, "and it is waiting on the scan instead");
+    assert.equal(landed.waiting[0].landed, "2026-09-15");
+    assert.equal(landed.waiting[0].left, 1, "two of the three days measured");
+  });
+
+  it("answers the four views over http, and takes a floor only with a reason", async () => {
+    const dir = viewRoot();
+    const server = srv.createServer({ root: dir, appDist: path.join(dir, "no-app") });
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const post = (body) =>
+      fetch(`${base}/api/ratchet`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    try {
+      const ledger = await fetch(`${base}/api/ledger?days=30`);
+      assert.equal(ledger.status, 200);
+      assert.equal((await ledger.json()).windowDays, 2);
+      assert.equal((await fetch(`${base}/api/bench`)).status, 200);
+      assert.equal((await fetch(`${base}/api/recurrence`)).status, 200);
+      const ratchet = await fetch(`${base}/api/ratchet?budget=0`);
+      assert.equal(ratchet.status, 200);
+      assert.equal((await ratchet.json()).budget, 0, "a budget of zero is a budget, not a missing one");
+
+      const held = await post({ skill: "x-plan", action: "hold", reason: "after the lint rule" });
+      assert.equal(held.status, 200);
+      assert.equal((await held.json()).floor.basis, 3, "the best sustained run the record holds");
+
+      const silent = await post({ skill: "x-plan", action: "lower", value: 60 });
+      assert.equal(silent.status, 400);
+      assert.match((await silent.json()).reason, /with a reason/);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("report views — the five borrowed rules", async () => {
+  const v = await import(path.join(ROOT, "scripts", "report-views.mjs"));
+
+  it("fires Westgard's rules, and only on the shape each one describes", () => {
+    const flat = [80, 80, 80, 80, 80, 80, 80, 80];
+    assert.deepEqual(v.rulesFired(flat, 80, 5), [], "a flat run fires nothing");
+    assert.deepEqual(v.rulesFired([...flat.slice(0, 7), 96], 80, 5), ["1_3s"], "3.2 sigma is a rejection");
+    assert.deepEqual(v.rulesFired([...flat.slice(0, 7), 91], 80, 5), ["1_2s"], "2.2 sigma is a warning, not a rejection");
+    assert.deepEqual(
+      v.rulesFired([...flat.slice(0, 6), 91, 92], 80, 5),
+      ["1_2s", "2_2s"],
+      "two in a row past 2s: the warning fires first, and the run rule confirms it — which is the multirule procedure working"
+    );
+    assert.deepEqual(v.rulesFired([...flat.slice(0, 4), 86, 87, 88, 89], 80, 5), ["4_1s"], "four past 1s");
+    assert.deepEqual(v.rulesFired([81, 82, 83, 84, 85, 86, 87], 80, 5), ["7T"], "seven climbing");
+    assert.deepEqual(v.rulesFired([81, 81, 81, 81, 81, 81, 81, 81, 81, 81], 80, 5), ["10x"], "ten on one side");
+    assert.deepEqual(v.rulesFired([80, 80], 80, 0), [], "no spread is no yardstick");
+  });
+
+  it("prices every rule in the false alarms it costs", () => {
+    const at = (key) => v.CONTROL_RULES.find((rule) => rule.key === key).falseAlarm;
+    assert.ok(Math.abs(at("1_3s") - 0.0027) < 0.0001, `1_3s is 2 x P(|Z| > 3), got ${at("1_3s")}`);
+    assert.ok(at("1_2s") > 0.04 && at("1_2s") < 0.05, "2 sigma rings on about 4.6% of good days");
+    assert.ok(at("2_2s") < at("1_2s") / 10, "which is why the run rules exist");
+    assert.ok(at("7T") < 0.001);
+    assert.equal(v.ruleOf("1_2s").kind, "warn");
+    assert.equal(v.ruleOf("1_3s").kind, "reject");
+  });
+
+  it("measures the noise floor from the record, and ignores a day nobody used", () => {
+    const rows = [
+      { name: "x-a", series: [{ date: "2026-09-16", score: 60, raw: 60, n: 6 }, { date: "2026-09-17", score: 70, raw: 70, n: 6 }] },
+      { name: "x-b", series: [{ date: "2026-09-16", score: 40, raw: 40, n: 6 }, { date: "2026-09-17", score: 60, raw: 60, n: 6 }] },
+      { name: "x-prior", series: [{ date: "2026-09-16", score: null, raw: 59.8, n: 0 }, { date: "2026-09-17", score: null, raw: 59.4, n: 0 }] },
+    ];
+    const pooled = v.pooledDaySigma(rows);
+    assert.equal(pooled.pairs, 2, "a day with no loaded session is a baseline, not a measurement");
+    assert.equal(pooled.spread, 7.1, "the two deltas are 10 and 20");
+    assert.equal(pooled.sigma, 5, "SEM: the spread of differences over sqrt(2)");
+    assert.equal(pooled.mdc, 13.9, "1.96 x the spread is the change that is real");
+    assert.equal(v.pooledDaySigma([{ name: "one", series: [{ date: "d", score: 1, raw: 1, n: 1 }] }]).sigma, null);
+  });
+
+  it("judges the last day against the days before it, not against itself", () => {
+    const rows = [
+      { name: "jump", series: [{ date: "d1", score: 60, raw: 60, n: 6 }, { date: "d2", score: 78, raw: 78, n: 6 }] },
+      { name: "steady", series: [{ date: "d1", score: 70, raw: 70, n: 6 }, { date: "d2", score: 71, raw: 71, n: 6 }] },
+    ];
+    const chart = v.controlChart({ rows, sigma: 5 });
+    const jump = chart.skills.find((skill) => skill.name === "jump");
+    assert.equal(jump.center, 60, "the baseline is the day before, so the jump is judged against it");
+    assert.equal(jump.baselineDays, 1);
+    assert.equal(jump.judgedDays, 1);
+    assert.equal(jump.z, 3.6);
+    assert.deepEqual(jump.fired, ["1_3s"]);
+    assert.equal(jump.source, "pooled", "two days cannot give a skill its own sigma");
+    assert.equal(chart.skills[0].name, "jump", "the alarm sorts first");
+    assert.equal(chart.skills.find((skill) => skill.name === "steady").alarming, false);
+    assert.equal(chart.alarming, 1);
+    assert.ok(chart.expectedAt3s < 0.1, "two skills of noise produce almost no 3s alarms");
+  });
+
+  it("gives a skill its own limits once its baseline is long enough", () => {
+    const values = [70, 72, 68, 71, 69, 70, 72, 68, 71, 70, 69];
+    const rows = [{ name: "x-a", series: values.map((score, index) => ({ date: `2026-09-${String(index + 1).padStart(2, "0")}`, score, raw: score, n: 6 })) }];
+    const chart = v.controlChart({ rows, sigma: 5, minDays: 6 });
+    assert.equal(chart.skills[0].source, "own");
+    assert.equal(chart.skills[0].sigma, 1.4, "the skill's own spread, not the fleet's");
+    assert.equal(chart.skills[0].baselineDays, 6, "the baseline holds at least minDays");
+    assert.equal(chart.skills[0].judgedDays, 5, "and the days after it are the ones under judgement");
+  });
+
+  it("puts an interval on a score, from the denominators its axes were measured over", () => {
+    const weights = { conformance: 0.3, adherence: 0.2, trigger: 0.2, rework: 0.15, protocol: 0.15 };
+    const dimensions = { trigger: 0.5, rework: 0.9, protocol: 0.8 };
+    const big = v.scoreInterval({ dimensions, denominators: { trigger: 100, rework: 10000, protocol: 100 }, weights });
+    const small = v.scoreInterval({ dimensions, denominators: { trigger: 2, rework: 200, protocol: 2 }, weights });
+    assert.ok(small.se > big.se * 5, `a rate over two sessions says far less than the same rate over a hundred (${small.se.toFixed(1)} vs ${big.se.toFixed(1)})`);
+    assert.equal(big.used.length, 3, "an axis with no denominator is not part of the interval");
+    assert.equal(v.scoreInterval({ dimensions: {}, denominators: {}, weights }).se, null, "no axes, no interval");
+  });
+
+  it("halves an interval at four times the sessions, and says how many that is", () => {
+    const weights = { trigger: 1 };
+    const rows = [{ name: "x-a", latestScore: 70 }];
+    const once = v.intervalRows({ rows, latest: new Map([["x-a", { dimensions: { trigger: 0.5 }, denominators: { trigger: 10 }, score: 70, n: 10, named: 20 }]]), weights });
+    const four = v.intervalRows({ rows, latest: new Map([["x-a", { dimensions: { trigger: 0.5 }, denominators: { trigger: 40 }, score: 70, n: 40, named: 80 }]]), weights });
+    assert.equal(once.skills[0].se, 15.8);
+    assert.ok(Math.abs(once.skills[0].se / 2 - four.skills[0].se) < 0.001, "SE = sigma/sqrt(n): four times the evidence, half the interval");
+    assert.equal(once.skills[0].needsSessions, 40, "the sessions that would halve it");
+    assert.equal(once.skills[0].conservative, 22.6, "the score the evidence alone supports");
+    assert.equal(once.skills[0].low, 39, "and the range it sits in");
+    const unknown = v.intervalRows({ rows, latest: new Map(), weights, fallbackSigma: 4 });
+    assert.equal(unknown.skills[0].se, 4, "a day with no tally falls back to the record's own noise");
+  });
+
+  it("prices a reason code in points, and the codes add up to the gap", () => {
+    const weights = { conformance: 0.3, trigger: 0.2, rework: 0.15 };
+    const found = v.factorCodes({
+      name: "x-a",
+      dimensions: { conformance: 0.9, trigger: 0.5, rework: 0.5 },
+      denominators: { conformance: 10, trigger: 10, rework: 100 },
+      tally: { loaded: 5, named: 10, checks: { passes: 9, fails: 1 }, toolCalls: 100, repeats: 50, panels: 3, proseQuestions: 1 },
+      weights,
+    });
+    assert.equal(found.score, 68.5);
+    assert.equal(found.gap, 31.5);
+    const sum = found.codes.reduce((total, code) => total + code.costs, 0);
+    assert.ok(Math.abs(sum - found.gap) < 0.2, `the codes add up to the gap (${sum} vs ${found.gap})`);
+    assert.equal(found.top.axis, "trigger");
+    assert.match(found.top.evidence, /5 of 10 sessions loaded it; 5 named it and never did/);
+    assert.equal(found.codes.find((code) => code.axis === "rework").evidence, "50 repeated calls out of 100");
+    assert.equal(v.simulate({ dimensions: { trigger: 0.5 }, weights: { trigger: 1 }, axis: "trigger", target: 1 }), 100);
+    assert.equal(v.simulate({ dimensions: { trigger: 0.5 }, weights: { trigger: 1 }, axis: "nope", target: 1 }), null);
+  });
+
+  it("cross-checks a reason code's score against the scorer it decomposes", async () => {
+    const m = await import(path.join(ROOT, "skills", "x-autoreflection", "scripts", "metrics.mjs"));
+    const dimensions = { conformance: 0.97, adherence: null, trigger: 0.583, rework: 0.98, protocol: 0.847 };
+    const found = v.factorCodes({ name: "x-review", dimensions, denominators: {}, tally: {}, weights: m.WEIGHTS_V1 });
+    assert.ok(Math.abs(found.score - m.compose(dimensions, m.WEIGHTS_V1).score) < 0.05, "one rule for the score, not two");
+  });
+
+  it("prices the fleet's rates by the evidence behind them", () => {
+    const tallies = [{ loaded: 5, named: 10 }, { loaded: 9, named: 90 }];
+    const pooled = v.pooledRates(tallies, {
+      dimensionsOf: (tally) => ({ trigger: tally.loaded / tally.named }),
+      denominatorsOf: (tally) => ({ trigger: tally.named }),
+    });
+    assert.equal(pooled.trigger, 0.14, "weighted by sessions, not by skills");
+    assert.deepEqual(v.pooledRates([]), {});
+  });
+
+  it("reads the fixing process as a pipeline, and names where the work has stopped", () => {
+    const flow = v.flowOf({
+      dates: ["2026-09-16", "2026-09-17"],
+      arrivals: { "2026-09-16": 6, "2026-09-17": 7 },
+      kept: { "2026-09-16": 2, "2026-09-17": 3 },
+      landed: { "2026-09-17": 2 },
+      closed: {},
+      open: [{ first: "2026-09-16", path: "a" }, { first: "2026-09-17", path: "b" }],
+      today: "2026-09-17",
+    });
+    assert.deepEqual(flow.stages.map((stage) => [stage.key, stage.count]), [["proposed", 13], ["kept", 5], ["landed", 2], ["closed", 0]]);
+    assert.deepEqual(flow.perDay.map((day) => day.cumulative.proposed), [6, 13], "the bands are cumulative");
+    assert.equal(flow.arrivalsPerDay, 6.5);
+    assert.equal(flow.waitAtArrivals, 0.3, "Little's law: two open, 6.5 arriving a day");
+    assert.equal(flow.waitAtClosures, null, "no closures is no throughput to divide by");
+    assert.equal(flow.constraint, "landed", "the deepest stage work has reached and not left");
+    assert.deepEqual(flow.reached, ["proposed", "kept", "landed"]);
+    assert.equal(flow.oldestDays, 1);
+    assert.equal(v.flowOf({ dates: [], open: [] }).arrivalsPerDay, null);
+  });
+
+  it("widens a review interval, and resets it when a finding comes back", () => {
+    assert.equal(v.intervalOf({ step: 0 }), 1);
+    assert.equal(v.intervalOf({ step: 1 }), 6);
+    assert.equal(v.intervalOf({ step: 2, ef: 2.5 }), 15);
+    assert.equal(v.intervalOf({ step: 3, ef: 2.5 }), 38, "SM-2: 1, 6, then the easiness factor");
+    const held = v.applyOutcome(null, "held", "2026-09-17T06:00:00Z");
+    assert.equal(held.step, 1);
+    assert.equal(held.ef, 2.5);
+    assert.equal(held.reformulated, false);
+    const lapsed = v.applyOutcome(held, "came-back", "2026-09-20T06:00:00Z");
+    assert.equal(lapsed.step, 0, "a lapse goes back to a one-day interval");
+    assert.equal(lapsed.lapses, 1);
+    assert.equal(lapsed.ef, 2.3);
+    const twice = v.applyOutcome(lapsed, "came-back", "2026-09-21T06:00:00Z");
+    assert.equal(twice.reformulated, true, "a finding that keeps coming back needs rewriting, not re-fixing");
+    const floored = v.applyOutcome({ step: 6, ef: 1.3, lapses: 9 }, "held", "x");
+    assert.equal(floored.ef, 1.3, "the easiness factor has a floor");
+    assert.equal(floored.step, 6, "and the step has a ceiling");
+  });
+
+  it("asks for what the scanner cannot see, and answers the rest itself", () => {
+    const findings = [
+      { path: "a.js", klass: "k", severity: "high", status: "came-back", first: "2026-09-16", last: "2026-09-17", days: 2, sessions: [] },
+      { path: "b.md", klass: "k", severity: "medium", status: "new", first: "2026-09-16", last: "2026-09-17", days: 1, sessions: [] },
+      { path: "c.js", klass: "k", severity: "low", status: "closed", first: "2026-09-10", last: "2026-09-12", days: 3, sessions: [] },
+    ];
+    const due = v.dueRows({ findings, reviews: {}, today: "2026-09-17" });
+    assert.deepEqual(due.due.map((row) => row.path), ["a.js", "b.md"], "a closed finding is not re-checked");
+    assert.equal(due.dueCount, 2);
+    assert.equal(due.due[0].auto, "came-back", "the scan already answered this one");
+    assert.equal(due.due[0].interval, 1, "a finding with no review is due a day after it was first seen");
+    assert.equal(due.due[0].overdueBy, 0);
+    assert.equal(due.autoAnswered, 1);
+
+    const reviewed = v.dueRows({ findings, reviews: { "a.js": { step: 1, at: "2026-09-17T06:00:00Z", ef: 2.5, lapses: 0 } }, today: "2026-09-17" });
+    const a = [...reviewed.due, ...reviewed.next].find((row) => row.path === "a.js");
+    assert.equal(a.interval, 6, "a check that held widens the wait");
+    assert.equal(a.overdueBy, -6, "so it is not due for six days");
+
+    const hidden = v.dueRows({ findings, reviews: { "a.js": { reformulated: true } }, today: "2026-09-17" });
+    assert.equal(hidden.due.some((row) => row.path === "a.js"), false, "a reformulated finding leaves the schedule");
+    assert.equal(v.dueRows({ findings, reviews: {}, today: "2026-09-17", limit: 1 }).due.length, 1, "the list is capped");
+  });
+});
+
+describe("report views — the five over the record", async () => {
+  const srv = await import(SERVER);
+
+  /**
+   * Five days of one skill climbing, and one pack whose three sessions agree with the line.
+   *
+   * x-plan is loaded by all three sessions and passes two of three checks in each, so its axes have real
+   * denominators; x-fix is named by all three and loaded by none, which is the shape the reason codes are for.
+   */
+  function fiveDayRoot({ digestOn = "2026-09-17" } = {}) {
+    const dir = tmp();
+    const values = [["2026-09-13", 60], ["2026-09-14", 65], ["2026-09-15", 70], ["2026-09-16", 75], ["2026-09-17", 80]];
+    fs.writeFileSync(
+      path.join(dir, "history.jsonl"),
+      values.map(([date, score]) => `${JSON.stringify(line(date, [scored("x-plan", score)], { sessions: 3 }))}\n`).join("")
+    );
+    const pack = path.join(dir, digestOn);
+    fs.mkdirSync(pack, { recursive: true });
+    const session = (id) => ({
+      id,
+      host: "crush",
+      uuid: id,
+      title: id,
+      project: "/tmp/p",
+      modified: `${digestOn}T10:00:00Z`,
+      stats: { messages: 6, userMessages: 2, assistantMessages: 4, toolCalls: 100, toolResults: 100, panels: 5, toolFailures: 0, expectedExits: 0, repeats: 10, corrections: 0, reprompts: 0, proseQuestions: 1 },
+      skills: { loaded: ["x-plan"], used: ["x-plan", "x-fix"], unused: [] },
+      checks: [{ skill: "x-plan", script: "s.mjs", calls: 3, passes: 2, refusals: 0, fails: 1 }],
+      graphs: [{ skill: "x-plan", calls: 10, illegalMoves: 1, prematureTransitions: 0 }],
+      runFolders: [],
+      artifacts: [],
+    });
+    fs.writeFileSync(
+      path.join(pack, "summary.json"),
+      JSON.stringify({ pack: digestOn, counts: {}, skills: { touched: [], idle: [] }, sessions: [session("s1"), session("s2"), session("s3")], signals: [], warnings: [], notes: [], runFolders: [], artifacts: [] })
+    );
+    fs.writeFileSync(
+      path.join(pack, "DIGEST.md"),
+      "# Daily\n\n## Proposals\n\n### P1 — doc-command-drift: fix it\n**Signal:** S1 (high, kept)\n**Target:** `skills/x-plan/SKILL.md:9`\n**Change:** do the thing\n**Check:** `npm test` exits 0\n"
+    );
+    return dir;
+  }
+
+  it("judges the newest day against the record's own noise, not an invented threshold", () => {
+    const dir = fiveDayRoot();
+    const chart = srv.apiControl({ root: dir, sigma: 4 });
+    const plan = chart.skills.find((skill) => skill.name === "x-plan");
+    assert.equal(plan.center, 67.5, "the baseline is the four days before the one under judgement");
+    assert.equal(plan.latest, 80);
+    assert.equal(plan.z, 3.1);
+    assert.deepEqual(plan.fired, ["1_3s"]);
+    assert.equal(plan.source, "pooled");
+    assert.equal(chart.sigma, 4);
+    assert.equal(chart.alarming, 1);
+    assert.equal(chart.rules.length, 6, "the rule table travels with the chart");
+    assert.ok(chart.expectedAt3s < 0.05, "and so does what it costs in false alarms");
+  });
+
+  it("puts an interval on a score from the pack's own counters", () => {
+    const dir = fiveDayRoot();
+    const view = srv.apiInterval({ root: dir });
+    const plan = view.skills.find((skill) => skill.name === "x-plan");
+    assert.equal(plan.score, 84, "the score the day's counters produce");
+    assert.equal(plan.n, 3, "and the sessions behind it");
+    assert.ok(Math.abs(plan.se - 5) < 0.1, `the interval the axes earn: ${plan.se}`);
+    assert.equal(plan.needsSessions, 12, "four times the evidence to halve it");
+    assert.equal(view.tallied, 2, "the pack's tallies are what the interval reads");
+    assert.equal(view.fallbackSigma, 0, "a record that climbs in equal steps has no spread: zero, which the chart reads as no yardstick");
+  });
+
+  it("prices the reason codes in points, with the counters behind each one", () => {
+    const dir = fiveDayRoot();
+    const view = srv.apiFactors({ root: dir });
+    const fix = view.skills.find((skill) => skill.name === "x-fix");
+    assert.equal(fix.score, 52);
+    assert.equal(fix.gap, 48);
+    assert.equal(fix.top.axis, "trigger");
+    assert.equal(fix.top.costs, 40, "the axis carries 20 of the weights and 40 of these points");
+    assert.equal(fix.top.evidence, "0 of 3 sessions loaded it; 3 named it and never did");
+    const plan = view.skills.find((skill) => skill.name === "x-plan");
+    assert.equal(plan.score, 84);
+    assert.equal(plan.top.axis, "conformance");
+    assert.equal(plan.top.evidence, "6 of 9 checks passed");
+    assert.deepEqual(view.skills.map((skill) => skill.name), ["x-fix", "x-plan"], "the widest gap leads");
+    assert.equal(view.pooled.trigger, 0.5, "three of six named sessions loaded, which is context and not a target");
+  });
+
+  it("reads the flow of the fixing, from proposals to closures", () => {
+    const dir = fiveDayRoot();
+    srv.writeTodos([{ id: "P1", day: "2026-09-15", skill: "x-plan", change: "do the thing", target: "skills/x-plan/SKILL.md:9" }], dir);
+    const view = srv.apiFlow({ root: dir, commits: (file) => (file === "skills/x-plan/SKILL.md" ? ["2026-09-15T10:00:00Z"] : []) });
+    assert.deepEqual(view.stages.map((stage) => stage.count), [1, 1, 1, 0], "one proposed, one kept, one landed, none closed");
+    assert.equal(view.constraint, "landed", "work has reached landing and stopped");
+    assert.equal(view.wip, 1);
+    assert.equal(view.arrivalsPerDay, 0.2, "one proposal over five days");
+    assert.equal(view.waitAtArrivals, 5, "Little's law: one open, a fifth of an arrival a day");
+    assert.equal(view.waitAtClosures, null, "with nothing closed there is no throughput to divide by");
+    assert.equal(view.kept, 1);
+  });
+
+  it("schedules a re-check, and records what the check found", () => {
+    const dir = fiveDayRoot();
+    const before = srv.apiSchedule({ root: dir, commits: () => [] });
+    assert.equal(before.dueCount, 0, "a finding first seen today is due tomorrow");
+    assert.equal(before.next[0].path, "skills/x-plan/SKILL.md");
+    assert.equal(before.next[0].due, "2026-09-18");
+    assert.equal(before.load, 0.8, "a fifth of an arrival a day, times the four checks a widening schedule asks");
+
+    const held = srv.recordReview({ root: dir, path: "skills/x-plan/SKILL.md", outcome: "held", at: "2026-09-18T06:00:00Z" });
+    assert.equal(held.ok, true);
+    assert.equal(held.review.step, 1);
+    const after = srv.apiSchedule({ root: dir });
+    const row = [...after.due, ...after.next].find((entry) => entry.path === "skills/x-plan/SKILL.md");
+    assert.equal(row.interval, 6, "a check that held widens the wait");
+    assert.equal(row.due, "2026-09-24");
+
+    const back = srv.recordReview({ root: dir, path: "skills/x-plan/SKILL.md", outcome: "came-back", at: "2026-09-25T06:00:00Z" });
+    assert.equal(back.review.step, 0, "a finding that came back goes to a one-day interval");
+    assert.equal(back.review.lapses, 1);
+    assert.equal(srv.recordReview({ root: dir, path: "skills/x-plan/SKILL.md", outcome: "nonsense" }).ok, false);
+    assert.match(srv.recordReview({ root: dir, outcome: "held" }).reason, /needs the path/);
+    assert.ok(fs.existsSync(path.join(dir, "reviews.json")), "the reviews live beside the packs");
+  });
+
+  it("reads a broken or absent review file as no reviews rather than throwing", () => {
+    const dir = tmp();
+    assert.deepEqual(srv.readReviews(dir), { updatedAt: null, items: {} });
+    fs.writeFileSync(path.join(dir, "reviews.json"), "not json");
+    assert.deepEqual(srv.readReviews(dir), { updatedAt: null, items: {} });
+    fs.writeFileSync(path.join(dir, "reviews.json"), JSON.stringify({ items: { "a.js": { step: 99, ef: 9, lapses: -1 } } }));
+    const stored = srv.readReviews(dir).items["a.js"];
+    assert.equal(stored.step, 6, "a step beyond the schedule is capped");
+    assert.equal(stored.ef, 2.5, "an easiness factor above the ceiling is the ceiling");
+    assert.equal(stored.lapses, 0);
+  });
+
+  it("answers the five views over http, and takes a review verdict", async () => {
+    const dir = fiveDayRoot();
+    const server = srv.createServer({ root: dir, appDist: path.join(dir, "no-app") });
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const post = (body) =>
+      fetch(`${base}/api/reviews`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    try {
+      for (const route of ["control", "interval", "factors", "flow", "schedule"]) {
+        const response = await fetch(`${base}/api/${route}`);
+        assert.equal(response.status, 200, `${route} answers`);
+        assert.match(response.headers.get("content-type") ?? "", /json/);
+      }
+      const written = await post({ path: "skills/x-plan/SKILL.md", outcome: "held" });
+      assert.equal(written.status, 200);
+      assert.equal((await written.json()).review.step, 1);
+      assert.equal((await (await fetch(`${base}/api/reviews`)).json()).items["skills/x-plan/SKILL.md"].step, 1);
+
+      const refused = await post({ path: "skills/x-plan/SKILL.md", outcome: "maybe" });
+      assert.equal(refused.status, 400);
+      assert.match((await refused.json()).reason, /unknown outcome/);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

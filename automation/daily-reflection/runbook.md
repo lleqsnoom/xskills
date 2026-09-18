@@ -37,6 +37,7 @@ of the automation, so this runbook stops before it.
 | 2 | Choose the sessions worth reflecting on | a short list, at most 4 |
 | 3 | Reflect on each chosen session | `reflections/<session>/E00-reflection.md`, gated by `check-reflection.mjs` |
 | 4 | Write the digest | `.x-skills/daily/<date>/DIGEST.md` |
+| 5 | Re-render the pages, so the digest's proposals are on them | `<run folder>/report.html`, `.x-skills/daily/history.html` |
 
 ## Step 2 — choose the sessions
 
@@ -132,6 +133,31 @@ Rules for the digest:
 - If there is nothing to propose, the digest is three lines: the window, the count, and "no x-skill
   friction in n sessions". Never pad it.
 - Put the digest path in your final message, alone on the last line.
+
+## Step 5 — render the pages
+
+Collection already wrote a page per pack and the index, but it ran before the digest existed, so that page
+carries only the items derived from the axes. Re-render once the digest is written:
+
+```bash
+node skills/x-autoreflection/scripts/render-report.mjs \
+  --days 7 --digest .x-skills/daily/<date>/DIGEST.md --out .x-skills/daily/<date>/report.html
+```
+
+The movement page is written too — one row per skill in use, one column per recorded day, and the axis that
+moved. It is the default page of `npm run report`, and the first thing to read in the morning.
+
+It writes three things beside the pack:
+
+| File | What it is |
+|------|------------|
+| `<pack>/report.html` | the window: a compact list, a matrix, a panel per skill, every open item |
+| `<pack>/todos.md` | the same items as a checklist, one line each |
+| `.x-skills/daily/history.html` | every day on record, one row per skill in use, and what moved |
+
+`.x-skills/daily/history.jsonl` is the record those pages read: one 6 KB line per day, appended by the
+renderer and **never pruned**, because packs are. That is what makes a trend possible at all — a pack
+disappears after 14 days, its scores do not.
 
 ## Rules that span the steps
 

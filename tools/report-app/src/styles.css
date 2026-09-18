@@ -387,3 +387,152 @@ ul.recent { list-style: none; margin: 0 0 .8rem; padding: 0; display: grid; gap:
 .task-line summary::-webkit-details-marker { display: none; }
 .task-line details[open] > summary { color: var(--foreground); }
 .task-line .task-detail-body { padding: .35rem 0 .5rem; max-width: 90ch; }
+
+/* The main screen, five ways. The tab strip is a preference, not a route: a chosen view is a tinted chip
+   (`button.on`), so the one solid control on any of these screens stays the action it asks for. */
+.view-tabs { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; margin-bottom: .35rem; }
+.view-tabs > .dim { font-size: var(--t-chrome); margin-right: .4rem; }
+.view-tabs button { padding: .1rem .5rem; }
+.view-hint { font-size: var(--t-chrome); margin: 0 0 .9rem; }
+/* One explanatory sentence per screen, kept to a measure a reader can follow. */
+.prose { max-width: 90ch; margin: .4rem 0 0; }
+
+/* the ledger: one kept fix a row, its window either side of the day a commit touched the file */
+.ledger { table-layout: fixed; width: 100%; }
+.ledger .l-when { width: 8rem; }
+.ledger .l-skill { width: 9rem; }
+.ledger .l-land { width: 7rem; }
+.ledger .l-move { width: 9rem; }
+.ledger .l-verdict { width: 11rem; }
+.ledger td { vertical-align: middle; }
+.ledger tr.open { background: var(--muted); }
+.ledger .l-verdict .pill + .pill { margin-left: .3rem; }
+
+/* the ratchet: the score as a bar, the floor as a notch. A skill below its floor is the only loud row. */
+.ratchet { display: grid; gap: .1rem; overflow-x: auto; }
+.rat-row { display: grid; align-items: center; gap: .6rem; padding: .24rem .4rem; border-radius: var(--radius-sm);
+  grid-template-columns: 11rem minmax(8rem, 1fr) 4rem minmax(13rem, 1fr) 14rem; }
+.rat-row:hover { background: var(--muted); }
+.rat-row.head { color: var(--muted-foreground); font-size: var(--t-chrome); border-left: 3px solid transparent; }
+.rat-row.head:hover { background: none; }
+.rat-row.below { border-left: 3px solid var(--weak); }
+.rat-row.held, .rat-row.thin { border-left: 3px solid transparent; }
+.rat-row.thin .rat-track { opacity: .55; }
+.rat-track { position: relative; display: block; height: 8px; border-radius: 999px; background: var(--muted); border: 1px solid var(--border); }
+/* currentColor, so the band's own colour class supplies the ink and the number beside it still says the same. */
+.rat-fill { display: block; height: 100%; border-radius: 999px; background: currentColor; }
+.rat-notch { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--foreground); }
+.rat-floor { overflow-wrap: anywhere; }
+.rat-act { display: inline-flex; align-items: center; gap: .35rem; justify-content: flex-end; }
+.rat-act input[type="text"] { min-width: 9rem; }
+@media (max-width: 1000px) {
+  .rat-row { grid-template-columns: 9rem minmax(6rem, 1fr) 3.5rem minmax(6rem, 1fr); }
+  .rat-row .rat-act { grid-column: 1 / -1; justify-content: flex-start; }
+}
+
+/* the bench: one card that is the decision, then what is in flight, queued and waiting on the scan */
+.bench-now { display: grid; gap: .5rem; margin-bottom: 1.5rem; }
+.bench-head { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.bench-act { margin-left: auto; display: inline-flex; align-items: center; gap: .5rem; }
+.bench-why { margin: 0; color: var(--muted-foreground); max-width: 90ch; }
+.bench-change { margin: 0; font-size: var(--t-section); max-width: 90ch; }
+.bench-now .fields { max-width: 90ch; }
+.bench-cols { display: grid; gap: 1rem; align-items: start; margin-top: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr)); }
+.bench-cols h2 { margin-top: 0; }
+.bench-card { display: grid; gap: .3rem; }
+.bench-card p { margin: 0; }
+.bench-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .1rem; }
+.bench-line { display: grid; align-items: baseline; gap: .5rem; padding: .15rem .3rem; border-radius: var(--radius-sm);
+  grid-template-columns: 8rem minmax(0, 1fr) auto auto; }
+.bench-line:hover { background: var(--muted); }
+.bench-line > .dim:last-child { white-space: nowrap; }
+
+/* what keeps coming back: one row a file, its sightings one click away */
+.findings { display: grid; gap: .35rem; }
+.finding { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); }
+.finding.came-back { border-color: color-mix(in srgb, var(--weak) 45%, var(--border)); }
+.finding > summary { display: grid; align-items: center; gap: .5rem; padding: .45rem .6rem; cursor: pointer; list-style: none;
+  grid-template-columns: 7rem 9rem minmax(0, 1fr) 11rem 6rem; }
+.finding > summary::-webkit-details-marker { display: none; }
+.finding[open] > summary { border-bottom: 1px solid var(--border); }
+.finding-path { overflow-wrap: anywhere; }
+.finding-body { padding: .3rem .8rem .7rem; }
+.finding-body p { margin: .3rem 0; max-width: 90ch; }
+.sightings { list-style: none; margin: .5rem 0 0; padding: 0; display: grid; gap: .15rem; }
+.sightings li { display: grid; align-items: baseline; gap: .5rem; padding: .1rem .2rem;
+  grid-template-columns: 6.5rem 2.5rem minmax(0, 1fr) minmax(0, 1fr); }
+.sightings li:hover { background: var(--muted); border-radius: var(--radius-sm); }
+@media (max-width: 1000px) {
+  .finding > summary { grid-template-columns: 7rem minmax(0, 1fr) 6rem; }
+  .finding > summary .finding-count { display: none; }
+  .sightings li { grid-template-columns: 6.5rem minmax(0, 1fr); }
+}
+
+/* the control chart: the record's own limits, and the rule that fired. Only what fired is loud. */
+.ctl { display: grid; gap: .15rem; }
+.ctl-row { display: grid; align-items: center; gap: .6rem; padding: .3rem .4rem; border-radius: var(--radius-sm);
+  grid-template-columns: 11rem minmax(8rem, 1fr) 6rem minmax(12rem, 1.2fr); }
+.ctl-row:hover { background: var(--muted); }
+.ctl-row.alarm { border-left: 3px solid var(--weak); }
+.ctl-row.warn { border-left: 3px solid var(--fair); }
+.ctl-row.quiet { border-left: 3px solid transparent; }
+.ctl-chart { min-width: 0; }
+.ctl-why { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; overflow-wrap: anywhere; }
+.rules td { vertical-align: middle; }
+.rules .num { white-space: nowrap; }
+
+/* the interval: a score, the range it sits in, and what the evidence alone supports */
+.intervals { table-layout: fixed; width: 100%; }
+.intervals .iv-skill { width: 11rem; }
+.intervals .iv-n { width: 6rem; }
+.intervals .iv-score { width: 9rem; }
+.intervals .iv-pm { width: 10rem; }
+.intervals .iv-cons { width: 9rem; }
+.intervals .iv-need { width: 9rem; }
+.intervals td { vertical-align: middle; }
+
+/* the reason codes: a row a skill, the decomposition one click in */
+.factors { display: grid; gap: .35rem; }
+.factor { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); }
+.factor > summary { display: grid; align-items: baseline; gap: .5rem; padding: .45rem .6rem; cursor: pointer; list-style: none;
+  grid-template-columns: 11rem 5rem 10rem minmax(0, 1fr) auto; }
+.factor > summary::-webkit-details-marker { display: none; }
+.factor[open] > summary { border-bottom: 1px solid var(--border); }
+.factor-body { padding: .3rem .8rem .6rem; }
+.factor-body p { margin: .35rem 0 0; max-width: 90ch; }
+.codes td { vertical-align: middle; }
+.codes .num { white-space: nowrap; }
+
+/* the flow: cumulative bands, and the stage where work has stopped */
+.flow-bands { display: grid; gap: .3rem; margin: 0 0 1.25rem; max-width: 60rem; }
+.flow-band { display: grid; align-items: center; gap: .6rem; grid-template-columns: 6rem minmax(0, 1fr) 3rem; }
+.flow-label { font-size: var(--t-chrome); }
+.flow-track { display: block; height: 10px; border-radius: 999px; background: var(--muted); border: 1px solid var(--border); overflow: hidden; }
+.flow-fill { display: block; height: 100%; }
+.flow-fill.proposed { background: var(--unknown); }
+.flow-fill.kept { background: var(--fair); }
+.flow-fill.landed { background: var(--link); }
+.flow-fill.closed { background: var(--good); }
+.flow-grid { display: grid; gap: 1rem; align-items: start; grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr)); }
+.flow-answer { font-size: var(--t-section); margin: .2rem 0 .4rem; }
+.flow-days td { vertical-align: middle; }
+
+/* the schedule: what is due, and the three verdicts a check can produce */
+.schedule { display: grid; gap: .5rem; }
+.review { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: .6rem .7rem; }
+.review.auto { border-color: color-mix(in srgb, var(--weak) 45%, var(--border)); }
+.review-head { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.review-act { margin-left: auto; display: inline-flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+.review-path { margin: .35rem 0 .2rem; overflow-wrap: anywhere; }
+/* A verdict is one of three equal outcomes, so no one of them is the solid control on the page: the
+   destructive one is marked by a word and a border, not by being the only filled button. */
+.review-act button.came-back { border-color: color-mix(in srgb, var(--weak) 45%, var(--border)); color: var(--weak); font-weight: 600; }
+.review p { margin: .25rem 0 0; max-width: 90ch; }
+.due-next td { vertical-align: middle; }
+@media (max-width: 1000px) {
+  .factor > summary { grid-template-columns: 9rem minmax(0, 1fr) auto; }
+  .factor > summary .f-n, .factor > summary .f-gap { display: none; }
+  .ctl-row { grid-template-columns: 9rem minmax(6rem, 1fr) 5rem; }
+  .ctl-row .ctl-why { grid-column: 1 / -1; }
+}

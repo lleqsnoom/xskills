@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js";
-import type { Proposal, TodoItem } from "./api";
+import type { BenchTask, Proposal, TodoItem } from "./api";
 
 /**
  * A proposal and a to-do entry are one thing at two moments in its life: the digest proposes it, the reader
@@ -54,6 +54,24 @@ export function taskFromTodo(item: TodoItem): Task {
     note: item.note,
     from: item.day ?? null,
     inTodo: true,
+  };
+}
+
+/** A proposal the bench picked. It is a proposal, so the same `+ to-do` action applies to it. */
+export function taskFromBench(candidate: BenchTask): Task {
+  return {
+    id: candidate.id,
+    skill: candidate.skill,
+    title: candidate.title,
+    signal: candidate.signal,
+    target: candidate.target,
+    change: candidate.change,
+    reason: candidate.reason ?? null,
+    expected: candidate.expected,
+    route: candidate.route,
+    note: null,
+    from: candidate.day ?? candidate.from ?? null,
+    inTodo: false,
   };
 }
 

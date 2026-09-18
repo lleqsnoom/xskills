@@ -22,6 +22,7 @@ The package has **zero dependencies** — it uses only Node.js built-ins (`fs/pr
 | `node bin/install.js install-all --global --force` | Refreshes every installed skill, replacing existing copies |
 | `node bin/install.js <name>` | Shortcut: installs the named skill |
 | `node bin/install.js help` | Shows usage info |
+| `npm run dev` | Works on the report app: the server under `node --watch` plus Vite with hot reload — `-- --port 8080 --panel` |
 | `npm run report` | Serves the daily metrics on <http://127.0.0.1:8787> — `-- --port 8080 --days 14` |
 | `npm run report:open` | Starts the report if it is not answering, then opens it in an Orca browser tab — `-- --window` for a window with no browser controls |
 
@@ -36,7 +37,7 @@ xskills/
 ├── lib/install.js            # Core logic — install, globalInstall, listSkills
 ├── automation/               # Scheduled maintenance (not published in the npm package)
 │   └── daily-reflection/     # 05:00 Orca job: collect last 24h sessions from every CLI, write a digest
-├── scripts/                  # Repo tooling: sync-run-folders.js, report-server.mjs, report-open.mjs (not published)
+├── scripts/                  # Repo tooling: sync-run-folders.js, dev.mjs, report-server.mjs, report-open.mjs (not published)
 ├── tools/report-app/         # The report app's Solid source, styled in Orca's design language (dist/ and node_modules/ are gitignored)
 └── skills/                   # Skill packages (published as part of the npm package)
     ├── x-commit/             # Conventional commit message helper
@@ -273,6 +274,7 @@ database behind it, whose storage is those JSON files.
 
 ```bash
 npm run report:install              # once: the app's own dependencies
+npm run dev                         # work on the app: server (restarting on change) + Vite hot reload
 npm run report:build                # once, and after any change under tools/report-app
 npm run report:panel                # the Orca plugin's panel: the same app, baked with a snapshot
 npm run report                      # http://127.0.0.1:8787/
@@ -283,25 +285,99 @@ npm run report:open -- --window     # the same, in a window with no browser cont
 npm run report:open -- --print      # say what would happen, and open nothing
 ```
 
-The server only reads, with one exception: the selection a reader makes is written to `todos.json` beside
-the packs, so it survives a restart.
+The server only reads, with three exceptions, all files beside the packs: the selection a reader makes
+(`todos.json`), the floors a reader commits to (`ratchet.json`) and the re-checks a reader records
+(`reviews.json`), so all three survive a restart.
 
 | Route | What it is |
 |-------|------------|
-| `/` | **movement** — the recent days, a calendar for the rest, and one row per skill in use: its line, what moved, and its latest score |
+| `/` | **the main screen**, five views of the record (see below): `movement`, `bench`, `ledger`, `ratchet`, `recurrence` |
 | `/days` | the calendar, every recorded day clickable |
 | `/day/<YYYY-MM-DD>` | one day: its scores, its sessions, and the proposals its `DIGEST.md` asks for |
 | `/day/<date>/session/<id>` | one session's counters, and the signals blamed on it |
 | `/skill/<name>` | one skill: its line, why it moved, what was proposed for it and the signals blamed on it |
 | `/todos` | the selection, editable, written back to `todos.json` |
 | `/api/movement` `/api/days` `/api/day/<date>` `/api/skill/<name>` | the same data as JSON |
-| `/api/refresh` `POST /api/todos` | record the newest day; write the selection |
+| `/api/ledger` `/api/ratchet` `/api/bench` `/api/recurrence` | the work views as JSON |
+| `/api/control` `/api/interval` `/api/factors` `/api/flow` `/api/schedule` | the measurement views as JSON |
+| `/api/refresh` `POST /api/todos` `POST /api/ratchet` `POST /api/reviews` | record the newest day; write the selection; hold a floor in or lower it; record a re-check |
 | `POST /api/open` | open the report where a reader asked for it: `{ surface: "orca" \| "window", path }` |
 | `/history.jsonl` | the raw day-by-day record |
 
 The server answers any extension-less path with the app shell, so a deep link survives a reload, and an
 unbuilt app gets a page naming `npm run report:build` instead of a 404. A reader who is not the app can live
 on `/api/*` alone.
+
+**The main screen is ten views, because one goal cannot be served from one angle.** `?view=` picks one
+(`movement`, `bench`, `ledger`, `ratchet`, `recurrence`, `control`, `interval`, `factors`, `flow`, `schedule`),
+the picker is a tab strip on the screen itself, and
+the choice rides through every link beside `shape`, so a reload or a bookmark lands on the view the reader
+chose. What the five have in common is that each ends in a decision rather than a number:
+
+| View | The question | What is loud |
+|------|--------------|--------------|
+| `movement` | did anything in use get better or worse, and by which axis | a skill whose line went down |
+| `bench` | what is the one fix to do now, and is it done yet | the picked card — `doing` is capped at one |
+| `ledger` | of the fixes I kept, how many held | a fix whose window came back below where it started |
+| `ratchet` | has any skill slipped below the best it has already held | a skill below its floor |
+| `recurrence` | which defects keep coming back | a finding proposed again *after* a fix landed |
+| `control` | is the newest day different from the days before it, in the record's own noise | the rule that fired, with its false-alarm rate |
+| `interval` | what is a score worth, and where does the next session buy the most | the widest interval |
+| `factors` | why is the score that number, in points | the axis costing the most, with its counters |
+| `flow` | is the fixing process keeping up | the stage work has reached and not left |
+| `schedule` | which believed-fixed finding is due for a re-check | a finding the scan already caught coming back |
+
+Three of those need a fact no pack holds: **when a fix landed**. `scripts/report-server.mjs` asks git for the
+commits to the file a proposal's `Target:` names (`git log --format=%cI -- <path>`, as argv and after `--`),
+memoised per file and injected through a `commits` seam so a test needs no repository. That one fact is what closes the loop the
+panel otherwise only records: proposal → kept (`todos.json`) → landed (git) → measured (the day's line).
+
+- **ledger** measures `?window=` (default 2) *measured* days either side of the day a commit touched the file,
+  waits for the whole window before it says anything, and calls a move under ±2 points flat — the noise the
+  movement table already treats as flat. A commit that predates the day the reader kept the fix is context,
+  not a landing, and is shown as such: a fix must not take credit for an earlier commit.
+- **ratchet** holds a floor per skill in `ratchet.json`. The floor is the best *sustained* run of measured days
+  (3 by default), the whole window's score when the record is too short for a run, or a value the reader
+  committed to — `source` says which, and the basis is printed beside it. A day below the sample floor can
+  neither hold nor break a floor, and lowering one is refused without a reason: RuboCop's todo lesson is that
+  re-baselining silently absorbs whatever went wrong.
+- **bench** picks with `severity × (1 + 0.5 × days seen) ÷ check cost`, and the `why` is part of the answer. A
+  fix with no check costs three times as much to prove, because it cannot be proven.
+- **recurrence** groups findings by *file*, not by improvement class: the class is written by the reflection and
+  its wording drifts between runs (one digest files a defect as `doc-command-drift:`, the next as
+  `` `x-epic`: ``), so grouping by it would orphan the history and read as progress. A sighting after the last
+  commit to the file is the finding "coming back"; a finding with a fix and no sighting for 7 days is *closed by
+  evidence*, and says how long the quiet has lasted rather than claiming certainty.
+
+The last five measure the measurement itself, each borrowing a rule a field already settled:
+
+- **control** builds a Levey-Jennings chart per skill the way a lab does: the centre and the spread come from a
+  **baseline period** (every measured day but the ones under judgement, at least `minDays`), the last up to
+  seven days are judged against it, and the rules are Westgard's multirule set (`1_3s`, `1_2s` as a *warning*,
+  `2_2s`, `4_1s`, `10x`, `7T`) with each one's false alarm computed from the normal tail and printed beside it.
+  The fleet's expected false alarms come with it: at 28 skills a 2s rule rings about once a day on nothing,
+  which is the arithmetic that decides the rule set. A day nobody loaded is a baseline, never a measurement.
+- **interval** puts a standard error on a score from the denominators its axes were measured over
+  (`σ/√n`; a rate's variance is `r(1−r)/n`), prints the score the evidence alone supports (TrueSkill's μ − 3σ),
+  and says how many sessions would halve the interval, which is always four times what the skill has.
+- **factors** decomposes the gap from 100 into the points each axis costs (`100·Σw(1−r)/Σw`) with the counters
+  behind it, and simulates one axis at a target. The target is the reader's: on this record the fleet's own
+  trigger rate is 23% because these CLIs name far more skills than they load, and aiming at it *costs* points.
+  It reads the newest day's tallies, not the movement table, because the skills with the widest gaps are the
+  ones no session ever loaded.
+- **flow** is Little's law over the pipeline: proposals → kept → landed → closed, the arrivals and closures a
+  day, the wait the open queue implies, and the constraint as the deepest stage work has reached and not left.
+  A closure is dated by the rule that produces it (last fix + the quiet week), which the view says.
+- **schedule** is SM-2 over findings: intervals of 1, then 6 days, then ×easiness (floored at 1.3), a lapse
+  back to one day, and `reformulate` after two — Wozniak's own conclusion, that an item which keeps failing has
+  a flaw in how it is written. A finding the scan already caught coming back is answered for free (`auto`), so
+  the list asks a human only for what the scanner cannot see. It is the second file the app writes
+  (`reviews.json`, beside `todos.json` and `ratchet.json`).
+
+The arithmetic lives in `scripts/report-views.mjs` and every rule is a pure function of records the packs
+already hold plus the `commits`, `applied` and `sigma` seams, so `test/report-app.test.cjs` drives all of it
+without a repository. `report-panel.mjs` bakes all nine payloads into the plugin's panel beside the movement
+one, so a panel answers every view with no network.
 
 **A day is one screen.** `/day/<date>` shows the header and the digest's proposals, and nothing else: the
 scores, the sessions and the signals — everything the pack holds — sit inside one `<details class="evidence">`,

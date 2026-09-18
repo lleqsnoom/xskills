@@ -2,6 +2,7 @@ import { For, Match, Show, Switch, createResource, createSignal } from "solid-js
 import { api, isSnapshot, type MovementPage } from "./api";
 import { bakedReport } from "./baked.mjs";
 import { current, linkProps, type Route } from "./router";
+import { currentView, VIEWS } from "./views";
 import { Movement } from "./components/Movement";
 import { DaysView } from "./components/DaysView";
 import { DayView } from "./components/DayView";
@@ -114,11 +115,11 @@ export function App() {
   );
 }
 
-/** What the pane title bar says: which screen this is. The heading below it is the page's own headline. */
+/** What the pane title bar says: which screen this is — and for the main one, which view of the record. */
 function label(route: Route): string {
   switch (route.name) {
     case "movement":
-      return "Movement";
+      return VIEWS.find((view) => view.id === currentView())?.label ?? "Movement";
     case "days":
       return "Days";
     case "todos":

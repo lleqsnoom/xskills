@@ -288,9 +288,10 @@ function worthReading(signals: Signal[]): number {
  * digest's label), so the row stops offering itself the moment it is on the list — including on a reload, and
  * including for entries that were saved before the list recorded which day they came from.
  */
-function TodoButton(props: { task: Task }) {
+export function TodoButton(props: { task: Task }) {
   const [added, setAdded] = createSignal(props.task.inTodo);
-  const [error, setError] = createSignal("");  const todo = (): TodoItem => ({
+  const [error, setError] = createSignal("");
+  const todo = (): TodoItem => ({
     id: props.task.id,
     day: props.task.from,
     skill: props.task.skill,

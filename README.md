@@ -85,12 +85,19 @@ xskills <skill-name>
 
 ```bash
 npm run report:install          # once: the app's own dependencies
+npm run dev                     # working on the app: the server and hot reload, started together
 npm run report:build            # once, and after any change under tools/report-app
 npm run report:panel            # the Orca plugin's panel: the same app, baked with a snapshot
 npm run report                  # http://127.0.0.1:8787/ — movement per skill, per day
 npm run report:open             # start it if it is not running, then open it in an Orca tab
 npm run report:window           # the same, in a window with no browser controls (chrome --app)
 ```
+
+`npm run dev` runs two processes: the report server under `node --watch`, so an edit to it or to anything it
+imports restarts it, and Vite on <http://127.0.0.1:5173/>, which hot-reloads the page and proxies `/api` to the
+server. Edit a component and the browser updates; edit the server and it comes back on its own. Pass
+`--port <n>` to move the server (Vite is told where it went), `--panel` to bake the Orca panel on every restart,
+or `--no-watch` to leave the server alone.
 
 The app is styled in Orca's own design language — its theme tokens, its Geist font, its radius and badge
 recipes — so the report reads as another pane of the same application. `Run` in its title bar opens (or

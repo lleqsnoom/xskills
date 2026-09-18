@@ -72,7 +72,7 @@ export function navigate(to: Route, { replace = false } = {}) {
 /** The attrs a link needs, in the shape the JSX spread accepts: an href, or a role and a tab stop. */
 function navAttrs(to: Route): { href?: string; role?: "link"; tabindex?: number } {
   // `baked.mjs` is JavaScript, so the literal type of `role` is lost at the boundary: declare it here.
-  return navProps({ baked, href: withShape(href(to)) }) as { href?: string; role?: "link"; tabindex?: number };
+  return navProps({ baked, href: withQuery(href(to)) }) as { href?: string; role?: "link"; tabindex?: number };
 }
 
 /**
@@ -102,10 +102,17 @@ export function linkProps(to: Route) {
 }
 
 /**
- * Carry the task shape through a link. It is a reading preference rather than a route, so it rides in the
- * query: a reload or a bookmark lands on the shape the reader picked.
+ * Carry the reading preferences through a link: the task shape, and which view of the record is open. Both are
+ * preferences rather than routes, so they ride in the query, and a reload or a bookmark lands on the shape and
+ * the view the reader chose.
  */
-function withShape(path: string): string {
-  const shape = new URLSearchParams(baked ? "" : window.location.search).get("shape");
-  return shape ? `${path}${path.includes("?") ? "&" : "?"}shape=${shape}` : path;
+function withQuery(path: string): string {
+  const here = new URLSearchParams(baked ? "" : window.location.search);
+  const carried = new URLSearchParams();
+  for (const key of ["shape", "view"]) {
+    const value = here.get(key);
+    if (value) carried.set(key, value);
+  }
+  const query = carried.toString();
+  return query ? `${path}${path.includes("?") ? "&" : "?"}${query}` : path;
 }
