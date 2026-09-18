@@ -11,9 +11,6 @@ const WORKER = path.join(PLUGIN, "main.mjs");
 const MANIFEST = path.join(PLUGIN, "orca-plugin.json");
 const ORIGIN = "http://127.0.0.1:8787";
 
-/** What a plugin gets instead of the real bake: the baker has its own tests, and no test runs the CLI. */
-const noBake = async () => ({ baked: false, reason: "test" });
-
 /** A Response good enough for the worker: `ok`, `status`, `json()` and `text()`. */
 function respond(body, status = 200, contentType = "application/json") {
   return {
@@ -107,7 +104,7 @@ describe("orca plugin — the report in an Orca tab", async () => {
 
   it("registers the open command and records where the worker runs", () => {
     const host = makeHost();
-    worker.default(host.orca, { fetch: makeFetch([]), bakePanel: noBake });
+    worker.default(host.orca, { fetch: makeFetch([]) });
 
     assert.ok(host.commands.has("report-open"), "the palette entry this layer promised");
     assert.match(host.logs.join("\n"), new RegExp(process.cwd().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
@@ -116,7 +113,7 @@ describe("orca plugin — the report in an Orca tab", async () => {
   it("probes the report and reads its newest day", async () => {
     const host = makeHost();
     const fetchStub = makeFetch([{ url: `${ORIGIN}/api/days`, body: DAYS }]);
-    const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub, bake: noBake });
+    const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub });
 
     assert.deepEqual(await plugin.probe(), {
       up: true,
@@ -132,7 +129,7 @@ describe("orca plugin — the report in an Orca tab", async () => {
       { url: `${ORIGIN}/api/days`, body: DAYS },
       { url: `${ORIGIN}/api/open`, method: "POST", body: OPENED },
     ]);
-    const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub, bake: noBake });
+    const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub });
 
     await plugin.open();
 
@@ -150,7 +147,7 @@ describe("orca plugin — the report in an Orca tab", async () => {
       { url: `${ORIGIN}/api/days`, body: { dates: [], recent: [], calendar: [] } },
       { url: `${ORIGIN}/api/open`, method: "POST", body: OPENED },
     ]);
-    const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub, bake: noBake });
+    const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub });
 
     assert.deepEqual(await plugin.probe(), { up: true, origin: ORIGIN, day: null, dates: [] });
     await plugin.open();
@@ -160,7 +157,7 @@ describe("orca plugin — the report in an Orca tab", async () => {
   it("says what to run when nothing answers", async () => {
     const host = makeHost();
     const fetchStub = refusing();
-    const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub, bake: noBake });
+    const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub });
 
     await plugin.open();
 
@@ -176,7 +173,7 @@ describe("orca plugin — the report in an Orca tab", async () => {
       { url: `${ORIGIN}/api/days`, body: { hello: "world" } },
       { url: `${ORIGIN}/api/open`, method: "POST", body: OPENED },
     ]);
-    const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub, bake: noBake });
+    const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub });
 
     const probe = await plugin.probe();
     assert.equal(probe.up, false);
@@ -192,7 +189,7 @@ describe("orca plugin — the report in an Orca tab", async () => {
     const fetchStub = makeFetch([
       { url: `${ORIGIN}/api/days`, body: "<!doctype html><h1>hello</h1>", contentType: "text/html" },
     ]);
-    const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub, bake: noBake });
+    const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub });
 
     const probe = await plugin.probe();
     assert.equal(probe.up, false);
@@ -210,7 +207,7 @@ describe("orca plugin — the report in an Orca tab", async () => {
         body: { ok: false, surface: "orca", how: "create-failed", url: ORIGIN, message: "Orca would not open a tab: no runtime" },
       },
     ]);
-    const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub, bake: noBake });
+    const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub });
 
     await plugin.open();
 
@@ -226,7 +223,7 @@ describe("orca plugin — the report in an Orca tab", async () => {
           reject(Object.assign(new Error("The operation was aborted"), { name: "AbortError" }));
         });
       });
-    const plugin = worker.createPlugin({ orca: host.orca, fetch: hung, timeoutMs: 20, bake: noBake });
+    const plugin = worker.createPlugin({ orca: host.orca, fetch: hung, timeoutMs: 20 });
 
     const probe = await plugin.probe();
 
@@ -272,7 +269,6 @@ describe("orca plugin — the probe proves identity, and the plugin stays on thi
       orca: host.orca,
       fetch: fetchStub,
       url: "http://192.168.1.5:8787",
-      bake: noBake,
     });
 
     const probe = await plugin.probe();
@@ -288,7 +284,7 @@ describe("orca plugin — the probe proves identity, and the plugin stays on thi
   it("tells a stranger on the port apart from a server that is not running", async () => {
     const host = makeHost();
     const fetchStub = makeFetch([{ url: `${ORIGIN}/api/days`, body: "<h1>hello</h1>", contentType: "text/html" }]);
-    const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub, bake: noBake });
+    const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub });
 
     const probe = await plugin.probe();
     await plugin.open();
@@ -383,7 +379,7 @@ describe("orca plugin — the report's address comes from the plugin's own setti
       { url: "http://127.0.0.1:9000/api/days", body: DAYS },
       { url: "http://127.0.0.1:9000/api/open", method: "POST", body: OPENED },
     ]);
-    const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub, bake: noBake });
+    const plugin = worker.createPlugin({ orca: host.orca, fetch: fetchStub });
 
     await plugin.open();
     await plugin.probe();
@@ -415,7 +411,7 @@ describe("orca plugin — status, refresh and start", async () => {
   function plugin({ answers = {}, routes = [], fetch: fetchImpl, url } = {}) {
     const host = makeHost(answers);
     const fetchStub = fetchImpl ?? makeFetch(routes);
-    const instance = worker.createPlugin({ orca: host.orca, fetch: fetchStub, url, bake: noBake });
+    const instance = worker.createPlugin({ orca: host.orca, fetch: fetchStub, url });
     instance.register();
     return { host, fetchStub, run: (id) => host.commands.get(id)() };
   }
@@ -616,8 +612,6 @@ describe("orca plugin — the manifest and the key it answers to", async () => {
     "settings:own",
   ]);
   const EVENTS = new Set(["worktree.created", "worktree.removed", "agent.status.changed"]);
-  /** Declared by the manifest and written by the tooling rather than by hand, so a clone may not have it. */
-  const GENERATED = new Set(["panel.html"]);
   const SLUG = /^[a-z0-9][a-z0-9.-]*$/;
   const SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
   const bindingKey = (binding) =>
@@ -648,9 +642,6 @@ describe("orca plugin — the manifest and the key it answers to", async () => {
 
     const files = [manifest.main, ...(contributes.panels ?? []).map((panel) => panel.entry)];
     for (const file of files.filter(Boolean)) {
-      // The panel is generated (gitignored): a clone that has not baked yet has no file, and that is a panel
-      // with nothing in it rather than a plugin that does not load. The baker has its own tests.
-      if (GENERATED.has(file)) continue;
       if (!exists(path.join(PLUGIN, file))) issues.push(`missing file ${file}`);
     }
 
@@ -753,7 +744,7 @@ describe("orca plugin — it speaks once when a day lands", async () => {
       { url: `${ORIGIN}/api/open`, method: "POST", body: OPENED },
       ...routes,
     ]);
-    const instance = worker.createPlugin({ orca: host.orca, fetch: fetchStub, bake: noBake });
+    const instance = worker.createPlugin({ orca: host.orca, fetch: fetchStub });
     instance.register();
     return { host, fetchStub, run: (id) => host.commands.get(id)(), check: () => instance.check() };
   }
@@ -856,7 +847,7 @@ describe("orca plugin — it speaks once when a day lands", async () => {
       "storage.set": { ok: false, code: "capability_denied", error: "storage was not granted" },
     });
     const fetchStub = makeFetch(reportRoutes());
-    const instance = worker.createPlugin({ orca: host.orca, fetch: fetchStub, bake: noBake });
+    const instance = worker.createPlugin({ orca: host.orca, fetch: fetchStub });
 
     const result = await instance.check();
 
@@ -1017,10 +1008,13 @@ describe("orca plugin — Orca's events wake the check, and a down server is sil
   });
 });
 
-describe("orca plugin — the panel tab", async () => {
+describe("orca plugin — the panel is a document, and the plugin is a tree nobody writes to", async () => {
   const PANEL = path.join(PLUGIN, "panel.html");
   const manifest = () => JSON.parse(fs.readFileSync(MANIFEST, "utf8"));
   const gitignore = () => fs.readFileSync(path.join(ROOT, ".gitignore"), "utf8");
+  const panel = () => fs.readFileSync(PANEL, "utf8");
+  const worker = () => fs.readFileSync(WORKER, "utf8");
+  const posted = () => [...panel().matchAll(/call\(\s*"([^"]+)"/g)].map((match) => match[1]);
 
   it("is contributed as a panel named after the plugin", () => {
     assert.deepEqual(manifest().contributes.panels, [
@@ -1028,17 +1022,32 @@ describe("orca plugin — the panel tab", async () => {
     ]);
   });
 
-  it("is generated, so a clone that has not baked has no panel yet", () => {
-    assert.match(gitignore(), /tools\/orca-plugin\/panel\.html/, "the baked panel is not committed");
-    assert.equal(manifest().contributes.panels[0].entry, "panel.html");
+  it("is committed, so the panel a reader runs is the panel that was reviewed", () => {
+    assert.ok(fs.existsSync(PANEL), "the panel ships with the plugin");
+    assert.doesNotMatch(gitignore(), /panel\.html/, "nothing in this plugin is generated at install time");
   });
 
-  it("is the app on a snapshot once it is baked: one file, no external reference", () => {
-    if (!fs.existsSync(PANEL)) return; // generated: the baker, and its tests, live in test/report-app.test.cjs
-    const html = fs.readFileSync(PANEL, "utf8");
+  it("is never written by a run: a plugin is a content-hashed tree", () => {
+    // Orca's consent fingerprint covers the hash of every file in a plugin tree that contributes instructional
+    // content (this one has a keybinding), so a run that rewrote one of them would ask the reader to approve
+    // the plugin again — "reinstall on a data change". Nothing here may write, and nothing bakes.
+    const writes = [/writeFile/, /mkdirSync/, /\brm\s*\(/, /report-panel/, /dist-panel/, /node:fs/, /node:path/];
+    for (const write of writes) {
+      assert.doesNotMatch(worker(), write, "the worker may not touch a file");
+    }
+    // The server writes — that is the to-do selection — but not into the plugin, and it has no baker to run.
+    const server = fs.readFileSync(path.join(ROOT, "scripts", "report-server.mjs"), "utf8");
+    for (const bake of [/orca-plugin/, /panel\.html/, /report-panel/, /dist-panel/]) {
+      assert.doesNotMatch(server, bake, "nothing generates the prompt's panel");
+    }
+    const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
+    assert.equal(scripts["report:panel"], undefined, "there is no baker to run");
+  });
 
-    assert.match(html, /window\.__REPORT__ = \{/, "the snapshot the app answers from");
-    assert.match(html, /"\/api\/movement"/);
+  it("carries no copy of the record, and no way to fetch one", () => {
+    const html = panel();
+    assert.doesNotMatch(html, /window\.__REPORT__/, "a snapshot in here would be stale the moment it was written");
+    assert.doesNotMatch(html, /["'`]\/api\//, "a panel has connect-src 'none', so it cannot ask for data");
     for (const external of [
       /<script[^>]+\bsrc=/i,
       /<link[^>]+\bhref="(?!data:)/i,
@@ -1049,146 +1058,62 @@ describe("orca plugin — the panel tab", async () => {
     }
   });
 
-  it("hands a link that lost its href the pointer its role promises", () => {
-    if (!fs.existsSync(PANEL)) return;
-    // The host swallows clicks on `<a href>`, so the panel's links carry a role instead — and a browser gives
-    // an anchor without an href the text cursor, which is what "every button shows an I-beam" was.
-    assert.match(fs.readFileSync(PANEL, "utf8"), /a\[role=["']?link["']?\]\s*\{[^}]*cursor:\s*pointer/);
+  it("posts only the one action a panel may safely post", () => {
+    assert.deepEqual([...new Set(posted())], ["workspace.readContext"]);
+    assert.match(panel(), /orca-panel-action-result/);
+  });
+
+  it("says where the report is, and that the pane is not it", () => {
+    const html = panel();
+    assert.match(html, /127\.0\.0\.1:8787/, "the address the report is served at");
+    assert.match(html, /cannot write/, "a pane cannot write, and the panel says so rather than offering a button");
+    assert.doesNotMatch(html, /<button\b/, "the host cannot tell a shell from an agent session, so it types into nothing");
+  });
+
+  it("names the two ways to open the report for real", () => {
+    const html = panel();
+    assert.match(html, /x-skills report: Open/);
+    assert.match(html, /Ctrl\+J/);
+    assert.match(html, /Ctrl\+Alt\+X/);
+    assert.match(html, /“J|⌘J/);
+  });
+
+  it("has words for every state it can be in", () => {
+    const html = panel();
+    for (const state of ["Reading the focused worktree", "No worktree is focused"]) {
+      assert.ok(html.includes(state), `the panel needs the state: ${state}`);
+    }
+    assert.match(html, /displayName/);
+    assert.match(html, /branch/);
+  });
+
+  it("keeps the panel's type and spacing scales", () => {
+    const html = panel();
+    for (const size of [...html.matchAll(/font-size:\s*(\d+)px/g)].map((match) => Number(match[1]))) {
+      assert.ok([12, 14, 16].includes(size), `${size}px is off the panel's type scale`);
+    }
   });
 });
 
-describe("orca plugin — the worker bakes the panel too", async () => {
+describe("orca plugin — the worker asks, and writes nothing", async () => {
   const worker = await import(WORKER);
-  const log = () => {};
+  const source = () => fs.readFileSync(WORKER, "utf8");
 
-  const listed = (worktrees) => ({ code: 0, stdout: JSON.stringify({ result: { worktrees } }), stderr: "" });
-  const context = (branch) => ({ "workspace.readContext": { ok: true, value: { branch, displayName: "x", terminals: [] } } });
-
-  it("asks Orca which path the focused branch is in", async () => {
-    const host = makeHost(context("refs/heads/main"));
-
-    const root = await worker.findReportRoot({
-      orca: host.orca,
-      own: {},
-      log,
-      run: () => listed([{ path: "/repo", branch: "refs/heads/other" }, { path: "/wanted", branch: "refs/heads/main" }]),
-    });
-
-    assert.equal(root, "/wanted");
-    assert.equal(
-      host.calls.find((call) => call.method === "storage.set").params.value,
-      "/wanted",
-      "so the next wake does not ask again"
-    );
-  });
-
-  it("takes a root the reader set without asking the CLI at all", async () => {
-    const host = makeHost(context("refs/heads/main"));
-    let asked = 0;
-
-    const root = await worker.findReportRoot({
-      orca: host.orca,
-      own: { reportRoot: "/configured" },
-      log,
-      run: () => {
-        asked += 1;
-        return listed([]);
-      },
-    });
-
-    assert.equal(root, "/configured");
-    assert.equal(asked, 0);
-  });
-
-  it("remembers what it found, so a later wake is one storage read", async () => {
-    const host = makeHost({
-      ...context("refs/heads/main"),
-      "storage.get": { ok: true, value: { value: "/remembered" } },
-    });
-    let asked = 0;
-
-    const root = await worker.findReportRoot({
-      orca: host.orca,
-      own: {},
-      log,
-      run: () => {
-        asked += 1;
-        return listed([]);
-      },
-    });
-
-    assert.equal(root, "/remembered");
-    assert.equal(asked, 0);
-  });
-
-  it("says so, and bakes nothing, when no worktree answers", async () => {
-    const host = makeHost(context("refs/heads/main"));
-    const said = [];
-
-    const root = await worker.findReportRoot({
-      orca: host.orca,
-      own: {},
-      log: (line) => said.push(line),
-      run: () => listed([{ path: "/repo", branch: "refs/heads/elsewhere" }]),
-    });
-
-    assert.equal(root, null);
-    assert.match(said.join("\n"), /no worktree in Orca is on refs\/heads\/main/);
-  });
-
-  it("bakes through the repository's own baker, at the paths the report lives at", async () => {
-    const host = makeHost(context("refs/heads/main"));
-    const calls = [];
-
-    const result = await worker.bakePanel({
-      orca: host.orca,
-      own: { reportRoot: "/repo" },
-      log,
-      loadBaker: async (root) => {
-        calls.push(root);
-        return {
-          bakeIfStale: (args) => {
-            calls.push(args);
-            return { baked: true, stamp: "2026-09-17:1:2" };
-          },
-        };
-      },
-    });
-
-    assert.deepEqual(calls, [
-      "/repo",
-      {
-        root: path.join("/repo", ".x-skills", "daily"),
-        dist: path.join("/repo", "tools", "report-app", "dist-panel"),
-        out: path.join("/repo", "tools", "orca-plugin", "panel.html"),
-      },
-    ]);
-    assert.equal(result.baked, true);
-  });
-
-  it("survives a baker that throws, and says why", async () => {
-    const host = makeHost(context("refs/heads/main"));
-    const said = [];
-
-    const result = await worker.bakePanel({
-      orca: host.orca,
-      own: { reportRoot: "/repo" },
-      log: (line) => said.push(line),
-      loadBaker: async () => ({
-        bakeIfStale: () => {
-          throw new Error("no built panel in dist-panel");
-        },
-      }),
-    });
-
-    assert.equal(result.baked, false);
-    assert.match(said.join("\n"), /could not bake the panel: no built panel in dist-panel/);
-  });
-
-  it("runs the Orca CLI, and never a server of its own", () => {
-    const source = fs.readFileSync(WORKER, "utf8");
+  it("runs no process, and never becomes a server of its own", () => {
     for (const own of [/(?<!Sync)\bspawn\s*\(/, /\bexec\s*\(/, /\bexecFile\s*\(/, /\bfork\s*\(/, /\bcreateServer\s*\(/, /\.listen\s*\(/]) {
-      assert.doesNotMatch(source, own, "the plugin asks Orca; it does not become a server");
+      assert.doesNotMatch(source(), own, "the plugin asks Orca; it does not become a server");
     }
+  });
+
+  it("imports nothing that could touch a file", () => {
+    assert.doesNotMatch(source(), /node:child_process/);
+    assert.doesNotMatch(source(), /node:fs/);
+    assert.doesNotMatch(source(), /node:path/);
+  });
+
+  it("is a client of the live report, at the one address it may talk to", () => {
+    assert.match(source(), /DEFAULT_URL = "http:\/\/127\.0\.0\.1:8787"/);
+    assert.equal(typeof worker.loopbackOrigin, "function");
+    assert.equal(typeof worker.createPlugin, "function");
   });
 });

@@ -5,6 +5,11 @@ The plugin opens the report as a full-area Orca **browser tab**, and that is as 
 written to be filed on `github.com/stablyai/orca/issues` as it stands, and nothing here is speculation about
 the host.
 
+The panel this plugin ships today is a consequence of that limit: a small, static document that names the
+report's address, the focused worktree and the two ways to open the report. It carries no data — a snapshot
+would have to be *written into the plugin's files*, and Orca binds a reader's consent to the hash of those
+files, so a panel refreshed by a bake is a plugin that asks to be installed again on every data change.
+
 Verified against Orca 1.4.199 (`/usr/lib/orca-ide/app.asar`) and `github.com/stablyai/orca`
 (`src/shared/plugins/`, `src/main/plugins/`) on 2026-09-17.
 
@@ -73,9 +78,12 @@ style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-
 >
 > ### What I will do when it lands
 >
-> Ship the pane behind a probe: the panel tries the request and falls back to a card naming the two possible
-> causes (blocked, or not running) when it cannot. The commands, the keybinding, the notifications and the
-> browser-tab path all stay, so an Orca without it is unaffected.
+> Ship the pane behind a probe: the panel fetches the report from the declared origin and falls back to the card
+> it shows today — the address and the two ways in — when the request fails, naming the two possible causes
+> (blocked, or not running). Because the loaded page is the app the server serves, the pane reads *and writes*:
+> `+ to-do`, `remove` and `clear` work in the panel, and nothing about the record is copied into the plugin.
+> The commands, the keybinding, the notifications and the browser-tab path all stay, so an Orca without it is
+> unaffected.
 >
 > ### If the answer is no
 >

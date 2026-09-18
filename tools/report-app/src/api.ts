@@ -1,16 +1,5 @@
 /** The shapes `scripts/report-server.mjs` answers with, and the one place that fetches them. */
 
-import { bakedAt, bakedReport, missingSentence, writeRefused } from "./baked.mjs";
-
-/** True when this build is a baked panel: answers come from the snapshot, and nothing is written. */
-export const isSnapshot = () => bakedReport() !== null;
-
-/** The app has six read routes and two writes, and a snapshot can only serve the reads. */
-function refuseInSnapshot(path: string): void {
-  const snapshot = bakedReport();
-  if (snapshot) throw new Error(writeRefused(snapshot, path));
-}
-
 export type Band = { key: "good" | "fair" | "weak" | "unknown"; label: string };
 
 export type AxisName = "conformance" | "adherence" | "trigger" | "rework" | "protocol";
@@ -217,12 +206,6 @@ export type SessionDetail = { date: string; session: Session; signals: Signal[] 
 const cache = new Map<string, Promise<unknown>>();
 
 async function get<T>(path: string): Promise<T> {
-  const snapshot = bakedReport();
-  if (snapshot) {
-    const payload = bakedAt(snapshot, path);
-    if (payload === null) throw new Error(missingSentence(snapshot, path));
-    return payload as T;
-  }
   const cached = cache.get(path);
   if (cached) return cached as Promise<T>;
   const request = (async () => {
@@ -257,7 +240,6 @@ export const api = {
   },
   invalidate: () => cache.clear(),
   saveTodos: async (items: TodoItem[]): Promise<Todos> => {
-    refuseInSnapshot("/api/todos");
     const response = await fetch("/api/todos", {
       method: "POST",
       headers: { "content-type": "application/json" },

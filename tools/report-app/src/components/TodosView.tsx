@@ -1,5 +1,5 @@
 import { Show, createResource, createSignal } from "solid-js";
-import { api, isSnapshot, type TodoItem } from "../api";
+import { api, type TodoItem } from "../api";
 import { improvementBrief } from "../brief.mjs";
 import { settled } from "../resource.mjs";
 import { taskFromTodo, type Task } from "../tasks";
@@ -65,11 +65,9 @@ export function TodosView() {
               >
                 copy the brief
               </Button>
-              <Show when={!isSnapshot()}>
-                <Button onClick={clear} disabled={!current().length}>
-                  clear
-                </Button>
-              </Show>
+              <Button onClick={clear} disabled={!current().length}>
+                clear
+              </Button>
               <Show when={status()}>
                 <span class="text-chrome text-muted-foreground">{status()}</span>
               </Show>
@@ -81,11 +79,9 @@ export function TodosView() {
             tasks={current().map(taskFromTodo)}
             empty="Nothing on the list. Open a day and use “+ to-do” on a proposal, and it lands here — and in .x-skills/daily/todos.json."
             action={(task) => (
-              <Show when={!isSnapshot()} fallback={<span class="dim">a snapshot cannot write</span>}>
-                <Button variant="outline" onClick={() => remove(task)} title={`drop ${task.id} from the list`}>
-                  remove
-                </Button>
-              </Show>
+              <Button variant="outline" onClick={() => remove(task)} title={`drop ${task.id} from the list`}>
+                remove
+              </Button>
             )}
           />
         </>

@@ -1,5 +1,5 @@
 import { For, Show, createResource, createSignal } from "solid-js";
-import { api, isSnapshot, type Day, type Signal, type TodoItem } from "../api";
+import { api, type Day, type Signal, type TodoItem } from "../api";
 import { linkProps } from "../router";
 import { Bar } from "./charts";
 import { Card, CardHead, CardName } from "./Card";
@@ -312,7 +312,7 @@ export function TodoButton(props: { task: Task }) {
     }
   };
   return (
-    <Show when={!isSnapshot()} fallback={<span class="dim">a snapshot cannot write</span>}>
+    <>
       <Button
         variant={added() ? "outline" : "primary"}
         onClick={add}
@@ -324,6 +324,6 @@ export function TodoButton(props: { task: Task }) {
       <Show when={error()}>
         <span class="failed text-chrome">{error()}</span>
       </Show>
-    </Show>
+    </>
   );
 }

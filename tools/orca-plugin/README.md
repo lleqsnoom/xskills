@@ -1,10 +1,11 @@
 # x-skills report — an Orca plugin
 
-The [x-skills daily report](../../README.md) as a full-area Orca tab: one command opens it, and soon a
-notification says when a new day has landed.
+The [x-skills daily report](../../README.md) as a full-area Orca tab: one command opens it, and a notification
+says when a new day has landed.
 
 The report itself is the standalone server in `scripts/report-server.mjs`. This plugin is an adapter over it:
-it asks the server to show itself, and it reads the server's API. Nothing in this folder renders the report.
+it asks the server to show itself, and it reads the server's API. Nothing in this folder renders the report,
+and nothing in it is written at runtime — a plugin's files are its consent.
 
 ## Install (development)
 
@@ -38,66 +39,53 @@ A command that finds nothing answering says so, and says what to run. `Record` n
 
 ## The panel
 
-`panel.html` is a right-sidebar panel tab, titled `x-skills report` after the manifest — and it is **the
-report's own UI**: the same Solid app the server serves, built to one file with the API payloads baked in.
+`panel.html` is a right-sidebar panel tab, titled `x-skills report` after the manifest, and it is a **static
+document committed with the plugin**: it names the address the report is served at, shows the focused worktree,
+and names the two ways to open the report for real. There is no build step, and nothing generates it.
 
-```bash
-npm run report:panel   # build the panel bundle, then bake the snapshot into tools/orca-plugin/panel.html
+That is a constraint, not a preference. Orca injects this policy into every panel —
+
+```
+Content-Security-Policy: default-src 'none'; connect-src 'none'; script-src 'unsafe-inline'; …
 ```
 
-A panel is a sandboxed document with `connect-src 'none'`, so it cannot fetch. What it can do is run inline
-script and style, and Orca re-reads its entry file on every open — so the app answers from `window.__REPORT__`
-(a snapshot of movement, days, todos, every day the rail and the calendar can reach — each with its sessions —
-and the skills in use) instead of from the network.
+— and cancels navigations, form submissions, clicks on `<a href>` and `window.open`. So a panel cannot fetch
+the report, cannot load a page from it, and cannot navigate to it. A panel may call exactly three host actions
+(`workspace.readContext`, which this one uses for the worktree line; `terminal.sendText`; and
+`notifications.show`), and there is no host-to-panel data channel: nothing can push the record into this
+folder, and the panel cannot ask the worker for it either.
 
-**Two callers keep that snapshot current, and they share one baker** (`scripts/report-panel.mjs`, the same
-module the standalone report uses):
+**A plugin's files are immutable at runtime**, and that is the second reason. Orca's consent fingerprint covers
+the hash of every file in a plugin tree that contributes instructional content — this one contributes a
+keybinding, so it does — which means a run that rewrote `panel.html` would invalidate the reader's consent and
+ask them to install the plugin again. The snapshot the panel used to carry did exactly that: a fresh bake was a
+fresh tree hash, and a fresh tree hash is a reinstall prompt.
 
-| Caller | When it bakes |
+| Was | Is |
 |---|---|
-| the report server, while it runs | on start, after every `/api/refresh`, and whenever the packs change (a five-second comparison of the newest pack's fingerprint) |
-| this plugin's worker, whenever Orca wakes it | on activation, on every command, and on any event, each time asking the baker first whether the panel is behind the record |
+| the app built to one file with every payload baked in (`npm run report:panel`) | a hand-written document naming the address and the two ways in |
+| re-baked on start, after `/api/refresh`, and whenever the packs changed | never written: the tree the reader consented to is the tree they run |
+| answering from `window.__REPORT__`, and unable to write | the app served live, where `+ to-do`, `remove` and `clear` all work |
+| the numbers in a pane | the numbers in the report's own tab |
 
-So the panel works with no server running at all, and it stays current when the server is running. The worker
-finds the checkout by asking rather than guessing: `workspace.readContext` gives the focused branch, and
-`orca worktree list --json` turns a branch into a path. A `reportRoot` setting wins over that, and the answer
-is remembered in the plugin's own storage, so a wake with nothing to bake costs one stat.
+### Why there is no live pane yet
 
-**A panel that is already open keeps the snapshot it was opened with.** The host reads the entry file when the
-panel opens (its effect depends only on the plugin and panel identity), and nothing in a panel can reload
-itself — so a new day arrives when the panel is next mounted, which switching the sidebar away and back does.
+A live pane needs the host to allow it: either `contributes.panels[].src` (one declared origin in the panel
+frame) or a scoped `net:fetch` capability. Both are written up, with the host lines that block them, in
+[PANE-REQUEST.md](PANE-REQUEST.md). When one of them lands, this panel fetches the server directly and the
+numbers — reads and writes both — are in the pane, with nothing else about this plugin changed.
 
-The panel is generated and not committed (`panel.html` is gitignored): a clone that has not baked has no
-entry file, which shows as an empty panel rather than a broken plugin.
+### What the panel can and cannot do, in one list
 
-### What the panel's own host does to it
-
-Orca injects a guard into every panel, and it is worth knowing because it shapes the app:
-
-- **A click on an `<a href>` is cancelled in the capture phase** (`preventDefault` +
-  `stopImmediatePropagation`), before any handler of the page runs. An anchor *without* an href is left alone.
-  So a snapshot renders the same links without an href — `navProps` in `tools/report-app/src/baked.mjs` —
-  and supplies `role="link"` and a tab stop instead, with Enter and Space activating them.
-- **Navigations are cancelled** (`window.navigation`), so the router keeps its view in memory.
-- **Forms and `window.open` are cancelled**; the app has neither.
-
-The symptom of getting this wrong is "the panel's buttons do nothing": every rail item and every row in the
-report is a link, so all of them were dead until the href came out.
-
-### What the panel cannot do
-
-- **It cannot write.** `+ to-do`, `remove` and `clear` are hidden, and the line under the tabs says when the
-snapshot was taken, because a panel cannot reach `/api/todos` or `/api/open`.
-- **It holds every recorded day, up to a byte budget.** Days are baked newest first until the payloads reach
-  6 MB (Orca refuses a panel entry over 10 MB), so the newest day is always there and a record far heavier than
-  this one's loses its oldest days rather than its newest. A day that is not in the snapshot says which days
-  are, instead of spinning.
-- **It is a dashboard in a side panel.** Measured at 360px: the page does not overflow, and a skill's row folds
-  its line under the score and the name — a 306px canvas in a 319px list — rather than scrolling sideways.
-- **A live pane still needs Orca.** See [PANE-REQUEST.md](PANE-REQUEST.md): a panel cannot be a full-area tab
-  and cannot fetch, so live-and-wide is a request to the host.
-- **An installed copy is frozen.** Installed plugins are content-hash verified, so the bake only refreshes a
-  development copy; a marketplace build would carry the snapshot it was published with.
+- **It cannot read the record.** No fetch, no snapshot, no data channel: the panel's own words are all it has.
+- **It cannot write.** `+ to-do`, `remove` and `clear` live in the report's tab, where the server answers.
+- **It cannot type into a terminal either.** The host returns terminal *ids* and nothing about what is running
+  in them, so the panel cannot tell a shell from an agent session — and a command typed into the wrong one is
+  worse than no button. Opening the report is the palette's job (**x-skills report: Open**), or `Mod+Alt+X`.
+- **It is a dashboard in a side panel**, measured at 360px and at 200px: no overflow, and the panel's type scale
+  (12/14/16px) holds.
+- **What it is for**: a reader who puts it beside their terminals gets the address, the worktree, and the two
+  ways in — and, unlike a snapshot, it is never out of date about any of them.
 
 ## Keybinding
 
@@ -124,13 +112,16 @@ default`), so a server on another port is a visible fact rather than a mystery.
   refused with the reason, and no request is made.
 - **It reads before it trusts.** A 200 is not evidence: the payload must be the report's own `GET /api/days`
   shape, so a stranger holding port 8787 reads as *not the report* rather than as a working report.
-- **The panel is a control, not a view.** `panel.html` is a right-sidebar panel tab named after the plugin. An
-  Orca panel is a sandboxed document (`default-src 'none'; connect-src 'none'`) with three callable host
-  actions and no data channel, so it cannot fetch the report or read the plugin's own storage. It shows the
-  focused worktree and one button, which types `npm run report:open` into a terminal there; the report itself
-  opens as a full-area **browser tab** — the same pane type a terminal uses. A live *pane* is a request to
-  Orca rather than something this plugin can do today: see [PANE-REQUEST.md](PANE-REQUEST.md), which quotes the
-  host lines that block it and the two designs that would unblock it.
+- **The panel is a signpost, not a view.** `panel.html` is a committed, static document: an Orca panel is a
+  sandboxed document (`default-src 'none'; connect-src 'none'`) with three callable host actions and no data
+  channel, so it cannot fetch the report, read the plugin's own storage, or open anything itself. It names the
+  address and the two ways in; the report opens as a full-area **browser tab** — the same pane type a terminal
+  uses. A live *pane* is a request to Orca rather than something this plugin can do today: see
+  [PANE-REQUEST.md](PANE-REQUEST.md), which quotes the host lines that block it and the two designs that would
+  unblock it.
+- **It never writes to itself.** Orca's consent is bound to the hash of this tree, so a run that rewrote
+  `panel.html` — or anything else here — would ask the reader to install the plugin again. The worker imports
+  no filesystem module at all, and there is no baker to run.
 
 ## What the worker sees
 
@@ -154,6 +145,6 @@ machine yet; the line exists so that the first run records it rather than leavin
 |---|---|
 | `orca-plugin.json` | The manifest: identity, the four commands, the panel, the keybinding, the events, the capabilities |
 | `main.mjs` | The worker: the probe, the commands, the new-day check, and the rules they obey |
-| `panel.html` | The report's own UI, baked with a snapshot (generated: `npm run report:panel`) |
+| `panel.html` | The panel: a static document naming where the report is (committed; nothing generates it) |
 | `PANE-REQUEST.md` | What Orca would have to add for the report to live in a pane, and why it cannot today |
 | `../../test/orca-plugin.test.cjs` | The tests: the worker against a stubbed host, the panel and manifest as source audits |

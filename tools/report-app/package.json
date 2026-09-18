@@ -7,8 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "preview": "vite preview",
-    "build:panel": "vite build --mode panel"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@kobalte/core": "^0.13.14",
