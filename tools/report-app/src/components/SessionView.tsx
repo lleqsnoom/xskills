@@ -71,7 +71,7 @@ export function SessionView(props: { date: string; id: string }) {
 
           <Show when={found().session.checks.length}>
             <h2>The skills' own checks in this session</h2>
-            <div class="table-wrap">
+            <div class="table-wrap records">
               <table>
                 <thead>
                   <tr>
@@ -87,12 +87,12 @@ export function SessionView(props: { date: string; id: string }) {
                   <For each={found().session.checks}>
                     {(check) => (
                       <tr>
-                        <td class="mono">{check.skill}</td>
-                        <td class="mono dim">{check.script}</td>
-                        <td class="num">{check.calls}</td>
-                        <td class="num good">{check.passes}</td>
-                        <td class="num fair">{check.refusals}</td>
-                        <td class="num weak">{check.fails}</td>
+                        <td class="mono" data-label="Skill">{check.skill}</td>
+                        <td class="mono dim" data-label="Script">{check.script}</td>
+                        <td class="num" data-label="Calls">{check.calls}</td>
+                        <td class="num good" data-label="Pass">{check.passes}</td>
+                        <td class="num fair" data-label="Refused">{check.refusals}</td>
+                        <td class="num weak" data-label="Fail">{check.fails}</td>
                       </tr>
                     )}
                   </For>

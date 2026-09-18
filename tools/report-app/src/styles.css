@@ -6,7 +6,8 @@
 
    Type has four sizes with one job each: the page headline, a section heading, body, and chrome (labels,
    table heads, buttons). Body is 14px rather than Orca's denser 12px because this screen is read, not
-   scanned, and muted is a colour — never a smaller size. */
+   scanned, and muted is a colour — never a smaller size. Orca's 11px meta is the one literal outside those
+   four, and the chart labels and the tab segments are what wear it. */
 @font-face {
   font-family: "Geist";
   src: url("./assets/geist-var.woff2") format("woff2");
@@ -76,7 +77,11 @@ html { overflow-y: scroll; }
 body { background: var(--background); color: var(--foreground);
   font: var(--t-body)/1.5 var(--font-sans); letter-spacing: .01em;
   -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-a { color: var(--link); text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 2px; }
+/* A link is coloured, and underlined only when pointed at: the browser underlines every `a` by default, so the
+   `none` is load-bearing — without it the tabs, the rows and the calendar all carry a stray hairline under
+   their text. `text-decoration-color` and the offset are for the hover underline, which is the soft one. */
+a { color: var(--link); text-decoration: none;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 2px; }
 a:hover { text-decoration: underline; }
 /* A baked panel's links carry no href — the host swallows those clicks — and a browser hands an href-less
    anchor the text cursor, which is what "every button shows an I-beam" was. The role is what says it is still
@@ -96,41 +101,35 @@ h4 { font-size: var(--t-body); font-weight: 500; margin: 0; }
 .loading { color: var(--muted-foreground); font-style: italic; }
 .failed { color: var(--weak); }
 .good { color: var(--good); } .fair { color: var(--fair); } .weak { color: var(--weak); } .unknown { color: var(--unknown); }
-/* Orca paints a status as its colour at 10% with a 25% edge, and keeps the word in the colour. */
-.pill { display: inline-flex; align-items: center; padding: .05rem .4rem; border-radius: var(--radius-sm);
-  font-size: var(--t-chrome); font-weight: 500; white-space: nowrap;
-  background: color-mix(in srgb, currentColor 10%, transparent);
-  border: 1px solid color-mix(in srgb, currentColor 25%, transparent); }
 
-/* shell: Orca's shape — a sidebar, a pane title bar, and the pane body beside them */
-.app { display: grid; grid-template-columns: 15rem minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); min-height: 100vh; }
-.rail { grid-column: 1; grid-row: 1 / span 2; background: var(--sidebar); border-right: 1px solid var(--sidebar-border);
+/* shell: Orca's shape — a sidebar, and the pane body beside it. There is no action bar above the view: it
+   held `Run` and `window`, which duplicated the address bar at the cost of a row on every screen. */
+.app { display: grid; grid-template-columns: 15rem minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-height: 100vh; }
+.rail { grid-column: 1; grid-row: 1; background: var(--sidebar); border-right: 1px solid var(--sidebar-border);
   padding: 1rem .9rem; position: sticky; top: 0; height: 100vh; overflow: auto; }
 .rail .brand { font-weight: 600; }
 .rail .dim { display: block; margin-bottom: 1rem; font-size: var(--t-chrome); }
 .rail nav { display: grid; gap: .1rem; }
-/* Row-shaped links opt out of the link colour: a blue column of 21 days, or of 328 signals, is noise. */
-.rail nav a { display: block; padding: .3rem .5rem; border-radius: var(--radius-sm); font-size: var(--t-chrome);
-  font-weight: 500; color: inherit; }
-.rail nav a:hover { background: var(--sidebar-accent); text-decoration: none; }
-/* The active item is a neutral tint, the way Orca marks the selected row — not a second colour. */
-.rail nav a.active { background: var(--sidebar-accent); color: var(--sidebar-accent-foreground); font-weight: 600; }
-.rail section { margin-top: 1rem; border-top: 1px solid var(--sidebar-border); padding-top: .75rem; }
-.rail section .dim { margin-bottom: .3rem; }
-.rail .rail-days { display: grid; gap: .1rem; }
-.rail .rail-days a { display: block; font-family: var(--font-mono); font-size: var(--t-chrome);
-  padding: .15rem .4rem; border-radius: var(--radius-sm); color: inherit; }
-.rail .rail-days a:hover { background: var(--sidebar-accent); text-decoration: none; }
-/* The pane title bar: the same recipe Orca uses for a pane — 12px, muted, hairline under it. */
-.topbar { grid-column: 2; grid-row: 1; position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: .5rem;
-  padding: .3rem .75rem; background: color-mix(in srgb, var(--background) 95%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent); backdrop-filter: blur(8px); }
-.topbar-label { font-size: var(--t-chrome); color: var(--muted-foreground); }
-.topbar-actions { margin-left: auto; display: inline-flex; align-items: center; gap: .4rem; min-width: 0; }
-.run-status { font-size: var(--t-chrome); color: var(--muted-foreground); }
-.main { grid-column: 2; grid-row: 2; padding: 1.25rem 1.75rem 4rem; min-width: 0; }
+/* The four tabs are one control, not four links: Orca's segmented switch, the one its Explorer panel puts in
+   its own header (`right-sidebar/FileExplorerViewSwitch.tsx` — `h-7 … rounded-md bg-input/40 p-0.5`, each
+   segment `rounded-sm px-2 text-[11px] font-normal text-muted-foreground`, and the chosen one
+   `bg-background font-medium text-foreground shadow-xs`). So: a track in `--input` at 40% with 2px of air
+   around the segments and between them, 11px labels in sentence case, and the mark the raised segment itself —
+   no underline, no fill colour of its own. */
+.rail nav { display: grid; gap: 2px; padding: 2px; border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--input) 40%, transparent); }
+.rail nav a { display: flex; align-items: center; min-height: 28px; padding: 0 .5rem;
+  border-radius: var(--radius-sm); font-size: 11px; font-weight: 400; color: var(--muted-foreground);
+  text-decoration: none; }
+.rail nav a:hover { background: color-mix(in srgb, var(--background) 40%, transparent); color: var(--foreground);
+  text-decoration: none; }
+.rail nav a.active { background: var(--background); color: var(--foreground); font-weight: 500;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / .05); }
+/* A snapshot's own line: a panel cannot reach the server, so what a reader needs to know is when the numbers
+   were taken. It lives under the tabs, which is the only chrome the shell has left. */
+.rail .snapshot { display: block; margin-top: .75rem; font-size: var(--t-chrome); color: var(--muted-foreground); }
+.main { grid-column: 2; grid-row: 1; padding: 1.25rem 1.75rem 4rem; min-width: 0; }
 .facts { color: var(--muted-foreground); margin: .3rem 0 0; max-width: 90ch; }
-.toolbar { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin: .75rem 0 0; }
 button, .button { font: inherit; font-size: var(--t-chrome); font-weight: 500; padding: .2rem .55rem; min-height: 26px;
   border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--card); color: var(--foreground); cursor: pointer; }
 button:hover, .button:hover { background: var(--muted); text-decoration: none; }
@@ -141,7 +140,9 @@ button.primary { background: var(--primary); border-color: var(--primary); color
 button.primary:hover { background: color-mix(in srgb, var(--primary) 90%, transparent); }
 /* A preference, not a task: a chosen filter or shape is a tinted chip. */
 button.on { background: var(--accent); border-color: transparent; color: var(--accent-foreground); font-weight: 600; }
-input[type="search"], input[type="text"] { font: inherit; font-size: var(--t-chrome); padding: .25rem .5rem;
+/* `max-width` is what makes it a pane's control rather than the browser's own 236px box: a filter wider than
+   the pane it filters is the one thing on this screen that used to scroll the page sideways. */
+input[type="search"], input[type="text"] { font: inherit; font-size: var(--t-chrome); padding: .25rem .5rem; max-width: 100%;
   border-radius: var(--radius-md); border: 1px solid var(--input); background: transparent; color: inherit; }
 input::placeholder { color: var(--muted-foreground); }
 .panel { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: .8rem; }
@@ -150,11 +151,34 @@ input::placeholder { color: var(--muted-foreground); }
 .row:hover { background: var(--muted); }
 .head { color: var(--muted-foreground); }
 table { width: 100%; border-collapse: collapse; }
-/* Wide tables scroll inside themselves; a page-wide horizontal scrollbar under a 24000px column is useless. */
-.table-wrap { overflow-x: auto; max-width: 100%; }
-th, td { text-align: left; padding: .3rem .45rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+/* Wide tables scroll inside themselves; a page-wide horizontal scrollbar under a 24000px column is useless.
+   The wrapper is also the container its table asks about, so a table can react to the pane it is really in. */
+.table-wrap { overflow-x: auto; max-width: 100%; container-type: inline-size; }
+/* A cell breaks a long token rather than pushing its table wider: a session id or a path is one word, and one
+   unbreakable word is a table that pans whatever the pane is. */
+th, td { text-align: left; padding: .3rem .45rem; border-bottom: 1px solid var(--border); vertical-align: top; overflow-wrap: anywhere; }
 /* Column heads are chrome: 12px, muted, sentence case — uppercase everywhere is shouting. */
 th { color: var(--muted-foreground); font-weight: 500; font-size: var(--t-chrome); white-space: nowrap; }
+/* A header that cannot wrap is what sets a table's minimum width: "A session it was loaded in" is 163px on its
+   own, and five such labels made a record table 403px wide whatever the pane was. Under 34rem they wrap. */
+@container (max-width: 34rem) {
+  .table-wrap th { white-space: normal; }
+}
+/* Under 27.5rem (440px — the width a session's seven heads need, plus a little) a record row becomes a stack:
+   the head goes, and every cell carries its own label in the label column. The numbers stay on screen instead
+   of at the end of a pan, and the table needs no width of its own. Above it the table is a table, which reads
+   better than a stack whenever the columns fit. */
+@container (max-width: 27.5rem) {
+  .table-wrap.records thead { display: none; }
+  .table-wrap.records tbody tr { display: block; padding: .35rem .2rem; border-bottom: 1px solid var(--border); }
+  .table-wrap.records tbody tr:hover { background: none; }
+  .table-wrap.records td { display: grid; grid-template-columns: minmax(3.5rem, 5.5rem) minmax(0, 1fr);
+    gap: .4rem; padding: .06rem .2rem; border: 0; }
+  .table-wrap.records td::before { content: attr(data-label); color: var(--muted-foreground); font-size: var(--t-chrome); }
+  /* The first cell is the row's own name: it reads as the heading of the stack, not as a labelled value. */
+  .table-wrap.records tr > td:first-child { grid-template-columns: minmax(0, 1fr); }
+  .table-wrap.records tr > td:first-child::before { display: none; }
+}
 tbody tr:hover { background: var(--muted); }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 dl.fields { margin: 0; display: grid; gap: .25rem; }
@@ -165,27 +189,42 @@ dl.fields dd { margin: 0; overflow-wrap: anywhere; }
 /* The one number a screen leads with. */
 .stat-value { font-size: var(--t-title); font-weight: 600; margin: 0; }
 @media (max-width: 860px) {
-  .app { grid-template-columns: minmax(0, 1fr); }
-  .rail { grid-column: 1; grid-row: 1; position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--sidebar-border); }
-  .topbar { grid-column: 1; grid-row: 2; }
-  .main { grid-column: 1; grid-row: 3; padding: 1rem 1rem 4rem; }
+  /* A narrow pane — a phone, or an Orca pane dragged in — gets the tabs as a bar across the top. The rail used
+     to stack above the content here as a 639px column of links, which put the report below the fold; the menus
+     are screens of their own now (Days, Skills), so the bar is one row of three, and it sticks while the report
+     scrolls under it. */
+  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .rail { grid-column: 1; grid-row: 1; position: sticky; top: 0; z-index: 10; height: auto;
+    padding: calc(.2rem + env(safe-area-inset-top, 0px)) calc(.25rem + env(safe-area-inset-right, 0px))
+      .2rem calc(.25rem + env(safe-area-inset-left, 0px));
+    border-right: 0; border-bottom: 1px solid var(--border); }
+  /* The wordmark and the caption are chrome for a pane with room for them. */
+  .rail .brand, .rail > .dim, .rail .dim { display: none; }
+  /* The same control across the top instead of down the side: three equal segments, same track, same 28px
+     height. Only the geometry changes with the orientation — a segmented control is one component. */
+  .rail nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .rail nav a { justify-content: center; padding: 0 .25rem; }
+  /* The panel's snapshot line, one line under the tabs. */
+  .rail .snapshot { margin: .35rem 0 0; text-align: center; }
+  .main { grid-column: 1; grid-row: 2; padding: .9rem .9rem 4rem; }
+  /* A thumb is not a mouse: controls grow, and an input at 16px is the size that stops iOS zooming the page
+     on focus. */
+  button, .button { min-height: 44px; }
+  input[type="search"], input[type="text"] { min-height: 44px; font-size: 16px; }
 }
 
-/* movement grid: skill, its line, the change, what moved, the latest score — one row, one line */
-.movement { display: grid; gap: .1rem; overflow-x: auto; }
-.mrow { display: grid; align-items: center; gap: .6rem; padding: .24rem .4rem; border-radius: var(--radius-sm);
-  grid-template-columns: 11rem 13rem 5rem minmax(14rem, 1fr) 4rem; }
-.mrow:hover { background: var(--muted); }
-.mrow.up { border-left: 3px solid var(--good); }
-.mrow.down { border-left: 3px solid var(--weak); }
-.mrow.head { border-left: 3px solid transparent; color: var(--muted-foreground); font-size: var(--t-chrome); }
-.mrow.head:hover { background: none; }
-.change { font-weight: 500; }
-.change.up, .num.up { color: var(--good); }
-.change.down, .num.down { color: var(--weak); }
-.moved { overflow-wrap: anywhere; }
-
-/* axes inline: a bar per axis with its number, never wrapping */
+/* One panel, and the only shape an entry is drawn in: a skill in use, a day it was measured on, the scores of
+   one day, a proposal. `.cards` is the grid they live in and the card itself is a Tailwind component
+   (`components/Card.tsx`) on this app's tokens, so every list on every screen is the same object in the same
+   arrangement. Both stay here rather than in the component because they are layout, not a control: a track of
+   `min(22rem, 100%)` is what keeps a card inside a 200px pane, and the axes below are a drawing. */
+.cards { display: grid; gap: .6rem; grid-template-columns: repeat(auto-fill, minmax(min(22rem, 100%), 1fr)); align-items: start;
+  /* Whatever the list follows — a heading, a toolbar, a filter — it stands off it. A list flush against the
+     control above it is the thing a reader cannot tell apart from one cell of it. */
+  margin-top: .6rem; }
+/* The name is what the card is about, and the only thing in it that carries the link colour. */
+.card-name { color: var(--link); font-weight: 500; overflow-wrap: anywhere; }
+/* axes inline: a bar per axis with its number */
 .axes { display: flex; gap: .5rem; flex-wrap: nowrap; overflow: hidden; }
 .axis { display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap; }
 .axis-row { display: grid; grid-template-columns: 7rem auto 3rem; align-items: center; gap: .5rem; }
@@ -196,6 +235,9 @@ dl.fields dd { margin: 0; overflow-wrap: anywhere; }
 .skill-top { display: grid; gap: .9rem; grid-template-columns: minmax(0, 1fr); }
 .status { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .9rem 1rem; }
 .radar-box { flex: 1 1 300px; max-width: 420px; }
+/* The one line under the gauge and the radar that says which day they describe, and what that day's number is
+   worth. It is the caveat the header used to carry, said where the number is instead of above it. */
+.day-note { margin: 0; text-align: center; font-size: var(--t-chrome); }
 .score-per-day { display: grid; gap: .2rem; min-width: 0; }
 .score-per-day h3 { margin: 0; }
 /* Both drawings are fixed in their own units and the browser scales them to the box, so the panel reacts to the
@@ -224,7 +266,6 @@ dl.fields dd { margin: 0; overflow-wrap: anywhere; }
    itself; a plain sparkline is just the drawing at the size it was asked for. */
 .chart { position: relative; }
 .chart.annotated { padding-bottom: 18px; }
-.chart > svg { display: block; height: var(--chart-plot, 150px); }
 .chart > canvas { display: block; width: 100%; height: var(--chart-plot, 150px); }
 .chart-values, .chart-dates { position: absolute; inset-inline: 0; pointer-events: none; }
 .chart-values { top: 0; height: var(--chart-plot, 150px); }
@@ -247,22 +288,6 @@ dl.fields dd { margin: 0; overflow-wrap: anywhere; }
 /* The day the pointer is on, marked down the plot: HTML, so it is exactly where the geometry says. */
 .chart-guide { position: absolute; top: 0; height: var(--chart-plot, 150px); width: 1px; border-left: 1px dashed var(--muted-foreground);
   opacity: .65; pointer-events: none; }
-/* The day behind the point: its score, and the shape that score was made of, side by side so the popup is not
-   taller than the chart it belongs to. */
-.chart-tip { position: absolute; z-index: 3; display: grid; gap: .35rem; width: 17.5rem; padding: .5rem .6rem;
-  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
-  box-shadow: 0 8px 24px color-mix(in srgb, var(--foreground) 22%, transparent); pointer-events: none; }
-.chart-tip-body { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); gap: .5rem; align-items: center; }
-.chart-tip.above { transform: translate(-50%, calc(-100% - 14px)); }
-.chart-tip.below { transform: translate(-50%, 14px); }
-.chart-tip.left { transform: translate(calc(-100% - 14px), -50%); }
-.chart-tip.right { transform: translate(14px, -50%); }
-.chart-tip-head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
-.chart-tip-head .num { font-weight: 600; font-size: var(--t-section); }
-.chart-tip .radar { display: block; width: 100%; height: auto; }
-.chart-tip .radar-list { display: grid; margin: 0; }
-.chart-tip p { margin: 0; font-size: var(--t-chrome); }
-
 .status-score { flex: 0 0 auto; display: grid; justify-items: center; gap: .2rem; }
 /* The radar's spoke labels: the axis name and its rate, in the axis's own colour. */
 .radar-label { font-size: var(--t-chrome); fill: var(--muted-foreground); }
@@ -289,20 +314,18 @@ ul.recent { list-style: none; margin: 0 0 .8rem; padding: 0; display: grid; gap:
 .day > :nth-child(3) { grid-column: 1 / -1; font-size: var(--t-chrome); }
 .day:hover { background: var(--muted); }
 /* auto-fit, not auto-fill: the months fill the column they are given instead of leaving empty tracks beside
-   a lone month. */
-.calendars { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .6rem; }
-.cal { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: .5rem .6rem; }
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: .12rem; }
+   a lone month. The 200px is a preference, not a floor — `min(200px, 100%)` is what keeps a month inside a
+   pane narrower than the month, where a bare 200px track hung 27px of itself off the page. */
+.calendars { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: .6rem; }
+.cal { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: .5rem .6rem; min-width: 0; }
+/* The days can shrink to nothing the pane does not have: 7 columns of `1fr` have a min-content floor, and at
+   200px a month's seven columns were 6px wider than the card they were in. */
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .12rem; }
 .cal-head { color: var(--muted-foreground); text-align: center; font-size: var(--t-chrome); }
 .cal-day { text-align: center; padding: .12rem 0; border-radius: var(--radius-sm); }
 .cal-blank { visibility: hidden; }
 .cal-has { display: block; background: var(--accent); color: var(--accent-foreground); font-weight: 600; }
 .cal-has:hover { background: color-mix(in srgb, var(--foreground) 14%, transparent); text-decoration: none; }
-@media (max-width: 1000px) {
-  .mrow { grid-template-columns: 9rem 9rem 4rem minmax(8rem, 1fr); }
-  .mrow .num:last-child { display: none; }
-}
-
 /* the evidence: everything the pack holds, behind one control, closed by default */
 .evidence { margin-top: 2rem; }
 .evidence > summary { cursor: pointer; color: var(--muted-foreground); font-size: var(--t-chrome);
@@ -311,21 +334,19 @@ ul.recent { list-style: none; margin: 0 0 .8rem; padding: 0; display: grid; gap:
 .evidence[open] > summary { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 .evidence > summary .mono { color: inherit; }
 
-/* tasks: one list, three shapes — the digest's proposals and the to-do selection draw through it */
-.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+/* A heading and its control: side by side when the pane can pay for both, the control under the heading when
+   it cannot. Three buttons are 146px, and a heading that will not give way beside them pushed the page 64px
+   wider than a 200px pane. */
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: .3rem 1rem; flex-wrap: wrap; }
 .section-head h2 { flex: 1; }
-.shapes { display: inline-flex; gap: .25rem; }
-.shapes button { padding: .1rem .5rem; }
 .clamp-1, .clamp-2, .clamp-3 { display: block; overflow: hidden; }
 .clamp-1 { white-space: nowrap; text-overflow: ellipsis; }
 .clamp-2, .clamp-3 { display: -webkit-box; -webkit-box-orient: vertical; }
 .clamp-2 { -webkit-line-clamp: 2; }
 .clamp-3 { -webkit-line-clamp: 3; }
 .task-id { color: var(--muted-foreground); }
+.task-check { margin: .2rem 0 0; max-width: 90ch; }
 /* The importance badge: the word says it, the colour only agrees with it. */
-.pill.high { color: var(--weak); }
-.pill.medium { color: var(--fair); }
-.pill.low, .pill.unknown { color: var(--unknown); }
 
 /* signals: a row a signal, its head beside the summary and above it when the width runs out. The summary
    is never clipped — the number of lines follows the viewport, which is what keeps the row on screen. */
@@ -348,191 +369,4 @@ ul.recent { list-style: none; margin: 0 0 .8rem; padding: 0; display: grid; gap:
   .sig { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* A: rows — a fixed table, so the clamps have a width to clamp against */
-.tasks { table-layout: fixed; }
-.tasks .t-id { width: 6rem; }
-.tasks .t-skill { width: 9rem; }
-.tasks .t-weight { width: 7rem; }
-.tasks .t-act { width: 7rem; }
-.tasks tr.open { background: var(--muted); }
-.tasks tr.task-detail td { background: var(--muted); padding: .55rem .8rem; }
-.tasks .task-detail-body .fields { max-width: 90ch; }
-.tasks td { vertical-align: middle; }
-.tasks .t-id .mono { color: var(--muted-foreground); }
-.tasks tr.open .t-id .mono { color: var(--foreground); }
-.twisty { font: inherit; border: 0; background: none; padding: .1rem .2rem; min-height: 24px; cursor: pointer; color: inherit; }
-.twisty .mark { color: var(--muted-foreground); }
-.twisty:hover { color: var(--foreground); }
-.twisty:hover .mark { color: var(--foreground); }
 
-/* B: cards — the change at reading size, the rest muted under it */
-.task-cards { display: grid; gap: .6rem; grid-template-columns: repeat(auto-fill, minmax(min(22rem, 100%), 1fr)); align-items: start; }
-.task-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: .6rem .7rem; }
-.task-card-head { display: flex; align-items: center; gap: .5rem; }
-.task-card .task-act { margin-left: auto; }
-.task-card .task-change { margin: .3rem 0 .45rem; font-size: var(--t-section); font-weight: 400; }
-.task-meta { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .4rem; align-items: baseline; }
-.task-check { margin: .2rem 0 0; max-width: 90ch; }
-.task-act { display: inline-flex; align-items: center; gap: .4rem; justify-content: flex-end; }
-.task-title { margin: 0 0 .35rem; }
-
-/* C: lines — one line a task, the whole text one click away */
-.task-lines { display: grid; gap: .1rem; }
-.task-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .5rem;
-  padding: .15rem .3rem; border-radius: var(--radius-sm); }
-.task-line:hover { background: var(--muted); }
-.task-line details { min-width: 0; }
-.task-line summary { display: grid; grid-template-columns: 3.5rem 6rem 9rem minmax(0, 1fr); gap: .5rem; align-items: center;
-  cursor: pointer; list-style: none; }
-.task-line summary::-webkit-details-marker { display: none; }
-.task-line details[open] > summary { color: var(--foreground); }
-.task-line .task-detail-body { padding: .35rem 0 .5rem; max-width: 90ch; }
-
-/* The main screen, five ways. The tab strip is a preference, not a route: a chosen view is a tinted chip
-   (`button.on`), so the one solid control on any of these screens stays the action it asks for. */
-.view-tabs { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; margin-bottom: .35rem; }
-.view-tabs > .dim { font-size: var(--t-chrome); margin-right: .4rem; }
-.view-tabs button { padding: .1rem .5rem; }
-.view-hint { font-size: var(--t-chrome); margin: 0 0 .9rem; }
-/* One explanatory sentence per screen, kept to a measure a reader can follow. */
-.prose { max-width: 90ch; margin: .4rem 0 0; }
-
-/* the ledger: one kept fix a row, its window either side of the day a commit touched the file */
-.ledger { table-layout: fixed; width: 100%; }
-.ledger .l-when { width: 8rem; }
-.ledger .l-skill { width: 9rem; }
-.ledger .l-land { width: 7rem; }
-.ledger .l-move { width: 9rem; }
-.ledger .l-verdict { width: 11rem; }
-.ledger td { vertical-align: middle; }
-.ledger tr.open { background: var(--muted); }
-.ledger .l-verdict .pill + .pill { margin-left: .3rem; }
-
-/* the ratchet: the score as a bar, the floor as a notch. A skill below its floor is the only loud row. */
-.ratchet { display: grid; gap: .1rem; overflow-x: auto; }
-.rat-row { display: grid; align-items: center; gap: .6rem; padding: .24rem .4rem; border-radius: var(--radius-sm);
-  grid-template-columns: 11rem minmax(8rem, 1fr) 4rem minmax(13rem, 1fr) 14rem; }
-.rat-row:hover { background: var(--muted); }
-.rat-row.head { color: var(--muted-foreground); font-size: var(--t-chrome); border-left: 3px solid transparent; }
-.rat-row.head:hover { background: none; }
-.rat-row.below { border-left: 3px solid var(--weak); }
-.rat-row.held, .rat-row.thin { border-left: 3px solid transparent; }
-.rat-row.thin .rat-track { opacity: .55; }
-.rat-track { position: relative; display: block; height: 8px; border-radius: 999px; background: var(--muted); border: 1px solid var(--border); }
-/* currentColor, so the band's own colour class supplies the ink and the number beside it still says the same. */
-.rat-fill { display: block; height: 100%; border-radius: 999px; background: currentColor; }
-.rat-notch { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--foreground); }
-.rat-floor { overflow-wrap: anywhere; }
-.rat-act { display: inline-flex; align-items: center; gap: .35rem; justify-content: flex-end; }
-.rat-act input[type="text"] { min-width: 9rem; }
-@media (max-width: 1000px) {
-  .rat-row { grid-template-columns: 9rem minmax(6rem, 1fr) 3.5rem minmax(6rem, 1fr); }
-  .rat-row .rat-act { grid-column: 1 / -1; justify-content: flex-start; }
-}
-
-/* the bench: one card that is the decision, then what is in flight, queued and waiting on the scan */
-.bench-now { display: grid; gap: .5rem; margin-bottom: 1.5rem; }
-.bench-head { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-.bench-act { margin-left: auto; display: inline-flex; align-items: center; gap: .5rem; }
-.bench-why { margin: 0; color: var(--muted-foreground); max-width: 90ch; }
-.bench-change { margin: 0; font-size: var(--t-section); max-width: 90ch; }
-.bench-now .fields { max-width: 90ch; }
-.bench-cols { display: grid; gap: 1rem; align-items: start; margin-top: 1.5rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr)); }
-.bench-cols h2 { margin-top: 0; }
-.bench-card { display: grid; gap: .3rem; }
-.bench-card p { margin: 0; }
-.bench-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .1rem; }
-.bench-line { display: grid; align-items: baseline; gap: .5rem; padding: .15rem .3rem; border-radius: var(--radius-sm);
-  grid-template-columns: 8rem minmax(0, 1fr) auto auto; }
-.bench-line:hover { background: var(--muted); }
-.bench-line > .dim:last-child { white-space: nowrap; }
-
-/* what keeps coming back: one row a file, its sightings one click away */
-.findings { display: grid; gap: .35rem; }
-.finding { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); }
-.finding.came-back { border-color: color-mix(in srgb, var(--weak) 45%, var(--border)); }
-.finding > summary { display: grid; align-items: center; gap: .5rem; padding: .45rem .6rem; cursor: pointer; list-style: none;
-  grid-template-columns: 7rem 9rem minmax(0, 1fr) 11rem 6rem; }
-.finding > summary::-webkit-details-marker { display: none; }
-.finding[open] > summary { border-bottom: 1px solid var(--border); }
-.finding-path { overflow-wrap: anywhere; }
-.finding-body { padding: .3rem .8rem .7rem; }
-.finding-body p { margin: .3rem 0; max-width: 90ch; }
-.sightings { list-style: none; margin: .5rem 0 0; padding: 0; display: grid; gap: .15rem; }
-.sightings li { display: grid; align-items: baseline; gap: .5rem; padding: .1rem .2rem;
-  grid-template-columns: 6.5rem 2.5rem minmax(0, 1fr) minmax(0, 1fr); }
-.sightings li:hover { background: var(--muted); border-radius: var(--radius-sm); }
-@media (max-width: 1000px) {
-  .finding > summary { grid-template-columns: 7rem minmax(0, 1fr) 6rem; }
-  .finding > summary .finding-count { display: none; }
-  .sightings li { grid-template-columns: 6.5rem minmax(0, 1fr); }
-}
-
-/* the control chart: the record's own limits, and the rule that fired. Only what fired is loud. */
-.ctl { display: grid; gap: .15rem; }
-.ctl-row { display: grid; align-items: center; gap: .6rem; padding: .3rem .4rem; border-radius: var(--radius-sm);
-  grid-template-columns: 11rem minmax(8rem, 1fr) 6rem minmax(12rem, 1.2fr); }
-.ctl-row:hover { background: var(--muted); }
-.ctl-row.alarm { border-left: 3px solid var(--weak); }
-.ctl-row.warn { border-left: 3px solid var(--fair); }
-.ctl-row.quiet { border-left: 3px solid transparent; }
-.ctl-chart { min-width: 0; }
-.ctl-why { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; overflow-wrap: anywhere; }
-.rules td { vertical-align: middle; }
-.rules .num { white-space: nowrap; }
-
-/* the interval: a score, the range it sits in, and what the evidence alone supports */
-.intervals { table-layout: fixed; width: 100%; }
-.intervals .iv-skill { width: 11rem; }
-.intervals .iv-n { width: 6rem; }
-.intervals .iv-score { width: 9rem; }
-.intervals .iv-pm { width: 10rem; }
-.intervals .iv-cons { width: 9rem; }
-.intervals .iv-need { width: 9rem; }
-.intervals td { vertical-align: middle; }
-
-/* the reason codes: a row a skill, the decomposition one click in */
-.factors { display: grid; gap: .35rem; }
-.factor { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); }
-.factor > summary { display: grid; align-items: baseline; gap: .5rem; padding: .45rem .6rem; cursor: pointer; list-style: none;
-  grid-template-columns: 11rem 5rem 10rem minmax(0, 1fr) auto; }
-.factor > summary::-webkit-details-marker { display: none; }
-.factor[open] > summary { border-bottom: 1px solid var(--border); }
-.factor-body { padding: .3rem .8rem .6rem; }
-.factor-body p { margin: .35rem 0 0; max-width: 90ch; }
-.codes td { vertical-align: middle; }
-.codes .num { white-space: nowrap; }
-
-/* the flow: cumulative bands, and the stage where work has stopped */
-.flow-bands { display: grid; gap: .3rem; margin: 0 0 1.25rem; max-width: 60rem; }
-.flow-band { display: grid; align-items: center; gap: .6rem; grid-template-columns: 6rem minmax(0, 1fr) 3rem; }
-.flow-label { font-size: var(--t-chrome); }
-.flow-track { display: block; height: 10px; border-radius: 999px; background: var(--muted); border: 1px solid var(--border); overflow: hidden; }
-.flow-fill { display: block; height: 100%; }
-.flow-fill.proposed { background: var(--unknown); }
-.flow-fill.kept { background: var(--fair); }
-.flow-fill.landed { background: var(--link); }
-.flow-fill.closed { background: var(--good); }
-.flow-grid { display: grid; gap: 1rem; align-items: start; grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr)); }
-.flow-answer { font-size: var(--t-section); margin: .2rem 0 .4rem; }
-.flow-days td { vertical-align: middle; }
-
-/* the schedule: what is due, and the three verdicts a check can produce */
-.schedule { display: grid; gap: .5rem; }
-.review { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: .6rem .7rem; }
-.review.auto { border-color: color-mix(in srgb, var(--weak) 45%, var(--border)); }
-.review-head { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-.review-act { margin-left: auto; display: inline-flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
-.review-path { margin: .35rem 0 .2rem; overflow-wrap: anywhere; }
-/* A verdict is one of three equal outcomes, so no one of them is the solid control on the page: the
-   destructive one is marked by a word and a border, not by being the only filled button. */
-.review-act button.came-back { border-color: color-mix(in srgb, var(--weak) 45%, var(--border)); color: var(--weak); font-weight: 600; }
-.review p { margin: .25rem 0 0; max-width: 90ch; }
-.due-next td { vertical-align: middle; }
-@media (max-width: 1000px) {
-  .factor > summary { grid-template-columns: 9rem minmax(0, 1fr) auto; }
-  .factor > summary .f-n, .factor > summary .f-gap { display: none; }
-  .ctl-row { grid-template-columns: 9rem minmax(6rem, 1fr) 5rem; }
-  .ctl-row .ctl-why { grid-column: 1 / -1; }
-}

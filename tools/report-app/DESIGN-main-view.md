@@ -251,11 +251,10 @@ currently cannot.
 
 # Part 2 — five more, from five other fields
 
-**Status: built.** All nine ideas ship as ten views of the main screen
-(`?view=movement|bench|ledger|ratchet|recurrence|control|interval|factors|flow|schedule`): Part 1's four plus the
-movement table, and Part 2's five, whose tabs are `control`, `interval`, `factors`, `flow` and `schedule`. Each
-one was taken from a scoring system that already exists somewhere else and already solves a problem this panel
-has; where the implementation departs from the sketch below, the code and `AGENTS.md` are the record.
+**Status: none of the nine ship.** They were built, reviewed, and then taken off the screen — the main screen is
+the movement table again, and `scripts/report-views.mjs` went with them. What is left is this document: the
+research, the nine designs, their wireframes, their costs and their measured numbers, which is where a rebuild
+would start. `AGENTS.md` describes what the app does today.
 
 The panel's weak point is not its ideas, it is that **every threshold in it was invented**. A movement is "up"
 past 0.5 points, a fix is "held" past 2, a score exists at n ≥ 5 and does not below it. None of those numbers

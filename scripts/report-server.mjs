@@ -2,12 +2,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import http from "node:http";
-import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { HISTORY_FILE, WEIGHTS_V1, compose, denominatorsOf, dimensionsOf, historyLine, readHistory, readProposals, scoresForSources, tallySessions, writeHistory } from "../skills/x-autoreflection/scripts/metrics.mjs";
+import { HISTORY_FILE, historyLine, readHistory, readProposals, scoresForSources, writeHistory } from "../skills/x-autoreflection/scripts/metrics.mjs";
 import { band, loadHistory, movementPage, movement, recentDays, calendar, days as allDays } from "../skills/x-autoreflection/scripts/derive.mjs";
 import { openReport, safePath } from "./report-open.mjs";
-import { CONTROL_RULES, REVIEW_STEPS, applyOutcome, budgetState, classOf, controlChart, dueRows, factorCodes, flowOf, intervalRows, ledgerRows, pathOf, pooledDaySigma, pooledRates, rankCandidates, ratchetRows, recurrenceFindings, sessionsIn, shiftDays, windowMean } from "./report-views.mjs";
+
 
 /**
  * `npm run report` — the local app: the JSON packs as a database, with the UI built from
@@ -276,11 +275,17 @@ export function apiSkill({ root = DAILY_ROOT, name, maxDays = 14 } = {}) {
       n: skill?.n ?? null,
       named: skill?.named ?? null,
       dimensions: skill?.dimensions ?? null,
+      // The band travels with each day's score, not only the latest one: the screen draws a day's gauge from
+      // this, and a UI that banded a score itself would drift from the rule the server already decided.
+      band: band(skill?.score ?? null),
       sample: session ? { id: session.id, host: session.host, title: session.title } : null,
     };
   });
   // Why it moved: the signals that blamed this skill and the proposals that target it, either of which is
-  // the next thing a reader wants after seeing the line go up or down.
+  // the next thing a reader wants after seeing the line go up or down. A proposal carries its day and whether
+  // it is already kept, by the same rule the day screen uses — one rule, decided once, so the `+ to-do` on
+  // this screen writes exactly the entry that screen would and reads back as kept on both.
+  const kept = readTodos(root).items;
   const signals = [];
   const proposals = [];
   for (const date of dates) {
@@ -291,7 +296,9 @@ export function apiSkill({ root = DAILY_ROOT, name, maxDays = 14 } = {}) {
       }
     }
     for (const proposal of readDayProposals(root, date).proposals) {
-      if (proposal.skill === name) proposals.push({ ...proposal, date });
+      if (proposal.skill !== name) continue;
+      const day = proposal.day ?? date;
+      proposals.push({ ...proposal, day, date, inTodo: kept.some((item) => sameWork(item, { ...proposal, day })) });
     }
   }
   const rank = { high: 0, medium: 1, low: 2 };
@@ -304,568 +311,30 @@ export function apiTodos({ root = DAILY_ROOT } = {}) {
   return readTodos(root);
 }
 
+/**
+ * Which bundle the built app is serving, as the file name its `index.html` asks for.
+ *
+ * A reader's tab is not reloaded when it is focused (`scripts/report-open.mjs`), so it can run yesterday's
+ * bundle for days — every fix in the repository and nothing of it on screen. The app knows its own name (the
+ * module it is running from), so the server only has to say what the current one is, and the two differ exactly
+ * when the page is older than the app. Null when the app is not built, or built in dev, where there is no
+ * hashed bundle to compare against.
+ */
+export function buildId({ appDist = APP_DIST } = {}) {
+  try {
+    const html = fs.readFileSync(path.join(appDist, "index.html"), "utf8");
+    return html.match(/\/assets\/(index-[\w-]+\.js)/)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** One session's own page: the session, and the signals blamed on it. Null when the pack does not hold it. */
 export function apiSession({ root = DAILY_ROOT, date, id } = {}) {
   const pack = readPack(root, date);
   const session = pack?.sessions?.find((entry) => String(entry.id) === String(id));
   if (!session) return null;
   return { date, session, signals: (pack.signals ?? []).filter((signal) => signal.session === session.id) };
-}
-
-/**
- * The four views that answer "is this getting better?": the ledger of fixes, the ratchet, the bench, and the
- * findings that came back.
- *
- * They share three collectors, because they differ in what they ask rather than in what they know: the
- * proposals a window's digests hold, the kept selection joined to the proposal each item came from, and the
- * days a file was committed on. `report-views.mjs` owns the arithmetic; this file does the looking.
- */
-
-/** How bad a proposal is, read from the digest's own words: `S21 (high, kept)`. */
-export function severityOf(signal) {
-  const text = String(signal ?? "").toLowerCase();
-  if (/\bhigh\b/.test(text)) return "high";
-  if (/\bmedium\b/.test(text)) return "medium";
-  if (/\blow\b/.test(text)) return "low";
-  return "unknown";
-}
-
-/**
- * The days a file was committed on. One `git log` per file, memoised, and injectable: this is the only place
- * the report shells out, and no rule in `report-views.mjs` may depend on a repository being there.
- */
-export function makeCommitDates({ cwd = REPO_ROOT, run = gitLog } = {}) {
-  const cache = new Map();
-  return (file) => {
-    if (!file) return [];
-    if (!cache.has(file)) cache.set(file, run(file, cwd));
-    return cache.get(file);
-  };
-}
-
-function gitLog(file, cwd) {
-  try {
-    // `--` before the path, so a file named like an option is still a path, and argv rather than a shell, so
-    // nothing in a digest's `Target:` line can become a command. A file git does not know is no commits.
-    const out = execFileSync("git", ["log", "--format=%cI", "--", file], {
-      cwd,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-    return out.split("\n").map((line) => line.trim()).filter(Boolean);
-  } catch {
-    return [];
-  }
-}
-
-/** When a fix landed: the first commit to its file on or after the day the reader kept it. */
-export function landedAt(commits, file, since, until) {
-  if (!file) return null;
-  return (
-    commits(file)
-      .map((stamp) => String(stamp).slice(0, 10))
-      .filter((date) => date <= until && (!since || date >= since))
-      .sort()[0] ?? null
-  );
-}
-
-/** The last commit to a file at or before a day, for a row that has not landed: context, not a landing. */
-export function committedBefore(commits, file, day) {
-  if (!file) return null;
-  return (
-    commits(file)
-      .map((stamp) => String(stamp).slice(0, 10))
-      .filter((date) => !day || date <= day)
-      .sort()
-      .pop() ?? null
-  );
-}
-
-/** The days a view reads, the last one, and the sample floor the day was scored against. */
-function windowOf(history, maxDays) {
-  const dates = allDays(history).slice(-maxDays);
-  const last = dates[dates.length - 1] ?? null;
-  return { dates, last, floor: history.get(last)?.floor ?? 5 };
-}
-
-/** Every proposal a window's digests ask for, as a sighting of the finding it describes. */
-export function proposalSightings({ root = DAILY_ROOT, dates = [] } = {}) {
-  const sightings = [];
-  for (const date of dates) {
-    const pack = readPack(root, date);
-    const known = new Set((pack?.sessions ?? []).map((session) => String(session.id)));
-    for (const proposal of readDayProposals(root, date).proposals) {
-      sightings.push({
-        date,
-        id: proposal.id,
-        klass: classOf(proposal.title),
-        title: proposal.title,
-        path: pathOf(proposal.target),
-        target: proposal.target ?? null,
-        skill: proposal.skill ?? null,
-        change: proposal.change ?? null,
-        reason: proposal.reason ?? null,
-        expected: proposal.expected ?? null,
-        route: proposal.route ?? null,
-        signal: proposal.signal ?? null,
-        severity: severityOf(proposal.signal),
-        sessions: sessionsIn(proposal.signal, known),
-      });
-    }
-  }
-  return sightings;
-}
-
-/**
- * The kept selection, each item joined to the proposal it came from.
- *
- * The item carries what the reader decided (the change, the check, the note) and the proposal carries the
- * class of defect and the file it lives in. They are matched by the work rather than by the label, for the
- * same reason `sameWork` exists: an entry saved before the list recorded days has no day of its own, and `P1`
- * means a different task on every day.
- */
-export function keptItems({ root = DAILY_ROOT, dates = [], todos = { items: [] } } = {}) {
-  const proposals = proposalSightings({ root, dates });
-  return todos.items.map((item) => {
-    const match = proposals.find((proposal) => sameWork(item, proposal)) ?? null;
-    return {
-      id: item.id,
-      day: item.day ?? match?.date ?? null,
-      skill: item.skill ?? match?.skill ?? null,
-      klass: match?.klass ?? classOf(null),
-      title: match?.title ?? null,
-      change: item.change ?? match?.change ?? null,
-      target: item.target ?? match?.target ?? null,
-      path: pathOf(item.target) ?? match?.path ?? null,
-      check: item.expected ?? match?.expected ?? null,
-      signal: item.signal ?? match?.signal ?? null,
-      route: item.route ?? match?.route ?? null,
-    };
-  });
-}
-
-/**
- * Findings that keep coming back, which is the sharpest improvement metric the record holds.
- *
- * A finding is an improvement class at a file; its sightings are the days a digest proposed it, and a commit
- * to that file after a sighting is a fix attempt. A sighting after the last attempt is the finding coming
- * back — the one thing the panel can say that means "the fix did not work" — and it is derived entirely from
- * packs already on disk.
- */
-export function apiRecurrence({ root = DAILY_ROOT, maxDays = 14, today = null, closedAfterDays = 7, commits = null } = {}) {
-  const history = loadHistory(path.join(root, "history.jsonl"));
-  const { dates, last } = windowOf(history, maxDays);
-  const git = commits ?? makeCommitDates();
-  const found = recurrenceFindings({
-    sightings: proposalSightings({ root, dates }),
-    commits: (file) => git(file),
-    today: today ?? last ?? "",
-    closedAfterDays,
-  });
-  return { ...found, from: dates[0] ?? null, to: last, days: dates.length, closedAfterDays };
-}
-
-/**
- * The ledger: of the fixes the reader kept, how many held.
- *
- * The window sits either side of the day the fix landed, and the verdict waits for the whole window, because
- * one day after a fix is a coin toss. `window` is a query knob and defaults to two: two measured days is the
- * honest minimum this record can pay for, and a repository with busier weeks can ask for more.
- */
-export function apiLedger({ root = DAILY_ROOT, maxDays = 30, window = 2, today = null, commits = null, sampleFloor = null } = {}) {
-  const history = loadHistory(path.join(root, "history.jsonl"));
-  const { dates, last, floor } = windowOf(history, maxDays);
-  const day = today ?? last ?? "";
-  const git = commits ?? makeCommitDates();
-  const todos = readTodos(root);
-  const items = keptItems({ root, dates, todos });
-  const seriesBySkill = new Map(movement(history, { maxDays }).map((row) => [row.name, row.series]));
-  const findings = apiRecurrence({ root, maxDays, today: day, commits: git }).findings;
-  const ledger = ledgerRows({
-    items,
-    seriesBySkill,
-    applied: (file, since) => landedAt(git, file, since, day),
-    lastCommit: (file, since) => committedBefore(git, file, since),
-    today: day,
-    windowDays: window,
-    sampleFloor: sampleFloor ?? floor,
-    cameBack: (klass, file) =>
-      findings.some((finding) => finding.klass === klass && finding.path === file && finding.status === "came-back"),
-  });
-  return { ...ledger, from: dates[0] ?? null, to: last, days: dates.length, proposals: proposalSightings({ root, dates }).length };
-}
-
-/**
- * The ratchet: one floor per skill, and how far each skill has slipped below it.
- *
- * With no floor stored, the best sustained value stands in, so the view is loud about a regression without
- * anyone having to configure it. A stored floor is a commitment, and lowering one needs a reason — the rule
- * RuboCop's todo list needs, where re-baselining silently absorbs whatever went wrong.
- */
-export function apiRatchet({ root = DAILY_ROOT, maxDays = 14, today = null, budget = 2, window = 3, sampleFloor = null } = {}) {
-  const history = loadHistory(path.join(root, "history.jsonl"));
-  const { dates, last, floor } = windowOf(history, maxDays);
-  const stored = readFloors(root);
-  const ratchet = ratchetRows({
-    rows: movement(history, { maxDays }),
-    floors: stored.skills,
-    window,
-    sampleFloor: sampleFloor ?? floor,
-    windowScores: windowScoreByName({ root, maxDays }),
-    today: today ?? last ?? "",
-  });
-  return { ...ratchet, budget, state: budgetState(ratchet.below, budget), updatedAt: stored.updatedAt, days: dates.length };
-}
-
-/**
- * Each skill's score over the whole window, which is the strongest evidence a short record has.
- *
- * A day can be under the sample floor while the window it sits in is not, so this is what a floor falls back
- * to when there is no run of solid days to hold. A record with no packs has no window, and that is not an
- * error — it is a repository where nothing has been collected yet.
- */
-function windowScoreByName({ root = DAILY_ROOT, maxDays = 14 } = {}) {
-  const scores = new Map();
-  try {
-    const window = scoresForSources({ days: maxDays, root });
-    for (const skill of window.skills ?? []) {
-      if (skill.status === "scored" && skill.score !== null) {
-        scores.set(skill.name, { score: skill.score, n: skill.n ?? null, days: window.window?.days ?? maxDays });
-      }
-    }
-  } catch {
-    return scores;
-  }
-  return scores;
-}
-
-/** The floors a reader has committed to, beside the packs: like the selection, the data survives a restart. */
-export function readFloors(root = DAILY_ROOT) {
-  const file = path.join(root, "ratchet.json");
-  if (!fs.existsSync(file)) return { updatedAt: null, skills: {} };
-  try {
-    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
-    const skills = {};
-    for (const [name, entry] of Object.entries(parsed.skills ?? {})) {
-      const value = Number(entry?.floor);
-      if (!Number.isFinite(value)) continue;
-      skills[name] = {
-        floor: value,
-        since: entry.since ?? null,
-        basis: entry.basis ?? null,
-        reason: entry.reason ?? null,
-        at: entry.at ?? null,
-      };
-    }
-    return { updatedAt: parsed.updatedAt ?? null, skills };
-  } catch {
-    return { updatedAt: null, skills: {} };
-  }
-}
-
-export function writeFloors(skills, root = DAILY_ROOT) {
-  const payload = { updatedAt: new Date().toISOString(), skills: skills ?? {} };
-  fs.mkdirSync(root, { recursive: true });
-  fs.writeFileSync(path.join(root, "ratchet.json"), `${JSON.stringify(payload, null, 2)}\n`);
-  return payload;
-}
-
-/** Hold a skill's floor in: commit to the best sustained value it has already reached. */
-export function holdFloor({ root = DAILY_ROOT, skill, reason = null, maxDays = 14, window = 3 } = {}) {
-  const view = apiRatchet({ root, maxDays, window });
-  const row = view.skills.find((entry) => entry.name === skill);
-  if (!row) return { ok: false, reason: `no movement recorded for ${skill}` };
-  if (!row.floor) return { ok: false, reason: `${skill} has no run of measured days to hold yet` };
-  const stored = readFloors(root);
-  stored.skills[skill] = { floor: row.floor.value, since: row.floor.since, basis: row.floor.basis, reason, at: new Date().toISOString() };
-  const written = writeFloors(stored.skills, root);
-  return { ok: true, skill, floor: written.skills[skill] };
-}
-
-/**
- * Lower a floor, deliberately and on the record. A reason is required: a floor that can be moved in silence is
- * not a floor, and the reason is what lets the next reader judge the move.
- */
-export function lowerFloor({ root = DAILY_ROOT, skill, value = null, reason = null, maxDays = 14, window = 3 } = {}) {
-  if (!reason || !String(reason).trim()) return { ok: false, reason: "a floor can only be lowered with a reason" };
-  const view = apiRatchet({ root, maxDays, window });
-  const row = view.skills.find((entry) => entry.name === skill);
-  if (!row) return { ok: false, reason: `no movement recorded for ${skill}` };
-  const next = Number.isFinite(Number(value)) ? Number(value) : row.latestScore;
-  if (!Number.isFinite(next)) return { ok: false, reason: `${skill} has no measured value to lower to` };
-  const stored = readFloors(root);
-  stored.skills[skill] = { floor: next, since: row.latest, basis: row.floor?.basis ?? null, reason: String(reason).trim(), at: new Date().toISOString() };
-  const written = writeFloors(stored.skills, root);
-  return { ok: true, skill, floor: written.skills[skill] };
-}
-
-/**
- * The bench: the one thing to fix now, what is in flight, and what is waiting on the scan.
- *
- * `now` is picked mechanically and says why: severity, how often the finding has been seen, and how cheap its
- * check is. `doing` is one card, because a bench with three open fixes is a bench where none gets finished,
- * and `queued` is what that limit costs. Everything landed but not yet measured is `waiting`, which is the
- * half of the loop nothing else in the app shows.
- */
-export function apiBench({ root = DAILY_ROOT, maxDays = 14, today = null, window = 2, commits = null } = {}) {
-  const history = loadHistory(path.join(root, "history.jsonl"));
-  const { dates, last, floor } = windowOf(history, maxDays);
-  const day = today ?? last ?? "";
-  const git = commits ?? makeCommitDates();
-  const todos = readTodos(root);
-  const sightings = proposalSightings({ root, dates });
-  const found = recurrenceFindings({ sightings, commits: (file) => git(file), today: day });
-  const kept = keptItems({ root, dates, todos });
-  const seriesBySkill = new Map(movement(history, { maxDays }).map((row) => [row.name, row.series]));
-  const recurrenceOf = (sighting) =>
-    found.findings.find((finding) => finding.klass === sighting.klass && finding.path === sighting.path)?.days ?? 1;
-
-  const open = sightings
-    .filter((sighting) => !todos.items.some((item) => sameWork(item, sighting)))
-    .map((sighting) => ({ ...sighting, recurrence: recurrenceOf(sighting), from: sighting.date }));
-  const ranked = rankCandidates(open);
-
-  const landed = kept.map((item) => {
-    const at = landedAt(git, item.path, item.day, day);
-    const after = at ? windowMean(seriesBySkill.get(item.skill), shiftDays(at, 1), day) : { mean: null, days: 0, calls: 0, thin: 0, dates: [] };
-    return { ...item, landed: at, after, left: Math.max(0, window - after.days) };
-  });
-  const inFlight = landed.filter((item) => !item.landed).sort((a, b) => String(a.day).localeCompare(String(b.day)));
-  const waiting = landed
-    .filter((item) => item.landed && item.left > 0)
-    .sort((a, b) => String(b.landed).localeCompare(String(a.landed)));
-
-  return {
-    today: day,
-    window,
-    sampleFloor: floor,
-    now: ranked[0] ?? null,
-    next: ranked.slice(1, 4),
-    candidates: ranked.length,
-    doing: inFlight[0] ?? null,
-    queued: inFlight.slice(1),
-    waiting,
-    counts: { open: ranked.length, kept: kept.length, inFlight: inFlight.length, waiting: waiting.length },
-  };
-}
-
-/**
- * The five views that ask a *different* question about the same record.
- *
- * Where the first four measured the work, these measure the measurement: how much of a move is noise, how sure
- * a number is, why it is that number, whether the fixing process is keeping up, and when a believed-fixed
- * finding has to be re-checked. Each one borrows its rule from a field that already solved the same problem
- * (clinical QC, competitive rating, consumer credit, queueing, spaced repetition), and every rule is a pure
- * function in `report-views.mjs`.
- */
-
-/** Every skill's tally for one day, which is where the axis denominators live. */
-export function talliesFor({ root = DAILY_ROOT, date } = {}) {
-  const pack = date ? readPack(root, date) : null;
-  if (!pack) return new Map();
-  return new Map(tallySessions(pack.sessions ?? []).map((tally) => [tally.name, tally]));
-}
-
-/** The newest day's tallies, as the maps the interval and reason-code views read. */
-function latestDay({ root, history, maxDays }) {
-  const { dates, last, floor } = windowOf(history, maxDays);
-  const tallies = talliesFor({ root, date: last });
-  const dims = new Map();
-  for (const [name, tally] of tallies) {
-    const dimensions = dimensionsOf(tally);
-    dims.set(name, {
-      dimensions,
-      denominators: denominatorsOf(tally),
-      score: compose(dimensions, WEIGHTS_V1).score,
-      n: tally.loaded,
-      named: tally.named,
-    });
-  }
-  return { dates, last, floor, tallies, dims };
-}
-
-/**
- * The control chart: limits from the record's own variation, and the rule that fired.
- *
- * The sigma is pooled from the day-to-day differences of every skill until a skill has ten measured days of
- * its own, because two days cannot say what one skill's own spread is. The fleet's expected false alarms come
- * with it, since that is the number that decides which rules are usable: at 28 skills, a 2s rule rings about
- * once a day on nothing.
- */
-export function apiControl({ root = DAILY_ROOT, maxDays = 14, minDays = 10, sigma = null } = {}) {
-  const history = loadHistory(path.join(root, "history.jsonl"));
-  const { dates, last } = windowOf(history, maxDays);
-  const rows = movement(history, { maxDays });
-  const pooled = pooledDaySigma(rows);
-  const chart = controlChart({ rows, sigma: sigma ?? pooled.sigma, minDays, fleet: rows.length });
-  return { ...chart, pooled, rules: CONTROL_RULES, from: dates[0] ?? null, to: last, days: dates.length };
-}
-
-/**
- * The interval a score earns, and where the next session buys the most certainty.
- *
- * `SE = σ/√n` is why this is a view and not a footnote: a score from three sessions and a score from forty have
- * the same number of digits today, and only one of them means anything. The conservative value is TrueSkill's
- * display rule (μ − 3σ) so a ranking is not held by whoever was measured luckiest.
- */
-export function apiInterval({ root = DAILY_ROOT, maxDays = 14, z = 1.96 } = {}) {
-  const history = loadHistory(path.join(root, "history.jsonl"));
-  const { dates, last, floor, tallies, dims } = latestDay({ root, history, maxDays });
-  const rows = movement(history, { maxDays });
-  const pooled = pooledDaySigma(rows);
-  const view = intervalRows({ rows, latest: dims, weights: WEIGHTS_V1, fallbackSigma: pooled.sigma, z });
-  return { ...view, pooled, sampleFloor: floor, from: dates[0] ?? null, to: last, days: dates.length, tallied: tallies.size };
-}
-
-/**
- * The reason codes: why a score is what it is, in points, and what a target on one axis would buy.
- *
- * The score is a weighted mean of measurable rates, so the gap from 100 decomposes exactly and every point is
- * attributable to an axis with the counters behind it. `pooled` is context, never a target: on this record the
- * fleet's trigger rate is 33% because those CLIs name far more skills than they load, and moving a skill
- * *down* to it would cost points.
- */
-export function apiFactors({ root = DAILY_ROOT, maxDays = 14 } = {}) {
-  const history = loadHistory(path.join(root, "history.jsonl"));
-  const { dates, last, dims, tallies } = latestDay({ root, history, maxDays });
-  const pooled = pooledRates([...tallies.values()], { dimensionsOf, denominatorsOf });
-  // Every skill the newest day's sessions named or loaded, not the movement table's rows: a skill that was
-  // named three times and never loaded is the case the `trigger` reason code exists for, and the movement
-  // table cannot list it because it has no loaded session to score.
-  const skills = [...dims.entries()]
-    .map(([name, day]) => {
-      if (day.score === null) return null;
-      return {
-        ...factorCodes({
-          name,
-          dimensions: day.dimensions,
-          denominators: day.denominators,
-          tally: tallies.get(name) ?? {},
-          weights: WEIGHTS_V1,
-          pooled,
-        }),
-        n: day.n,
-        named: day.named,
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => (b.gap ?? 0) - (a.gap ?? 0));
-  return { today: last, weights: WEIGHTS_V1, pooled, skills, from: dates[0] ?? null, to: last, days: dates.length };
-}
-
-/**
- * The flow of the fixing itself: what arrives, what closes, and how long the queue implies.
- *
- * Arrivals are the digest's proposals, kept and landed come from the selection and the commit dates, and a
- * closure is dated by the rule that produced it (the last fix plus the quiet week the recurrence board asks
- * for), which the view states rather than leaving as an unexplained bar.
- */
-export function apiFlow({ root = DAILY_ROOT, maxDays = 14, commits = null, closedAfterDays = 7 } = {}) {
-  const history = loadHistory(path.join(root, "history.jsonl"));
-  const { dates, last, floor } = windowOf(history, maxDays);
-  const day = last ?? "";
-  const git = commits ?? makeCommitDates();
-  const kept = keptItems({ root, dates, todos: readTodos(root) });
-  const findings = apiRecurrence({ root, maxDays, commits: git, closedAfterDays }).findings;
-  const arrivals = {};
-  const keptBy = {};
-  const landedBy = {};
-  const closedBy = {};
-  for (const sighting of proposalSightings({ root, dates })) arrivals[sighting.date] = (arrivals[sighting.date] ?? 0) + 1;
-  for (const item of kept) {
-    if (item.day) keptBy[item.day] = (keptBy[item.day] ?? 0) + 1;
-    const at = landedAt(git, item.path, item.day, day);
-    if (at) landedBy[at] = (landedBy[at] ?? 0) + 1;
-  }
-  for (const finding of findings) {
-    if (finding.status !== "closed" || !finding.lastFix) continue;
-    const on = shiftDays(finding.lastFix, closedAfterDays);
-    closedBy[on] = (closedBy[on] ?? 0) + 1;
-  }
-  const flow = flowOf({
-    dates,
-    arrivals,
-    kept: keptBy,
-    landed: landedBy,
-    closed: closedBy,
-    open: findings.filter((finding) => finding.status !== "closed").map((finding) => ({ first: finding.first, path: finding.path, status: finding.status })),
-    today: day,
-  });
-  return { ...flow, floor, kept: kept.length, findings: findings.length, closedAfterDays, from: dates[0] ?? null, to: last };
-}
-
-/** The reviews a reader has recorded: one entry per finding, keyed by the file it is about. */
-export function readReviews(root = DAILY_ROOT) {
-  const file = path.join(root, "reviews.json");
-  if (!fs.existsSync(file)) return { updatedAt: null, items: {} };
-  try {
-    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
-    const items = {};
-    for (const [key, entry] of Object.entries(parsed.items ?? {})) {
-      if (!key || !entry || typeof entry !== "object") continue;
-      const step = Number(entry.step);
-      const lapses = Number(entry.lapses);
-      const ef = Number(entry.ef);
-      items[key] = {
-        step: Number.isFinite(step) ? Math.max(0, Math.min(6, Math.trunc(step))) : 0,
-        lapses: Number.isFinite(lapses) ? Math.max(0, Math.trunc(lapses)) : 0,
-        ef: Number.isFinite(ef) ? Math.min(2.5, Math.max(1.3, ef)) : 2.5,
-        at: typeof entry.at === "string" ? entry.at : null,
-        outcome: typeof entry.outcome === "string" ? entry.outcome : null,
-        reformulated: entry.reformulated === true,
-      };
-    }
-    return { updatedAt: parsed.updatedAt ?? null, items };
-  } catch {
-    return { updatedAt: null, items: {} };
-  }
-}
-
-export function writeReviews(items, root = DAILY_ROOT) {
-  const payload = { updatedAt: new Date().toISOString(), items: items ?? {} };
-  fs.mkdirSync(root, { recursive: true });
-  fs.writeFileSync(path.join(root, "reviews.json"), `${JSON.stringify(payload, null, 2)}\n`);
-  return payload;
-}
-
-/** Record one verdict on one finding. The only write the schedule needs. */
-export function recordReview({ root = DAILY_ROOT, path: file, outcome = "held", at = null } = {}) {
-  if (!file || typeof file !== "string") return { ok: false, reason: "a review needs the path of the finding it is about" };
-  const allowed = ["held", "came-back", "reformulate"];
-  if (!allowed.includes(outcome)) return { ok: false, reason: `unknown outcome "${outcome}"; expected one of ${allowed.join(", ")}` };
-  const store = readReviews(root);
-  store.items[file] = applyOutcome(store.items[file] ?? null, outcome, at ?? new Date().toISOString());
-  const written = writeReviews(store.items, root);
-  return { ok: true, path: file, review: written.items[file] };
-}
-
-/**
- * What is due for a re-check, on a schedule that widens.
- *
- * A finding the scanner has already caught coming back is answered for free (`auto`), so the list asks a human
- * only for what the scanner cannot see. The load is stated too: arrivals a day times the four checks a widening
- * schedule asks for, which is the number that decides whether the routine will survive.
- */
-export function apiSchedule({ root = DAILY_ROOT, maxDays = 14, commits = null, limit = 8, closedAfterDays = 7 } = {}) {
-  const history = loadHistory(path.join(root, "history.jsonl"));
-  const { dates, last } = windowOf(history, maxDays);
-  const git = commits ?? makeCommitDates();
-  const findings = apiRecurrence({ root, maxDays, commits: git, closedAfterDays }).findings;
-  const store = readReviews(root);
-  const view = dueRows({ findings, reviews: store.items, today: last ?? "", limit });
-  const arrivals = proposalSightings({ root, dates }).length;
-  const perDay = dates.length ? Math.round((arrivals / dates.length) * 10) / 10 : null;
-  return {
-    ...view,
-    updatedAt: store.updatedAt,
-    steps: REVIEW_STEPS,
-    perFindingChecks: 4,
-    arrivals,
-    perDay,
-    load: perDay === null ? null : Math.round(perDay * 4 * 10) / 10,
-    from: dates[0] ?? null,
-    days: dates.length,
-  };
 }
 
 /**
@@ -931,39 +400,7 @@ export function createServer({ root = DAILY_ROOT, maxDays = 14, appDist = APP_DI
         return sendJson(res, 200, apiMovement({ root, maxDays, recent: Number(query.get("recent") ?? 5) || 5 }));
       }
       if (url.pathname === "/api/days") return sendJson(res, 200, apiDays({ root, maxDays }));
-      if (url.pathname === "/api/ledger") {
-        return sendJson(res, 200, apiLedger({ root, maxDays, window: Number(query.get("window") ?? 2) || 2 }));
-      }
-      if (url.pathname === "/api/bench") {
-        return sendJson(res, 200, apiBench({ root, maxDays, window: Number(query.get("window") ?? 2) || 2 }));
-      }
-      if (url.pathname === "/api/recurrence") return sendJson(res, 200, apiRecurrence({ root, maxDays }));
-      if (url.pathname === "/api/ratchet") {
-        if (req.method === "POST") {
-          const body = JSON.parse((await readBody(req)) || "{}");
-          const args = { root, skill: body.skill, reason: body.reason ?? null };
-          // Two decisions, one route: hold the floor in at what the skill already held, or lower it on the
-          // record. Both answer 400 with the reason when the move is not allowed.
-          const result = body.action === "lower" ? lowerFloor({ ...args, value: body.value ?? null }) : holdFloor(args);
-          return sendJson(res, result.ok ? 200 : 400, result);
-        }
-        const budget = Number(query.get("budget"));
-        return sendJson(res, 200, apiRatchet({ root, maxDays, budget: Number.isFinite(budget) ? budget : 2 }));
-      }
-      if (url.pathname === "/api/control") return sendJson(res, 200, apiControl({ root, maxDays }));
-      if (url.pathname === "/api/interval") return sendJson(res, 200, apiInterval({ root, maxDays }));
-      if (url.pathname === "/api/factors") return sendJson(res, 200, apiFactors({ root, maxDays }));
-      if (url.pathname === "/api/flow") return sendJson(res, 200, apiFlow({ root, maxDays }));
-      if (url.pathname === "/api/schedule") return sendJson(res, 200, apiSchedule({ root, maxDays }));
-      if (url.pathname === "/api/reviews") {
-        if (req.method === "POST") {
-          const body = JSON.parse((await readBody(req)) || "{}");
-          // One verdict on one finding: held (the wait grows), came back (the wait resets) or reformulate.
-          const result = recordReview({ root, path: body.path, outcome: body.outcome });
-          return sendJson(res, result.ok ? 200 : 400, result);
-        }
-        return sendJson(res, 200, readReviews(root));
-      }
+      if (url.pathname === "/api/version") return sendJson(res, 200, { build: buildId({ appDist }) });
       if (url.pathname === "/api/todos") {
         if (req.method === "POST") {
           const body = await readBody(req);
@@ -1061,19 +498,9 @@ function usage() {
     "  GET  /api/day/<date>                  one pack, its digest's proposals and its scores",
     "  GET  /api/day/<date>/session/<id>     one session and the signals blamed on it",
     "  GET  /api/skill/<name>                one skill's series, change and per-day detail",
-    "  GET  /api/ledger                      the fixes the reader kept, with a before/after verdict",
-    "  GET  /api/ratchet                     one floor per skill, and what slipped below it",
-    "  GET  /api/bench                       the one fix to do now, what is in flight, what is waiting",
-    "  GET  /api/recurrence                  findings that keep coming back, by class and file",
-    "  GET  /api/control                     control limits from the record, and the rule that fired",
-    "  GET  /api/interval                    each score with the interval its evidence earns",
-    "  GET  /api/factors                     why a score is what it is, in points, per axis",
-    "  GET  /api/flow                        arrivals, closures and the wait of the fixing process",
-    "  GET  /api/schedule                    what is due for a re-check, on widening intervals",
-    "  GET  /api/reviews  POST /api/reviews  the reviews recorded, and one verdict on one finding",
     "  GET  /api/refresh                     record the newest day, and report what changed",
     "  GET  /api/todos  POST /api/todos      the selection, and the one thing this server writes",
-    "  GET  /api/ratchet  POST /api/ratchet  the floors; POST holds one in or lowers it, with a reason",
+    "  GET  /api/version                     the bundle the app is serving, so a stale tab reloads itself",
     "  POST /api/open                        open the report in an Orca tab, or in a window without browser controls",
     "  GET  /history.jsonl                   the raw day-by-day record",
     "",

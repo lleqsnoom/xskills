@@ -1,5 +1,4 @@
-import { createSignal } from "solid-js";
-import type { BenchTask, Proposal, TodoItem } from "./api";
+import type { Proposal, TodoItem } from "./api";
 
 /**
  * A proposal and a to-do entry are one thing at two moments in its life: the digest proposes it, the reader
@@ -57,24 +56,6 @@ export function taskFromTodo(item: TodoItem): Task {
   };
 }
 
-/** A proposal the bench picked. It is a proposal, so the same `+ to-do` action applies to it. */
-export function taskFromBench(candidate: BenchTask): Task {
-  return {
-    id: candidate.id,
-    skill: candidate.skill,
-    title: candidate.title,
-    signal: candidate.signal,
-    target: candidate.target,
-    change: candidate.change,
-    reason: candidate.reason ?? null,
-    expected: candidate.expected,
-    route: candidate.route,
-    note: null,
-    from: candidate.day ?? candidate.from ?? null,
-    inTodo: false,
-  };
-}
-
 /**
  * How much a task matters: the worst severity among the signals it cites, and how many signals back it.
  *
@@ -106,32 +87,4 @@ export function importanceOf(task: Task): Importance {
     label: backing > 1 ? `${severity} ×${backing}` : severity,
     detail: text,
   };
-}
-
-/** The shape a list of tasks is drawn in. Three ship because which one reads best is a taste call. */
-export type Shape = "a" | "b" | "c";
-
-export const SHAPES: { id: Shape; label: string; hint: string }[] = [
-  { id: "a", label: "rows", hint: "one row a task, open a row for the whole text" },
-  { id: "b", label: "cards", hint: "the change first, the file and the check muted beside it" },
-  { id: "c", label: "lines", hint: "one line a task, expand for the detail" },
-];
-
-function fromUrl(): Shape {
-  const found = new URLSearchParams(window.location.search).get("shape");
-  return found === "b" || found === "c" ? found : "a";
-}
-
-const [shape, setShape] = createSignal<Shape>(fromUrl());
-
-export function taskShape(): Shape {
-  return shape();
-}
-
-/** The choice lives in the URL, so a reload keeps it and a link can point at the shape it argues for. */
-export function setTaskShape(next: Shape) {
-  setShape(next);
-  const url = new URL(window.location.href);
-  url.searchParams.set("shape", next);
-  window.history.replaceState(null, "", url);
 }

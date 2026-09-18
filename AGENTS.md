@@ -38,7 +38,8 @@ xskills/
 ├── automation/               # Scheduled maintenance (not published in the npm package)
 │   └── daily-reflection/     # 05:00 Orca job: collect last 24h sessions from every CLI, write a digest
 ├── scripts/                  # Repo tooling: sync-run-folders.js, dev.mjs, report-server.mjs, report-open.mjs (not published)
-├── tools/report-app/         # The report app's Solid source, styled in Orca's design language (dist/ and node_modules/ are gitignored)
+├── tools/report-app/         # The report app: Solid + Tailwind, controls in src/ui/, styled in Orca's design language
+│                             # (dist/, dist-panel/ and node_modules/ are gitignored)
 └── skills/                   # Skill packages (published as part of the npm package)
     ├── x-commit/             # Conventional commit message helper
     │   ├── SKILL.md          # Required: YAML frontmatter + instructions
@@ -285,99 +286,34 @@ npm run report:open -- --window     # the same, in a window with no browser cont
 npm run report:open -- --print      # say what would happen, and open nothing
 ```
 
-The server only reads, with three exceptions, all files beside the packs: the selection a reader makes
-(`todos.json`), the floors a reader commits to (`ratchet.json`) and the re-checks a reader records
-(`reviews.json`), so all three survive a restart.
+The server only reads, with one exception: the selection a reader makes, written to `todos.json` beside the
+packs so it survives a restart. Everything is answered `no-store`, because the app is rebuilt in place.
+
+**A page older than the app reloads itself.** Opening the report focuses the tab that already has it
+(`scripts/report-open.mjs`), and focusing a tab does not reload it — so a reader can sit on yesterday's bundle
+with every fix merged and none of it on screen, which is what "it is still broken" was. The bundle knows its own
+name (`/assets/index-<hash>.js`), the server reports the name its `index.html` asks for (`GET /api/version`), and
+when the two differ the page reloads once. Checked on the next focus or visibility change, and at most once a
+minute, so a page left open costs nothing. A dev server and a snapshot both opt out by construction: `main.tsx`
+and `panel.html` are not bundle names, and a panel has no network to ask over anyway.
 
 | Route | What it is |
 |-------|------------|
-| `/` | **the main screen**, five views of the record (see below): `movement`, `bench`, `ledger`, `ratchet`, `recurrence` |
+| `/` `/skills` | **skills** — a card per skill in use: its gauge, its name, its band, its score and its line, filtered by name or by how it moved |
 | `/days` | the calendar, every recorded day clickable |
 | `/day/<YYYY-MM-DD>` | one day: its scores, its sessions, and the proposals its `DIGEST.md` asks for |
 | `/day/<date>/session/<id>` | one session's counters, and the signals blamed on it |
 | `/skill/<name>` | one skill: its line, why it moved, what was proposed for it and the signals blamed on it |
-| `/todos` | the selection, editable, written back to `todos.json` |
+| `/todos` | the selection as cards, editable, written back to `todos.json`, and `copy the brief` to hand the whole loop to an agent |
 | `/api/movement` `/api/days` `/api/day/<date>` `/api/skill/<name>` | the same data as JSON |
-| `/api/ledger` `/api/ratchet` `/api/bench` `/api/recurrence` | the work views as JSON |
-| `/api/control` `/api/interval` `/api/factors` `/api/flow` `/api/schedule` | the measurement views as JSON |
-| `/api/refresh` `POST /api/todos` `POST /api/ratchet` `POST /api/reviews` | record the newest day; write the selection; hold a floor in or lower it; record a re-check |
+| `/api/version` | the bundle the app is serving, so a tab opened before the last build reloads itself |
+| `/api/refresh` `POST /api/todos` | record the newest day; write the selection |
 | `POST /api/open` | open the report where a reader asked for it: `{ surface: "orca" \| "window", path }` |
 | `/history.jsonl` | the raw day-by-day record |
 
 The server answers any extension-less path with the app shell, so a deep link survives a reload, and an
 unbuilt app gets a page naming `npm run report:build` instead of a 404. A reader who is not the app can live
 on `/api/*` alone.
-
-**The main screen is ten views, because one goal cannot be served from one angle.** `?view=` picks one
-(`movement`, `bench`, `ledger`, `ratchet`, `recurrence`, `control`, `interval`, `factors`, `flow`, `schedule`),
-the picker is a tab strip on the screen itself, and
-the choice rides through every link beside `shape`, so a reload or a bookmark lands on the view the reader
-chose. What the five have in common is that each ends in a decision rather than a number:
-
-| View | The question | What is loud |
-|------|--------------|--------------|
-| `movement` | did anything in use get better or worse, and by which axis | a skill whose line went down |
-| `bench` | what is the one fix to do now, and is it done yet | the picked card — `doing` is capped at one |
-| `ledger` | of the fixes I kept, how many held | a fix whose window came back below where it started |
-| `ratchet` | has any skill slipped below the best it has already held | a skill below its floor |
-| `recurrence` | which defects keep coming back | a finding proposed again *after* a fix landed |
-| `control` | is the newest day different from the days before it, in the record's own noise | the rule that fired, with its false-alarm rate |
-| `interval` | what is a score worth, and where does the next session buy the most | the widest interval |
-| `factors` | why is the score that number, in points | the axis costing the most, with its counters |
-| `flow` | is the fixing process keeping up | the stage work has reached and not left |
-| `schedule` | which believed-fixed finding is due for a re-check | a finding the scan already caught coming back |
-
-Three of those need a fact no pack holds: **when a fix landed**. `scripts/report-server.mjs` asks git for the
-commits to the file a proposal's `Target:` names (`git log --format=%cI -- <path>`, as argv and after `--`),
-memoised per file and injected through a `commits` seam so a test needs no repository. That one fact is what closes the loop the
-panel otherwise only records: proposal → kept (`todos.json`) → landed (git) → measured (the day's line).
-
-- **ledger** measures `?window=` (default 2) *measured* days either side of the day a commit touched the file,
-  waits for the whole window before it says anything, and calls a move under ±2 points flat — the noise the
-  movement table already treats as flat. A commit that predates the day the reader kept the fix is context,
-  not a landing, and is shown as such: a fix must not take credit for an earlier commit.
-- **ratchet** holds a floor per skill in `ratchet.json`. The floor is the best *sustained* run of measured days
-  (3 by default), the whole window's score when the record is too short for a run, or a value the reader
-  committed to — `source` says which, and the basis is printed beside it. A day below the sample floor can
-  neither hold nor break a floor, and lowering one is refused without a reason: RuboCop's todo lesson is that
-  re-baselining silently absorbs whatever went wrong.
-- **bench** picks with `severity × (1 + 0.5 × days seen) ÷ check cost`, and the `why` is part of the answer. A
-  fix with no check costs three times as much to prove, because it cannot be proven.
-- **recurrence** groups findings by *file*, not by improvement class: the class is written by the reflection and
-  its wording drifts between runs (one digest files a defect as `doc-command-drift:`, the next as
-  `` `x-epic`: ``), so grouping by it would orphan the history and read as progress. A sighting after the last
-  commit to the file is the finding "coming back"; a finding with a fix and no sighting for 7 days is *closed by
-  evidence*, and says how long the quiet has lasted rather than claiming certainty.
-
-The last five measure the measurement itself, each borrowing a rule a field already settled:
-
-- **control** builds a Levey-Jennings chart per skill the way a lab does: the centre and the spread come from a
-  **baseline period** (every measured day but the ones under judgement, at least `minDays`), the last up to
-  seven days are judged against it, and the rules are Westgard's multirule set (`1_3s`, `1_2s` as a *warning*,
-  `2_2s`, `4_1s`, `10x`, `7T`) with each one's false alarm computed from the normal tail and printed beside it.
-  The fleet's expected false alarms come with it: at 28 skills a 2s rule rings about once a day on nothing,
-  which is the arithmetic that decides the rule set. A day nobody loaded is a baseline, never a measurement.
-- **interval** puts a standard error on a score from the denominators its axes were measured over
-  (`σ/√n`; a rate's variance is `r(1−r)/n`), prints the score the evidence alone supports (TrueSkill's μ − 3σ),
-  and says how many sessions would halve the interval, which is always four times what the skill has.
-- **factors** decomposes the gap from 100 into the points each axis costs (`100·Σw(1−r)/Σw`) with the counters
-  behind it, and simulates one axis at a target. The target is the reader's: on this record the fleet's own
-  trigger rate is 23% because these CLIs name far more skills than they load, and aiming at it *costs* points.
-  It reads the newest day's tallies, not the movement table, because the skills with the widest gaps are the
-  ones no session ever loaded.
-- **flow** is Little's law over the pipeline: proposals → kept → landed → closed, the arrivals and closures a
-  day, the wait the open queue implies, and the constraint as the deepest stage work has reached and not left.
-  A closure is dated by the rule that produces it (last fix + the quiet week), which the view says.
-- **schedule** is SM-2 over findings: intervals of 1, then 6 days, then ×easiness (floored at 1.3), a lapse
-  back to one day, and `reformulate` after two — Wozniak's own conclusion, that an item which keeps failing has
-  a flaw in how it is written. A finding the scan already caught coming back is answered for free (`auto`), so
-  the list asks a human only for what the scanner cannot see. It is the second file the app writes
-  (`reviews.json`, beside `todos.json` and `ratchet.json`).
-
-The arithmetic lives in `scripts/report-views.mjs` and every rule is a pure function of records the packs
-already hold plus the `commits`, `applied` and `sigma` seams, so `test/report-app.test.cjs` drives all of it
-without a repository. `report-panel.mjs` bakes all nine payloads into the plugin's panel beside the movement
-one, so a panel answers every view with no network.
 
 **A day is one screen.** `/day/<date>` shows the header and the digest's proposals, and nothing else: the
 scores, the sessions and the signals — everything the pack holds — sit inside one `<details class="evidence">`,
@@ -386,6 +322,64 @@ pack's raw record is not the review; before this the day page was 20.9 viewports
 the decision. The signals inside are capped at the ones worth reading (`worthReading` counts everything that
 is not a low-severity repeat — 81 of 328 on a real day) with `show all` beside it, and folding the rest into
 a closed disclosure also takes 328 links out of the tab order.
+
+**One card, and every list is made of it.** `components/Card.tsx` is the app's only panel: a head (what the
+thing is, what it scored, its state) and a body (the numbers behind it), in a `.cards` grid whose track is
+`minmax(min(22rem, 100%), 1fr)` so a card is never wider than the pane it is in. Four views of the same kind of
+thing — a skill in use on `/skills`, the scores of one day, the days of one skill, a proposal — used to be four
+layouts (a five-column grid of fixed tracks, two more rows, a table, a card), and a reader had to learn each one.
+Now `/skills` is a card per skill (its gauge, its name, its band, its score, its line), a day's scores are a card
+per skill (the same head, plus the axes it measured and what it counted), and a skill's days are a card per day.
+A card that is the whole link is what makes the target the thing the reader sees: on `/skills` the card is an
+`<a>`, and only the name keeps the link colour. `held` marks the card a reader is on, and `onHold`/`onRelease`
+make the card itself the target for a pointer and for the keyboard — that is how the skill screen's days drive
+the gauge and the radar above them.
+
+**Every line is painted at the width it was given.** A `Sparkline` is a canvas, measured by an observer: at
+1300px a skill's card draws one 465px wide, in a 500px pane 155px, and in a 360px panel 306px. Its dots are
+circles and its stroke 1.8px at every size, because it is drawn at the size a reader sees rather than stretched
+to fit — the fixed 190×26 SVG it started with was 190px of a 688px column, and told the reader nothing about the
+rest of it. One renderer is left for this, which is why nothing passes a flag to choose one.
+
+**No page is wider than the pane it is in, and no table pans it.** Measured on every screen from 1300px down to
+200px: the document is exactly as wide as the pane, and no `.table-wrap` scrolls sideways either. What was pushing
+it out, in order of how much: the fixed-track rows (a five-column grid needs 30.5rem before its text has room);
+the tables, whose minimum width comes from what cannot shrink (a single-word head like "A session it was loaded
+in" is 163px on its own, and a session id is one unbreakable word); a heading that would not give way beside its
+146px picker; a month's `minmax(200px, 1fr)` track, a preference rather than a floor; a 236px filter input. The
+cards answer the first two by construction — a track is `minmax(min(22rem, 100%), 1fr)` and the prose in them
+breaks a long token (`overflow-wrap: anywhere`, because a change text is full of `{files:[{file, functions:[…]}]}`).
+The calendar is `minmax(min(200px, 100%), 1fr)` with 7 `minmax(0, 1fr)` columns, heads wrap under 34rem, and the
+filter is capped at its pane. A *record* table — a day's sessions, a session's checks — stacks under 27.5rem
+instead: the head goes and each cell carries its own `data-label` in a label column. Above 27.5rem the table is a
+table, which reads better whenever the columns fit.
+
+**Controls are a UI layer: Tailwind, wired to this app's tokens.** `src/ui/` is four components — `Button`,
+`Input`, `Badge`, `ToggleGroup` — and `components/Card.tsx` is the panel they sit in. Tailwind is imported in
+`src/tailwind.css` with its theme pointed at the app's own variables (`--color-card: var(--card)`,
+`--radius-lg: var(--radius)`, `--text-chrome: var(--t-chrome)`), so a utility class and a hand-written rule read
+the same values and cannot drift. Preflight is deliberately **not** imported: `styles.css` is the base this app
+was designed against, and a second reset on top of it would change rules nobody asked to change. The app's
+stylesheet is imported into a `components` layer *between* Tailwind's theme and its utilities, so a utility on an
+element wins over a legacy rule for that element — which is what moving a piece of UI onto Tailwind means.
+
+The filter is the clearest case for the layer. Three hand-written buttons in a wrapping row sit flush against each
+other the moment the row is tight, and a reader cannot tell a gap from a border; Kobalte's `ToggleGroup` is one
+track with one raised segment, roving focus and `aria-pressed` done for free, and it is the same control Orca uses
+for its own view switches. `Button` carries its own height, padding and radius (24px chip, 28px control — Orca's
+own small-control height — and 44px in a phone-sized pane, where a thumb cannot hit 28), its disabled and
+focus-ring states come from one place, and **the space between controls is always the layout's `gap`, never a
+margin one control forgot to leave**: `CardHead` owns `gap-x-2 gap-y-1` and the action takes the slack with
+`ml-auto` behind `CardActions`. That is the whole fix for "items touch or overlap": a control carries no margin,
+so it cannot collide, and a head that runs out of room wraps the item rather than overlapping it. A list stands
+off whatever it follows (`.cards { margin-top: .6rem }`), so a filter and the cards under it are never one
+object. `break-anywhere` (`@utility`, `overflow-wrap: anywhere`) is the app's own utility: machine strings —
+session ids, paths, control flow — are what would otherwise make a card wider than the pane.
+
+What is *not* in the layer is as deliberate: the charts, the radar, the calendar and the two record tables stay
+in `styles.css`, because they are drawings and records rather than controls, and their geometry (a canvas painted
+at a measured width, a table that stacks under 27.5rem) is not a set of paddings. `.dim` and `.num` stay too —
+they are the app's two text markers (muted prose, a tabular number) and Tailwind has no name for the meaning.
 
 **The app wears Orca's design language.** Every colour in `src/styles.css` is a value from Orca's own theme —
 `--background #fff/#0a0a0a`, `--card #fff/#171717`, `--border #e5e5e5/#ffffff12`, `--primary`, `--muted`,
@@ -400,46 +394,80 @@ red-700) so a badge clears 4.5:1 *on its own tint*, not only on white.
 
 **Four type sizes, one job each.** `--t-title: 24px` for the page headline, `--t-section: 16px` for `h2`,
 `--t-body: 14px` for prose, and `--t-chrome: 12px` for labels, table heads, buttons and badge text (Orca's
-`text-xs`, which is what it sets its own controls at). Muting is a colour, never a size (`.dim { color:
+`text-xs`, which is what it sets its own controls at). Orca's 11px meta is the one literal outside those four,
+and the chart labels and the tab segments are what wear it. Muting is a colour, never a size (`.dim { color:
 var(--muted-foreground); font-weight: 400 }`), because the page used to run thirteen sizes with 1,598
 elements at 12.5px, which is below the floor at which secondary text is readable. The one solid control is the
 row's `+ to-do` (`button.primary`, `--primary`); a preference marks its choice with a tint (`button.on`), not
 an accent fill.
 
-**The shell is Orca's too.** `.app` is a grid: a 240px sidebar on `--sidebar`, a pane title bar across the top
-of the content column (`components/App.tsx`'s `.topbar` — 12px, muted, a `--border` hairline and a blurred
-`--background` behind it), and the routed view below it. The bar's left says which screen this is; its right
-carries `Run`.
+**The shell is Orca's too.** `.app` is a grid: a 240px rail on `--sidebar`, and the routed view beside it — no
+action bar above the view. `Run` and `window` used to have one (a pane title bar carrying `components/App.tsx`'s
+`.topbar-label` and the two buttons), and it was removed: it took a row off every screen and asked the server for
+something the address bar already does. `POST /api/open` and `npm run report:open` stay — the plugin and the shell
+use them — but nothing in the page does. The one line worth keeping from that bar survives as `.snapshot`, under
+the tabs, and only a baked panel renders it: when its numbers were taken.
 
-**`Run` opens the report where the reader is.** The button asks the server (`POST /api/open`, which carries the
-current page path so the tab that opens *is* the screen the reader was on), and `scripts/report-open.mjs`
-decides: an Orca browser tab, focused rather than duplicated when the origin is already open
-(`orca tab list --json` → `tab switch --page`), or — for the `window` button — `chrome --app=<url>`, which is
-the only surface with no tabs and no address bar. **Orca's browser tab always draws its own toolbar** (its
-pane renders back/forward/reload and an address field unconditionally; only the pane *title* has a chromeless
-variant), so "in Orca, with no browser controls" is not a state that exists — the two buttons are the honest
-version of that wish. `npm run report:open` is the same code path from a shell, and starts the server first if
-nothing answers on the port; a machine that cannot oblige answers 502 with the reason, not a silent success.
-The body's `path` is re-anchored to the server's own origin (`safePath` refuses anything with a scheme, `:` or
-`\\`), so a request cannot point the opener at another host.
+**Three tabs are the whole navigation.** `Skills`, `Days` and `To-do` — no lists hang off the rail, because the
+lists that used to (the recent days, the skills in use) are the screens themselves, and the skills screen is the
+one the app opens on (`/` and `/skills` are that screen; every other path has its own). A tab owns the screens
+it leads to, so a skill page keeps **Skills** lit and a day and its sessions keep **Days** lit (`Nav`'s `also`),
+which is what makes the bar a place rather than a menu.
 
-**The skill screen answers three questions in order**: is it improving, by how much, and what to do about it.
-The headline delta is printed with the sample floor beside it (`apiSkill` returns the per-day `n`), because a
-skill measured only on thin days has a change that is a difference of two means over a handful of calls —
-`floorNote` in `SkillView.tsx` says so rather than letting `+19.2` read as a score. The small line beside a
-movement row stays range-scaled, where the direction is the message. Under the two charts: the proposals that
+Both widths draw the same thing, and it is **one control, not three links**: Orca's segmented switch, the one its
+Explorer panel puts in its own header (`right-sidebar/FileExplorerViewSwitch.tsx` — `h-7 … rounded-md bg-input/40
+p-0.5`, each segment `rounded-sm px-2 text-[11px] font-normal text-muted-foreground transition-[…]`, the chosen
+one `bg-background font-medium text-foreground shadow-xs`). So: a track in `--input` at 40%, `--radius-md`, with
+2px of air around the segments and between them; segments at `--radius-sm`, 28px high and 11px in sentence case
+(Orca's meta size, the one the chart labels already take — not `--t-chrome`, which this was first), muted until
+they are current; and the mark is the **raised segment itself**, `--background` with weight 500 and Orca's
+`shadow-xs` — there is no underline, no accent bar, and no colour of its own, because a tab is not a status. The
+track is one rule for both orientations: the media query only changes the geometry (`repeat(3, minmax(0, 1fr))`
+instead of a column). Below 860px the three become **one row of three across the top**, sticky so they stay put
+while the report scrolls under them, on a `--border` hairline. The wordmark and the caption hide, and controls
+grow to 44px with inputs at 16px so a phone does not zoom on focus. That is not a preference: stacked above the
+content at 390px, the rail was 639px of the 844px screen — **76% of the viewport was menu**, with the report
+starting below the fold at 675px. The bar is 39px now and the content pane starts at 39px, at 93px of scroll
+with a segment 75.5×28 and `Skills` measuring 54.2px of it.
+
+**Opening the report is a command, not a button.** `npm run report:open` (and the plugin's `x-skills report:
+Open`, which is the same code path) asks `scripts/report-open.mjs` to put the report in front of the reader: an
+Orca browser tab, focused rather than duplicated when the origin is already open (`orca tab list --json` →
+`tab switch --page`), or `--window` for `chrome --app=<url>`, which is the only surface with no tabs and no
+address bar. **Orca's browser tab always draws its own toolbar** (its pane renders back/forward/reload and an
+address field unconditionally; only the pane *title* has a chromeless variant), so "in Orca, with no browser
+controls" is not a state that exists — the two surfaces are the honest version of that wish. The page used to
+offer both as a `Run` and a `window` button; that bar is gone, and the buttons with it. The server still answers
+`POST /api/open` for callers that are not the page — the plugin asks it, carrying the current page path so the
+tab that opens *is* the screen the reader was on — and a machine that cannot oblige answers 502 with the reason,
+not a silent success. The body's `path` is re-anchored to the server's own origin (`safePath` refuses anything
+with a scheme, `:` or `\\`), so a request cannot point the opener at another host.
+
+**The skill screen answers three questions in order**: is it improving, by how much, and what to do about it —
+and it opens on the data, not on a sentence about the data. The header is the skill's name and nothing else: the
+delta line and the paragraph about the sample floor were prose above the first thing a reader came for, and the
+floor's caveat is now said where the number is, in `.day-note` under the gauge. That note carries the day being
+described, its `n` and `named`, and, when the day is under the floor, `below the sample floor: a mean of a handful
+of calls, not a score` — beside a number printed as a mean with a `*` rather than a dash. The small line beside a
+movement row stays range-scaled, where the direction is the message. Under the top panel: the proposals that
 target the skill and the signals blamed on it (`apiSkill`), the first as the same task rows the day screen
-uses, the second compact and capped at the worst five with the rest one click away.
+uses — and the same `+ to-do`, because a proposal is kept from whichever screen the reader is reading it on, and
+`apiSkill` marks each one `inTodo` by the same `sameWork` rule — the second compact and capped at the worst five
+with the rest one click away.
 
-**A skill's top is three things: the gauge, the radar, and the score over time.** `Radar` is the current
-state as a shape, and it **draws only the axes the latest day actually measured** — an axis that does not apply
-to a skill is not part of its shape, and a spoke scored zero would be a claim the scanner never made. With
-nothing measured there is no shape, so the radar is not drawn at all (and below three axes the rings go with
-it). Each spoke is labelled with the axis's full name and its rate, so the shape never hides a number, and the
-whole thing is drawn in the page's ink: colour has nothing left to carry there, and a monochrome radar beside
-the gauge reads as one object with it. `Sparkline` draws the score per day on a fixed 0–100 domain with the
-70/85 thresholds marked — the same number the gauge leads with, over time; the small line beside a movement row
-stays range-scaled, where the direction is the message.
+**A skill's top is three things about one day: the gauge, the radar, and the line.** The day is the newest
+measured one until the reader holds another: hovering or focusing a column of the chart, or a day panel below,
+sets `heldDay` in `SkillView`, and the gauge, the radar, the day note and the marked panel all describe that day.
+`Sparkline` takes that day as a controlled value (`held` / `onHold`), so the chart's guide line and the panel at
+the top can never disagree about which day is being read; letting go returns to the newest. `Radar` draws only
+the axes that day actually measured — an axis that does not apply to a skill is not part of its shape, and a spoke
+scored zero would be a claim the scanner never made. With nothing measured there is no shape, so the radar is not
+drawn at all (and below three axes the rings go with it). Each spoke is labelled with the axis's full name and its
+rate, so the shape never hides a number, and the whole thing is drawn in the page's ink: colour has nothing left to
+carry there, and a monochrome radar beside the gauge reads as one object with it. `Sparkline` draws the score per
+day on a fixed 0–100 domain with the 70/85 thresholds marked — the same number the gauge leads with, over time; the
+small line beside a movement row stays range-scaled, where the direction is the message. Each day carries its own
+`band` from the server, because a screen that banded a score itself would drift from the rule decided once.
 
 Everything on this screen is the score or the shape, with no explanation under it: the charts are read, and a
 paragraph restating what a reader can see is furniture. (`StackedAxes`, an earlier experiment that stacked the
@@ -456,8 +484,8 @@ therefore still a dot. Every point gets one: a marker is what makes a chart's da
 **The dates and the scores are HTML, over and under the drawing.** SVG text inside a stretched frame would be
 stretched with it — 2.25× wide in a wide pane — so the labels are ordinary spans in two absolutely positioned
 layers, each placed by a *percentage* of the frame. That is what lets them sit exactly on the geometry without
-measuring anything. A chart that annotates reserves 18px under the plot for the date row; a plain sparkline
-(the movement rows) reserves nothing and is drawn at its own size.
+measuring anything. A chart that annotates reserves 18px under the plot for the date row; a plain sparkline (a
+skill's row) reserves nothing and is painted at the width its cell gives it.
 
 **The time axis is logarithmic: `x` comes from a day's age, not its index.** One day old sits 17% of the way
 along, and by a 90-day history the last week holds a third of the width — the recent days are the ones a reader
@@ -472,20 +500,28 @@ synthetic year in a 1530px frame: 27 scores and 19 dates, all 365 columns tiling
 touching in either row; the narrow case (a year in 260px) gives 6 and 4. Two days in the record, which is all this
 repo has, show both and exercise none of the skipping.
 
-**Rolling over the plot names a day, and shows what that day was.** Each day owns a *column* of the plot — half
-the way to each neighbour, so every x belongs to a day — and hovering or focusing it opens `ChartTip`: the date,
-the score, the *same* radar the top of the page draws for today, and the rates beside it, so a comparison is
-between two things of the same kind. A vertical guide line marks the day the pointer is on, because a popup with
-nothing under it is a popup you have to guess at.
+**Rolling over the plot replaces what the top of the page says, rather than covering it.** Each day owns a
+*column* of the plot — half the way to each neighbour, so every x belongs to a day — and hovering or focusing it
+hands that day to the screen, which redraws the gauge, the radar and the day note for it, and marks the matching
+day panel below. A popup was tried first: a card over the chart with the date, the score and a small radar. It was
+a second reading of the same data, it sat over the line it described, and it could be neither as large nor as
+precise as the panel it duplicated. What survives from it is the vertical guide line (the day the pointer is on
+has to be visible somewhere) and the reason it worked at all: the shape shown for a past day is the *same* radar
+the top of the page draws, so a comparison is between two things of the same kind.
 
 The columns are HTML, not SVG: a full-height band is the same at any frame width, where SVG geometry would
 stretch, and it makes the data reachable by keyboard (`tabindex`, the aria-label naming the day and the score).
 An 18px marker was tried first and is not enough — hovering "the day" means hovering the plot, and a target you
-have to hunt for reads as a chart that does nothing. The tip itself is two columns (shape beside numbers) so it
-stays shorter than the chart it belongs to, is `names={false}` on the radar with `AxisRates` carrying the labels
-(a 15rem popover cannot hold full names at 12px, and a shrunken label is unreadable), and opens away from
-whatever it would hang over — sideways at the two ends, and towards the emptier half of the plot in the middle.
-The native `<title>` is left off the markers when the tip is on, so the two do not race for the same hover.
+have to hunt for reads as a chart that does nothing. The native `<title>` is left off the markers, so the two do
+not race for the same hover.
+
+**Every day is a card, and it can be held.** The day table on a skill's screen is a grid of cards in the same
+language as everything else: the date and its link to the day, the band, the score (a mean with a `*` when the
+day is under the floor) and what the day counted, the axes it measured as bars, and the session it came from. It
+reads as several days side by side instead of six columns of a table, it needs no horizontal scroll at any width,
+and — unlike the table — it can be *held*: hovering or focusing a card puts that day at the top of the page,
+exactly as a column of the chart does. That is why the card a reader is on is marked (`.card.held`): the top of
+the page may be far above, and the mark is what says which day it is describing.
 
 **The radar scales and measures nothing; the score chart is painted at the width it is given.** The radar is a
 fixed drawing in its own units that the browser fits to the box, and it caps at 420px so a pentagon never becomes
@@ -533,20 +569,14 @@ a different piece of work, from being marked as kept by today's. `TodoItem.day` 
 discriminator, not a label: two days may each contribute a `P1`, so dropping one must not drop the other
 (`POST /api/todos` whitelists it, and the to-do screen removes by `id` + `day`).
 
-**One list of tasks, three shapes.** A proposal in a digest and an entry on the to-do list are the same
-record at two moments, so both screens draw them through `components/TaskList.tsx` — the only difference is
-the action threaded in (`+ to-do` there, `remove` here). Which shape reads best is a taste call, so all
-three ship and the picker sits above the list:
-
-| Shape | Arrangement | Best for |
-|-------|-------------|----------|
-| `rows` | a row a task: skill, the change, an importance badge, one line each; open a row for the whole text | a digest with nine proposals in it |
-| `cards` | a card a task, the change at reading size and the file and check muted under it | reading one task at a time |
-| `lines` | a line a task, the whole text behind a disclosure | scanning a long list |
-
-`rows` is the shape in use. The change is the only prose in a row: the file it touches and the check that
-proves it are in the expanded row, not in every line, so nine proposals stay one screen. The row's title
-carries the file as well, for a reader who only hovers.
+**One list of tasks, one card.** A proposal in a digest and an entry on the to-do list are the same record at
+two moments, so all three screens draw them through `components/TaskList.tsx`, and the only difference is the
+action threaded in (`+ to-do` there, `remove` here). The list used to ship three shapes — a table of rows, a card,
+a line behind a disclosure — with a picker above it: three layouts to learn for one list, and the table was what
+could not fit a narrow pane. So there is one card, with the change at reading size, the file and the check under
+it, and the whole task one click away on the head's twisty (one card open at a time: a list of nine proposals is
+read by opening the one you are working on). The card's head carries the id, the importance badge, the skill and
+the action; the detail behind the twisty is the same `dl.fields` it always was.
 
 **The importance badge** is `importanceOf` in `src/tasks.ts`: the worst severity among the signals a task
 cites, and how many signals back it — `high`, `high ×2`, `medium`. It reads the digest's own words (`S21
@@ -554,10 +584,6 @@ cites, and how many signals back it — `high`, `high ×2`, `medium`. It reads t
 pack, because a signal id is scoped to the session that produced it: the same `S21` in two sessions is two
 findings, so an id alone cannot be looked up. The badge carries the word, the colour only agrees with it,
 and the title holds the raw signal text.
-
-`?shape=a|b|c` picks one, and the choice rides through every link, so a reload or a bookmark lands on the
-shape the reader chose. Each shape clamps the long fields and keeps the full text in the row's `title`, so a
-400-character change does not become a 400-character column.
 
 An axis a row never measured is a dash, not an empty bar: a bar with no value reads as a broken chart. An
 axis with no denominator is not a column, and a skill below the sample floor is not a row.

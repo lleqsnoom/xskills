@@ -14,14 +14,9 @@ export function pct(value: number | null | undefined): string {
   return value === null || value === undefined ? "—" : `${Math.round(value * 100)}%`;
 }
 
-/** Markdown for one to-do item, so the list can be pasted anywhere. */
-export function todoLine(item: {
-  skill: string | null;
-  change: string | null;
-  expected: string | null;
-  target: string | null;
-  route: string | null;
-}): string {
-  const route = item.route ? ` (${item.route})` : "";
-  return `- [ ] ${item.skill ?? "?"}: ${item.change ?? "?"}${route} — expected: ${item.expected ?? "not stated"} — target: ${item.target ?? "?"}`;
+/** A rate's colour, for a bar the API did not band: the same two thresholds the axes are banded by. */
+export function bandKey(value: number): "good" | "fair" | "weak" {
+  if (value >= 0.85) return "good";
+  if (value >= 0.7) return "fair";
+  return "weak";
 }

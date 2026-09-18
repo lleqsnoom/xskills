@@ -1,3 +1,4 @@
+import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, type Plugin } from "vite";
 import solid from "vite-plugin-solid";
 
@@ -53,7 +54,7 @@ export default defineConfig(({ mode }) => {
   const panel = mode === "panel";
   const reportUrl = process.env.REPORT_URL ?? "http://127.0.0.1:8787";
   return {
-    plugins: [solid(), ...(panel ? [singleFilePanel()] : [])],
+    plugins: [tailwindcss(), solid(), ...(panel ? [singleFilePanel()] : [])],
     server: {
       port: 5173,
       proxy: {

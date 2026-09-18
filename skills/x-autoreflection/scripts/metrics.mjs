@@ -118,24 +118,6 @@ export function dimensionsOf(tally) {
 }
 
 /**
- * The denominator behind each axis, so a rate travels with the count it was measured from.
- *
- * This is what turns a rate into a rate *with an error bar*: the same rate over 66 checks and over 2 says two
- * very different things, and the difference is only visible if the denominator comes with it. `axisMath` in
- * `derive.mjs` renders these for a reader; this is the machine-readable half.
- */
-export function denominatorsOf(tally) {
-  const { checks, graphs } = tally;
-  return {
-    conformance: (checks.passes ?? 0) + (checks.fails ?? 0),
-    adherence: graphs.calls ?? 0,
-    trigger: tally.named ?? 0,
-    rework: tally.toolCalls ?? 0,
-    protocol: (tally.panels ?? 0) + (tally.proseQuestions ?? 0),
-  };
-}
-
-/**
  * The weighted mean over the measured dimensions only, so the weights renormalize. `coverage` is how
  * much of the total weight the score rests on, which is how a reader tells a thin score from a full one.
  */

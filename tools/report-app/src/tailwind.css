@@ -1,0 +1,83 @@
+/*
+ * Tailwind, wired to the app's own tokens.
+ *
+ * The report wears Orca's design language, and Orca's language is a set of CSS variables (see `styles.css`,
+ * where each one is copied from Orca's theme value for value). Tailwind's theme is pointed at those same
+ * variables rather than at values of its own, so `bg-card`, `text-muted-foreground`, `border-border` and
+ * `rounded-lg` compile to this app's colours and radii — a utility class and a hand-written rule can never
+ * drift apart, because there is one source of values behind both.
+ *
+ * Preflight is deliberately not imported. `styles.css` is the base this app was designed against (`box-sizing`,
+ * Geist, the four type sizes, the sticky rail), and a second reset on top of it would change rules nobody asked
+ * to change. Tailwind brings the theme and the utilities; the base stays this app's own.
+ *
+ * Layers, in order: Tailwind's theme, Tailwind's utilities. The app's stylesheet is imported *into* `components`,
+ * which sits between them, so a utility class on an element wins over a legacy rule for that element — that is
+ * the whole point of moving a piece of UI onto Tailwind, and it is the opposite of the cascade an unlayered
+ * stylesheet would give.
+ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+/* The app's own stylesheet, under `components`: a utility class on an element therefore wins over a legacy rule
+   for it, which is what moving a piece of UI onto Tailwind means. */
+@import "./styles.css" layer(components);
+
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-link: var(--link);
+  /* The four states a score can be in, so a badge or a bar is `text-good` and nothing re-derives the palette. */
+  --color-good: var(--good);
+  --color-fair: var(--fair);
+  --color-weak: var(--weak);
+  --color-unknown: var(--unknown);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+
+  /* The app's four type sizes, by their job rather than by their size: chrome is what a control or a label
+     wears, section is a heading, body is prose, title is a page headline. */
+  --text-chrome: var(--t-chrome);
+  --text-chrome--line-height: 1.35;
+  --text-body: var(--t-body);
+  --text-body--line-height: 1.5;
+  --text-section: var(--t-section);
+  --text-section--line-height: 1.35;
+  --text-title: var(--t-title);
+  --text-title--line-height: 1.2;
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  /* A control's own height: 28px is what Orca sets its small controls at, and 44px is a thumb's floor, applied
+     where the pane is a phone rather than with a media query in the component. */
+  --spacing-control: 1.75rem;
+}
+
+/*
+ * `break-anywhere`: `overflow-wrap: anywhere`. The app is full of machine strings — a session id, a path, a
+ * snippet from a control flow — and one unbreakable token is a card wider than the pane it is in. Tailwind has
+ * `break-words` (which does not break inside a word that fits) and `break-all` (which breaks every word), so
+ * the one this app actually wants gets a name of its own.
+ */
+@utility break-anywhere {
+  overflow-wrap: anywhere;
+}

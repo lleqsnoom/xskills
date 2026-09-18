@@ -1,9 +1,10 @@
 import { Show, createResource, createSignal } from "solid-js";
 import { api, isSnapshot, type TodoItem } from "../api";
-import { todoLine } from "../lib";
+import { improvementBrief } from "../brief.mjs";
 import { settled } from "../resource.mjs";
 import { taskFromTodo, type Task } from "../tasks";
-import { ShapePicker, TaskList } from "./TaskList";
+import { TaskList } from "./TaskList";
+import { Button } from "../ui/Button";
 import { Loader } from "./Loader";
 
 /**
@@ -34,10 +35,13 @@ export function TodosView() {
     void persist(current().filter((item) => !(item.id === task.id && (item.day ?? null) === (task.from ?? null))));
   const clear = () => void persist([]);
   const copy = async () => {
-    const text = `# To-do\n\n${current().map(todoLine).join("\n")}\n`;
+    const text = improvementBrief(current(), {
+      generatedAt: new Date().toLocaleString(),
+      savedAt: settled(saved)?.updatedAt ?? null,
+    });
     try {
       await navigator.clipboard.writeText(text);
-      setStatus(`copied ${current().length} line${current().length === 1 ? "" : "s"}`);
+      setStatus(`copied the brief: ${current().length} task${current().length === 1 ? "" : "s"}, ${text.split("\n").length} lines`);
     } catch {
       setStatus("could not copy: this surface has no clipboard access");
     }
@@ -53,33 +57,34 @@ export function TodosView() {
               {current().length} item{current().length === 1 ? "" : "s"}
               {loaded().updatedAt ? ` · saved ${loaded().updatedAt}` : " · nothing saved yet"}
             </p>
-            <div class="toolbar">
-              <button onClick={copy} disabled={!current().length}>
-                copy as markdown
-              </button>
+            <div class="flex flex-wrap items-center gap-2">
+              <Button
+                onClick={copy}
+                disabled={!current().length}
+                title="the whole loop: the data sources, the steps, and one section per task"
+              >
+                copy the brief
+              </Button>
               <Show when={!isSnapshot()}>
-                <button onClick={clear} disabled={!current().length}>
+                <Button onClick={clear} disabled={!current().length}>
                   clear
-                </button>
+                </Button>
               </Show>
               <Show when={status()}>
-                <span class="dim">{status()}</span>
+                <span class="text-chrome text-muted-foreground">{status()}</span>
               </Show>
             </div>
           </header>
 
-          <div class="section-head">
-            <h2>The selection</h2>
-            <ShapePicker />
-          </div>
+          <h2 class="section-head">The selection</h2>
           <TaskList
             tasks={current().map(taskFromTodo)}
             empty="Nothing on the list. Open a day and use “+ to-do” on a proposal, and it lands here — and in .x-skills/daily/todos.json."
             action={(task) => (
               <Show when={!isSnapshot()} fallback={<span class="dim">a snapshot cannot write</span>}>
-                <button onClick={() => remove(task)} title={`drop ${task.id} from the list`}>
+                <Button variant="outline" onClick={() => remove(task)} title={`drop ${task.id} from the list`}>
                   remove
-                </button>
+                </Button>
               </Show>
             )}
           />

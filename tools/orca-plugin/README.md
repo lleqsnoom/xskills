@@ -86,14 +86,14 @@ report is a link, so all of them were dead until the href came out.
 
 ### What the panel cannot do
 
-- **It cannot write.** `+ to-do`, `remove` and `clear` are hidden, and `Run` is replaced by the snapshot's
-timestamp, because a panel cannot reach `/api/todos` or `/api/open`.
+- **It cannot write.** `+ to-do`, `remove` and `clear` are hidden, and the line under the tabs says when the
+snapshot was taken, because a panel cannot reach `/api/todos` or `/api/open`.
 - **It holds every recorded day, up to a byte budget.** Days are baked newest first until the payloads reach
   6 MB (Orca refuses a panel entry over 10 MB), so the newest day is always there and a record far heavier than
   this one's loses its oldest days rather than its newest. A day that is not in the snapshot says which days
   are, instead of spinning.
-- **It is a dashboard in a side panel.** Measured at 360px: the page does not overflow, and the movement table
-  scrolls inside its own wrapper — usable, not roomy.
+- **It is a dashboard in a side panel.** Measured at 360px: the page does not overflow, and a skill's row folds
+  its line under the score and the name — a 306px canvas in a 319px list — rather than scrolling sideways.
 - **A live pane still needs Orca.** See [PANE-REQUEST.md](PANE-REQUEST.md): a panel cannot be a full-area tab
   and cannot fetch, so live-and-wide is a request to the host.
 - **An installed copy is frozen.** Installed plugins are content-hash verified, so the bake only refreshes a

@@ -2,8 +2,11 @@ import { For, Show, createResource, createSignal } from "solid-js";
 import { api, isSnapshot, type Day, type Signal, type TodoItem } from "../api";
 import { linkProps } from "../router";
 import { Bar } from "./charts";
-import { severityClass } from "../lib";
-import { ShapePicker, TaskList } from "./TaskList";
+import { Card, CardHead, CardName } from "./Card";
+import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
+import { bandKey, severityClass } from "../lib";
+import { TaskList } from "./TaskList";
 import { Loader } from "./Loader";
 import { taskFromProposal, type Task } from "../tasks";
 
@@ -19,10 +22,7 @@ export function DayView(props: { date: string }) {
             <DayHeader date={props.date} loaded={loaded()} />
 
             <Show when={loaded().proposals.length}>
-              <div class="section-head">
-                <h2>Proposals — {loaded().proposals.length}</h2>
-                <ShapePicker />
-              </div>
+              <h2 class="section-head">Proposals — {loaded().proposals.length}</h2>
               <TaskList
                 tasks={loaded().proposals.map((proposal) => taskFromProposal(proposal))}
                 empty="The digest proposed nothing."
@@ -99,19 +99,25 @@ function ScoreList(props: { day: Day }) {
     Object.entries(dimensions).filter(([, value]) => value !== null && value !== undefined) as [string, number][];
   return (
     <Show when={props.day.scores.length} fallback={<p class="empty">No score was recorded that day.</p>}>
-      <div class="movement">
-        <div class="mrow head">
-          <span>skill</span>
-          <span>axes measured</span>
-          <span class="num">score</span>
-          <span class="num">n</span>
-        </div>
+      <div class="cards">
         <For each={props.day.scores}>
           {(row) => (
-            <div class="mrow">
-              <a class="mono" {...linkProps({ name: "skill", skill: row.name })}>
-                {row.name}
-              </a>
+            <Card
+              as="a"
+              {...linkProps({ name: "skill", skill: row.name })}
+              label={row.name}
+              title={`${row.name} — its own page`}
+            >
+              <CardHead>
+                <CardName>
+                  <span class="mono">{row.name}</span>
+                </CardName>
+                <Badge tone={row.band.key}>{row.band.label}</Badge>
+                <span class={`mono score big ${row.score === null ? "dim" : row.band.key}`}>
+                  {row.score === null ? "—" : row.score.toFixed(1)}
+                </span>
+              </CardHead>
+              <p class="m-0 text-chrome break-anywhere">loaded {row.n} · named {row.named}</p>
               <span class="axes">
                 <For each={measured(row.dimensions)}>
                   {([name, value]) => (
@@ -123,9 +129,7 @@ function ScoreList(props: { day: Day }) {
                   )}
                 </For>
               </span>
-              <span class={`num ${row.band.key}`}>{row.score === null ? "—" : row.score.toFixed(1)}</span>
-              <span class="num dim">{row.n}</span>
-            </div>
+            </Card>
           )}
         </For>
       </div>
@@ -133,16 +137,9 @@ function ScoreList(props: { day: Day }) {
   );
 }
 
-/** A rate's colour, for a bar the API did not band. */
-function bandKey(value: number): "good" | "fair" | "weak" {
-  if (value >= 0.85) return "good";
-  if (value >= 0.7) return "fair";
-  return "weak";
-}
-
 function SessionTable(props: { date: string; day: Day }) {
   return (
-    <div class="table-wrap">
+    <div class="table-wrap records">
       <table>
         <thead>
           <tr>
@@ -159,18 +156,18 @@ function SessionTable(props: { date: string; day: Day }) {
           <For each={props.day.pack.sessions}>
             {(session) => (
               <tr>
-                <td>
+                <td data-label="Session">
                   <a {...linkProps({ name: "session", date: props.date, id: session.id })}>
                     {session.title ?? "(untitled)"}
                   </a>
                   <div class="dim mono">{session.id}</div>
                 </td>
-                <td class="dim">{session.host}</td>
-                <td class="num">{session.stats.toolCalls}</td>
-                <td class="num">{session.stats.toolFailures}</td>
-                <td class="num">{session.stats.corrections}</td>
-                <td class="dim mono">{session.skills.loaded.join(", ") || "—"}</td>
-                <td class="num">{session.high || ""}</td>
+                <td class="dim" data-label="Host">{session.host}</td>
+                <td class="num" data-label="Tools">{session.stats.toolCalls}</td>
+                <td class="num" data-label="Failures">{session.stats.toolFailures}</td>
+                <td class="num" data-label="Corrected">{session.stats.corrections}</td>
+                <td class="dim mono" data-label="Loaded">{session.skills.loaded.join(", ") || "—"}</td>
+                <td class="num" data-label="High">{session.high || ""}</td>
               </tr>
             )}
           </For>
@@ -263,11 +260,11 @@ export function SignalList(props: {
         </For>
       </div>
       <Show when={props.limit && sorted().length > props.limit}>
-        <div class="toolbar">
-          <button onClick={() => setAll(!all())} aria-expanded={all()} class={all() ? "on" : ""}>
+        <div class="mt-2 flex flex-wrap items-center gap-2">
+          <Button onClick={() => setAll(!all())} aria-expanded={all()} variant={all() ? "primary" : "outline"}>
             {all() ? `show the worst ${props.limit}` : `show all ${sorted().length}`}
-          </button>
-          <span class="dim">
+          </Button>
+          <span class="text-chrome text-muted-foreground">
             showing {shown().length} of {sorted().length}, worst first
           </span>
         </div>
@@ -282,11 +279,12 @@ function worthReading(signals: Signal[]): number {
 }
 
 /**
- * The one write this screen does: keep a proposal on the to-do list beside the packs.
+ * The one write there is: keep a proposal on the to-do list beside the packs.
  *
  * The server already decided whether this proposal is kept (`inTodo`, matched on the work rather than on the
  * digest's label), so the row stops offering itself the moment it is on the list — including on a reload, and
- * including for entries that were saved before the list recorded which day they came from.
+ * including for entries that were saved before the list recorded which day they came from. It is exported
+ * because a day is not the only screen a proposal appears on: a skill's own screen keeps it the same way.
  */
 export function TodoButton(props: { task: Task }) {
   const [added, setAdded] = createSignal(props.task.inTodo);
@@ -315,11 +313,16 @@ export function TodoButton(props: { task: Task }) {
   };
   return (
     <Show when={!isSnapshot()} fallback={<span class="dim">a snapshot cannot write</span>}>
-      <button class={added() ? "" : "primary"} onClick={add} disabled={added()} title={error() || "keep this proposal"}>
+      <Button
+        variant={added() ? "outline" : "primary"}
+        onClick={add}
+        disabled={added()}
+        title={error() || "keep this proposal"}
+      >
         {added() ? "in to-do" : "+ to-do"}
-      </button>
+      </Button>
       <Show when={error()}>
-        <span class="failed dim">{error()}</span>
+        <span class="failed text-chrome">{error()}</span>
       </Show>
     </Show>
   );

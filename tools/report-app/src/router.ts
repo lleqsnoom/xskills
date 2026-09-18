@@ -4,13 +4,13 @@ import { bakedReport, navProps } from "./baked.mjs";
 /**
  * A router in eighty lines: the path is a signal, and a link is an anchor whose click is intercepted.
  *
- * The app has six routes and no nested layout, so a matching library would add a dependency and a version
+ * The app has seven routes and no nested layout, so a matching library would add a dependency and a version
  * to keep in step with Solid for no gain. The server answers any extension-less path with the shell, so a
  * deep link survives a reload.
  */
 
 export type Route =
-  | { name: "movement" }
+  | { name: "skills" }
   | { name: "days" }
   | { name: "day"; date: string }
   | { name: "session"; date: string; id: string }
@@ -19,21 +19,23 @@ export type Route =
 
 export function parseRoute(pathname: string): Route {
   const parts = pathname.split("/").filter(Boolean).map(decodeURIComponent);
-  if (!parts.length) return { name: "movement" };
+  // The root is the skills screen as well: it is the app's default, and the address a panel or a bookmark holds.
+  if (!parts.length) return { name: "skills" };
   if (parts[0] === "days" && parts.length === 1) return { name: "days" };
+  if (parts[0] === "skills" && parts.length === 1) return { name: "skills" };
   if (parts[0] === "todos" && parts.length === 1) return { name: "todos" };
   if (parts[0] === "skill" && parts[1]) return { name: "skill", skill: parts[1] };
   if (parts[0] === "day" && parts[1]) {
     if (parts[2] === "session" && parts[3]) return { name: "session", date: parts[1], id: parts[3] };
     return { name: "day", date: parts[1] };
   }
-  return { name: "movement" };
+  return { name: "skills" };
 }
 
 export function href(route: Route): string {
   switch (route.name) {
-    case "movement":
-      return "/";
+    case "skills":
+      return "/skills";
     case "days":
       return "/days";
     case "todos":
@@ -50,7 +52,7 @@ export function href(route: Route): string {
 /** A panel cancels navigations, so a snapshot keeps its route in memory and never touches history. */
 const baked = bakedReport() !== null;
 
-const [route, setRoute] = createSignal<Route>(baked ? { name: "movement" } : parseRoute(window.location.pathname));
+const [route, setRoute] = createSignal<Route>(baked ? { name: "skills" } : parseRoute(window.location.pathname));
 
 if (!baked) window.addEventListener("popstate", () => setRoute(parseRoute(window.location.pathname)));
 
@@ -72,7 +74,7 @@ export function navigate(to: Route, { replace = false } = {}) {
 /** The attrs a link needs, in the shape the JSX spread accepts: an href, or a role and a tab stop. */
 function navAttrs(to: Route): { href?: string; role?: "link"; tabindex?: number } {
   // `baked.mjs` is JavaScript, so the literal type of `role` is lost at the boundary: declare it here.
-  return navProps({ baked, href: withQuery(href(to)) }) as { href?: string; role?: "link"; tabindex?: number };
+  return navProps({ baked, href: href(to) }) as { href?: string; role?: "link"; tabindex?: number };
 }
 
 /**
@@ -99,20 +101,4 @@ export function linkProps(to: Route) {
     onClick,
     ...(baked ? { onKeyDown } : {}),
   };
-}
-
-/**
- * Carry the reading preferences through a link: the task shape, and which view of the record is open. Both are
- * preferences rather than routes, so they ride in the query, and a reload or a bookmark lands on the shape and
- * the view the reader chose.
- */
-function withQuery(path: string): string {
-  const here = new URLSearchParams(baked ? "" : window.location.search);
-  const carried = new URLSearchParams();
-  for (const key of ["shape", "view"]) {
-    const value = here.get(key);
-    if (value) carried.set(key, value);
-  }
-  const query = carried.toString();
-  return query ? `${path}${path.includes("?") ? "&" : "?"}${query}` : path;
 }

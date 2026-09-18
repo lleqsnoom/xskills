@@ -1,6 +1,6 @@
 import { createResource } from "solid-js";
 import { api, type MovementPage } from "../api";
-import { DaysSection } from "./Movement";
+import { DaysSection } from "./Skills";
 import { Loader } from "./Loader";
 
 /** Every day on record: the five newest as a list, then a calendar the older ones live in. */

@@ -50,17 +50,15 @@ type ChartPoint = {
 
 /**
  * A score per day as a line. By default it is scaled to its own range, which is right for the small line
- * beside a movement row where the direction is the message. Pass a `domain` (and the `bands` to mark) when the
+ * beside a skill's row where the direction is the message. Pass a `domain` (and the `bands` to mark) when the
  * chart has to support a decision: a fixed 0-100 scale with the healthy and fair thresholds drawn is honest
  * about how far the score actually moved, and comparable between two skills.
  *
- * Two renderings, each doing the job it is good at:
- *   - `canvas` paints the marks at the size they are actually shown, so a line is the width it says and a dot is
- *     round without tricks, and a hundred days cost one pass instead of a hundred elements. The scale and the
- *     frame are shared with the SVG path (`chart-scale.mjs`), and everything a reader reads — the dates, the
- *     scores, the tooltip — is HTML over it.
- *   - plain SVG is for the movement rows: 190x26, no labels, no interaction, and it scales into a table cell
- *     without an observer.
+ * One rendering, because it is the right one at every size: a canvas paints the marks at the size they are
+ * actually shown, so a line is the width it says and a dot is round without tricks, and a hundred days cost
+ * one pass instead of a hundred elements. The scale and the frame live in `chart-scale.mjs`, and everything a
+ * reader reads — the dates, the scores, the tooltip — is HTML over it. That is what let the rows drop the
+ * fixed 190×26 SVG they started with: 190px of a 688px column, and nothing in it that knew the width.
  *
  * `annotate` adds the axis: the date under each day and the score of the points there is room for. `timeScale`
  * puts the x axis on the logarithm of age (see `chart-scale.mjs`), which is what makes a long history readable
@@ -68,13 +66,18 @@ type ChartPoint = {
  */
 export function Sparkline(props: {
   points: SeriesPoint[];
-  width?: number;
   height?: number;
   domain?: [number, number];
   bands?: number[];
   annotate?: boolean;
   timeScale?: "linear" | "log";
-  canvas?: boolean;
+  /**
+   * The day the pointer or the keyboard is on, and who hears about it. A chart that annotates owns this while
+   * nothing else does, but a page can take it over: the skill screen's chart drives the gauge and the radar
+   * above it, so the day the reader is pointing at is the day the top of the page describes.
+   */
+  held?: string | null;
+  onHold?: (date: string | null) => void;
 }) {
   /** The drawing frame, in pixels: the plot's own height, then a row for the dates under it. */
   const PLOT = () => (props.annotate ? 132 : (props.height ?? 26));
@@ -94,7 +97,7 @@ export function Sparkline(props: {
     setSurface(element);
     onCleanup(() => observer?.disconnect());
   };
-  const VIEW_W = () => measured() ?? props.width ?? 190;
+  const VIEW_W = () => measured() ?? 190;
 
   const [dark, setDark] = createSignal(window.matchMedia("(prefers-color-scheme: dark)").matches);
   onMount(() => {
@@ -139,7 +142,12 @@ export function Sparkline(props: {
   const areas = createMemo(() => columns(dots().map((dot) => dot.x), VIEW_W()));
   const labelled = (gap: number) => labelSet(dots(), gap);
 
-  const [held, setHeld] = createSignal<string | null>(null);
+  const [own, setOwn] = createSignal<string | null>(null);
+  const held = () => (props.held !== undefined ? props.held : own());
+  const hold = (date: string | null) => {
+    if (props.held === undefined) setOwn(date);
+    props.onHold?.(date);
+  };
   const at = (date: string) => dots().find((dot) => dot.date === date) ?? null;
   // What the columns name, looked up once: the pointer walks these on every move.
   const named = createMemo(() => dots().map((dot) => `${dot.date}: ${dot.score.toFixed(1)}${dot.below ? " (below the sample floor)" : ""}`));
@@ -226,42 +234,13 @@ export function Sparkline(props: {
   createEffect(() => {
     const element = surface();
     dark();
-    if (element && props.canvas) paint(element);
+    if (element) paint(element);
   });
 
   return (
     <Show when={values().length >= 2} fallback={<span class="dim">one day so far</span>}>
       <div classList={{ chart: true, annotated: props.annotate === true }} style={{ "--chart-plot": `${PLOT()}px` }}>
-        <Show
-          when={props.canvas}
-          fallback={
-            <svg class="chart-plot" viewBox={`0 0 ${VIEW_W()} ${PLOT()}`} width={VIEW_W()} height={PLOT()} role="img"
-              aria-label={summary()}>
-              <line x1={pad} y1={y(0)} x2={VIEW_W() - pad} y2={y(0)} stroke="var(--border)" stroke-width="1" />
-              <For each={marks()}>
-                {(mark) => (
-                  <line x1={pad} y1={mark.y.toFixed(1)} x2={VIEW_W() - pad} y2={mark.y.toFixed(1)}
-                    stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3">
-                    <title>{`${mark.value} — ${mark.value >= 85 ? "healthy" : "fair"} from here up`}</title>
-                  </line>
-                )}
-              </For>
-              <polyline points={dots().map((dot) => `${dot.x.toFixed(1)},${dot.y.toFixed(1)}`).join(" ")} fill="none"
-                stroke="var(--primary)" stroke-width="1.8" />
-              <For each={dots()}>
-                {(dot) => (
-                  <circle cx={dot.x.toFixed(1)} cy={dot.y.toFixed(1)} r={dot.below ? 2.4 : 3}
-                    fill={dot.below ? "var(--background)" : "var(--primary)"} stroke="var(--primary)"
-                    stroke-width={dot.below ? 1.2 : 0}>
-                    <title>{`${dot.date}: ${dot.score.toFixed(1)}${dot.below ? " (below the sample floor)" : ""}`}</title>
-                  </circle>
-                )}
-              </For>
-            </svg>
-          }
-        >
-          <canvas class="chart-plot" ref={ref} role="img" aria-label={summary()} />
-        </Show>
+        <canvas class="chart-plot" ref={ref} role="img" aria-label={summary()} />
         <Show when={props.annotate}>
           {/* A target a pointer and a keyboard can both reach, in HTML so it does not shrink with the frame. */}
           <div class="chart-points">
@@ -269,19 +248,15 @@ export function Sparkline(props: {
               {(area, index) => (
                 <span class="chart-point" tabindex="0" role="img" aria-label={named()[index()] ?? ""}
                   style={{ left: `${(area.left / VIEW_W()) * 100}%`, width: `${((area.right - area.left) / VIEW_W()) * 100}%` }}
-                  onMouseEnter={() => setHeld(dots()[index()]?.date ?? null)} onMouseLeave={() => setHeld(null)}
-                  onFocus={() => setHeld(dots()[index()]?.date ?? null)} onBlur={() => setHeld(null)} />
+                  onMouseEnter={() => hold(dots()[index()]?.date ?? null)} onMouseLeave={() => hold(null)}
+                  onFocus={() => hold(dots()[index()]?.date ?? null)} onBlur={() => hold(null)} />
               )}
             </For>
           </div>
-          {/* A line down the day the pointer is on, so the popup is anchored to something visible. */}
+          {/* A line down the day the pointer is on, so the top of the page and the chart agree on which day
+              is being described. What that day *was* is not a popup: it is the gauge and the radar above. */}
           <Show when={held() ? at(held()!) : null} keyed>
-            {(dot) => (
-              <>
-                <span class="chart-guide" style={{ left: `${(dot.x / VIEW_W()) * 100}%` }} />
-                <ChartTip dot={dot} viewWidth={VIEW_W()} plotHeight={PLOT()} />
-              </>
-            )}
+            {(dot) => <span class="chart-guide" style={{ left: `${(dot.x / VIEW_W()) * 100}%` }} />}
           </Show>
           <div class="chart-values" aria-hidden="true">
             <For each={labelled(38)}>
@@ -387,43 +362,6 @@ export function Radar(props: {
         </For>
       </svg>
     </Show>
-  );
-}
-
-/**
- * What a point is: the day, its score, and the shape that score was made of. Rolling over a chart answers "what
- * was it then" with the same radar the top of the page draws for today, so the comparison is between two things
- * of the same kind rather than between a number and a picture.
- *
- * It is HTML over the drawing, like the labels, so nothing in it stretches with the frame. It opens away from
- * the edge it would otherwise hang over: above the point in the middle, to one side at the ends.
- */
-function ChartTip(props: { dot: ChartPoint; viewWidth: number; plotHeight: number }) {
-  const rate = () => (props.dot.x / props.viewWidth) * 100;
-  // At the ends there is no room above or below, so it opens sideways; in the middle it opens towards whichever
-  // half of the plot the point is in, and so never over the line it is describing.
-  const side = () => {
-    if (rate() > 62) return "left";
-    if (rate() < 22) return "right";
-    return props.dot.y < props.plotHeight / 2 ? "below" : "above";
-  };
-  return (
-    <div class={`chart-tip ${side()}`} style={{ left: `${rate()}%`, top: `${props.dot.y}px` }}>
-      <div class="chart-tip-head">
-        <span class="mono">{props.dot.date}</span>
-        <span class="num">{props.dot.score.toFixed(1)}</span>
-      </div>
-      <Show when={measuredRates(props.dot.dimensions).length}
-        fallback={<p class="dim">no axis was measured that day, so there is no shape</p>}>
-        <div class="chart-tip-body">
-          <Radar dimensions={props.dot.dimensions} names={false} label={`${props.dot.date}, ${props.dot.score.toFixed(1)}`} />
-          <AxisRates dimensions={props.dot.dimensions} />
-        </div>
-      </Show>
-      <Show when={props.dot.below}>
-        <p class="dim">below the sample floor: a mean of a handful of calls, not a score</p>
-      </Show>
-    </div>
   );
 }
 

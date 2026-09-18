@@ -1,64 +1,91 @@
-import { For, Match, Show, Switch, createSignal } from "solid-js";
+import { For, Show, createSignal } from "solid-js";
 import type { JSX } from "solid-js";
 import { linkProps } from "../router";
-import { SHAPES, importanceOf, setTaskShape, taskShape, type Task } from "../tasks";
+import { Card, CardActions, CardHead } from "./Card";
+import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
+import { importanceOf, type Task } from "../tasks";
 
 /**
- * One list of tasks, drawn three ways. A digest's proposals and the to-do selection are the same fields at
- * two moments, so both screens render them here — the only difference is the action threaded in.
+ * One list of tasks, drawn one way: a card each, opened for the whole task.
  *
- * Which shape reads best is a taste call, so all three ship and the reader picks; the picker is beside the
- * list because the shape is a property of the list, not of the screen.
+ * A digest's proposals and the to-do selection are the same fields at two moments, and both are read through
+ * here. The list used to ship three shapes — a table of rows, this card, a line behind a disclosure — with a
+ * picker above it, which meant a reader learned three layouts for one list, and the table was the thing that
+ * could not fit a narrow pane. So: the card, with the change at reading size, the file and the check under it,
+ * and the full detail one click away on the head's twisty. One card at a time, because a list of nine proposals
+ * is read by opening the one you are working on.
  */
 export function TaskList(props: {
   tasks: Task[];
   empty: string;
   action?: (task: Task) => JSX.Element;
 }) {
+  const [open, setOpen] = createSignal<string | null>(null);
   return (
     <Show when={props.tasks.length} fallback={<p class="empty">{props.empty}</p>}>
-      <Switch>
-        <Match when={taskShape() === "a"}>
-          <TaskRows {...props} />
-        </Match>
-        <Match when={taskShape() === "b"}>
-          <TaskCards {...props} />
-        </Match>
-        <Match when={taskShape() === "c"}>
-          <TaskLines {...props} />
-        </Match>
-      </Switch>
+      <div class="cards">
+        <For each={props.tasks}>
+          {(task) => (
+            <Card label={`${task.id}: ${task.change ?? "no change stated"}`}>
+              <CardHead>
+                <Button
+                  variant="quiet"
+                  size="chip"
+                  aria-expanded={open() === task.id}
+                  title={open() === task.id ? "close" : "the whole task"}
+                  onClick={() => setOpen(open() === task.id ? null : task.id)}
+                >
+                  <span aria-hidden="true">{open() === task.id ? "▾" : "▸"}</span>
+                  <span class="mono">{task.id}</span>
+                </Button>
+                <Weight task={task} />
+                <SkillLink task={task} />
+                <CardActions>{props.action?.(task)}</CardActions>
+              </CardHead>
+              <p class="m-0 text-section break-anywhere" title={`${task.change ?? ""}${task.target ? ` — ${task.target}` : ""}`}>
+                {task.change ?? "—"}
+              </p>
+              <p class="m-0 text-chrome break-anywhere">
+                <SkillTarget task={task} />
+              </p>
+              <p class="m-0 text-chrome break-anywhere" title={task.expected ?? ""}>
+                check:{" "}
+                <Show when={task.expected} fallback="not stated">
+                  {task.expected}
+                </Show>
+              </p>
+              <Show when={open() === task.id}>
+                <div class="mt-0.5 border-t border-[color-mix(in_srgb,var(--border)_70%,transparent)] pt-1.5">
+                  <TaskDetail task={task} />
+                </div>
+              </Show>
+            </Card>
+          )}
+        </For>
+      </div>
     </Show>
   );
 }
 
-/** The three shapes, as a control. Placed beside the list it reshapes. */
-export function ShapePicker() {
-  return (
-    <span class="shapes" role="group" aria-label="how to draw the tasks">
-      <For each={SHAPES}>
-        {(option) => (
-          <button
-            class={taskShape() === option.id ? "on" : ""}
-            aria-pressed={taskShape() === option.id}
-            title={option.hint}
-            onClick={() => setTaskShape(option.id)}
-          >
-            {option.label}
-          </button>
-        )}
-      </For>
-    </span>
-  );
-}
-
-/** A row's skill, as a link — the one thing about a task that has a page of its own. */
+/** A task's skill, as a link — the one thing about it that has a page of its own. */
 function SkillLink(props: { task: Task }) {
   return (
     <Show when={props.task.skill} fallback={<span class="dim">—</span>}>
       <a class="mono" {...linkProps({ name: "skill", skill: props.task.skill! })}>
         {props.task.skill}
       </a>
+    </Show>
+  );
+}
+
+/** The file the task touches, under the change it makes to it. */
+function SkillTarget(props: { task: Task }) {
+  return (
+    <Show when={props.task.target} fallback={<span class="dim">no file stated</span>}>
+      <span class="mono" title={props.task.target!}>
+        {props.task.target}
+      </span>
     </Show>
   );
 }
@@ -70,13 +97,13 @@ function SkillLink(props: { task: Task }) {
 function Weight(props: { task: Task }) {
   const importance = () => importanceOf(props.task);
   return (
-    <span class={`pill ${importance().key}`} title={importance().detail}>
+    <Badge tone={importance().key === "high" ? "weak" : importance().key === "medium" ? "fair" : "unknown"} title={importance().detail}>
       {importance().label}
-    </span>
+    </Badge>
   );
 }
 
-/** The whole text, for the shapes that hide it behind a disclosure. */
+/** The whole text, for the card a reader opened. */
 function TaskDetail(props: { task: Task }) {
   const field = (label: string, value: string | null) => (
     <div>
@@ -101,130 +128,6 @@ function TaskDetail(props: { task: Task }) {
         {field("Route", props.task.route)}
         {field("Note", props.task.note)}
       </dl>
-    </div>
-  );
-}
-
-/**
- * A: a row each — the shape for a digest with nine proposals in it. The change is the only prose left in
- * the row; the file and the check are one click away, which is where a reader wants them, not in every row.
- */
-function TaskRows(props: { tasks: Task[]; action?: (task: Task) => JSX.Element }) {
-  const [open, setOpen] = createSignal<string | null>(null); // one open row at a time keeps the list scannable
-  return (
-    <div class="table-wrap">
-      <table class="tasks">
-        <thead>
-          <tr>
-            <th class="t-id">#</th>
-            <th class="t-skill">skill</th>
-            <th>what changes</th>
-            <th class="t-weight">importance</th>
-            <th class="t-act"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <For each={props.tasks}>
-            {(task) => (
-              <>
-                <tr classList={{ open: open() === task.id }}>
-                  <td class="t-id">
-                    <button
-                      class="twisty"
-                      aria-expanded={open() === task.id}
-                      onClick={() => setOpen(open() === task.id ? null : task.id)}
-                    >
-                      <span class="mark">{open() === task.id ? "▾" : "▸"}</span> <span class="mono">{task.id}</span>
-                    </button>
-                  </td>
-                  <td>
-                    <SkillLink task={task} />
-                  </td>
-                  <td>
-                    <span class="clamp-1" title={`${task.change ?? ""}${task.target ? ` — ${task.target}` : ""}`}>
-                      {task.change ?? "—"}
-                    </span>
-                  </td>
-                  <td>
-                    <Weight task={task} />
-                  </td>
-                  <td class="t-act">{props.action?.(task)}</td>
-                </tr>
-                <Show when={open() === task.id}>
-                  <tr class="task-detail">
-                    <td colSpan={5}>
-                      <TaskDetail task={task} />
-                    </td>
-                  </tr>
-                </Show>
-              </>
-            )}
-          </For>
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-/** B: a card each, the change at reading size and everything else muted beside it. */
-function TaskCards(props: { tasks: Task[]; action?: (task: Task) => JSX.Element }) {
-  return (
-    <div class="task-cards">
-      <For each={props.tasks}>
-        {(task) => (
-          <article class="task-card">
-            <div class="task-card-head">
-              <span class="mono task-id">{task.id}</span>
-              <Weight task={task} />
-              <span class="task-act">{props.action?.(task)}</span>
-            </div>
-            <p class="task-change clamp-3" title={task.change ?? ""}>
-              {task.change ?? "—"}
-            </p>
-            <p class="task-meta">
-              <SkillLink task={task} />
-              <Show when={task.target}>
-                <span class="mono dim clamp-1" title={task.target!}>
-                  {task.target}
-                </span>
-              </Show>
-            </p>
-            <p class="task-check dim clamp-2" title={task.expected ?? ""}>
-              <Show when={task.expected} fallback="no check stated">
-                {task.expected}
-              </Show>
-            </p>
-          </article>
-        )}
-      </For>
-    </div>
-  );
-}
-
-/** C: one line each, the whole task behind a disclosure — the shape for scanning a long list. */
-function TaskLines(props: { tasks: Task[]; action?: (task: Task) => JSX.Element }) {
-  return (
-    <div class="task-lines">
-      <For each={props.tasks}>
-        {(task) => (
-          <div class="task-line">
-            <details>
-              <summary>
-                <span class="mono task-id">{task.id}</span>
-                <Weight task={task} />
-                <span class="task-line-skill">
-                  <SkillLink task={task} />
-                </span>
-                <span class="clamp-1" title={task.change ?? ""}>
-                  {task.change ?? "—"}
-                </span>
-              </summary>
-              <TaskDetail task={task} />
-            </details>
-            <span class="task-act">{props.action?.(task)}</span>
-          </div>
-        )}
-      </For>
     </div>
   );
 }
