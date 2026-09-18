@@ -16,7 +16,7 @@
       { "id": "report-refresh", "title": "x-skills report: Record the newest day" },
       { "id": "report-start", "title": "x-skills report: Start the server here" }
     ],
-    "panels": [{ "id": "report", "title": "x-skills report", "icon": "plug", "entry": "panel.html" }],
+    "panels": [{ "id": "report", "title": "x-skills report", "icon": "activity", "entry": "panel.html" }],
     "keybindings": [{ "command": "report-open", "key": "Mod+Alt+X", "when": "global" }],
     "events": [
       { "on": "worktree.created" },

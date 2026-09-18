@@ -1018,7 +1018,7 @@ describe("orca plugin — the panel is a document, and the plugin is a tree nobo
 
   it("is contributed as a panel named after the plugin", () => {
     assert.deepEqual(manifest().contributes.panels, [
-      { id: "report", title: "x-skills report", icon: "plug", entry: "panel.html" },
+      { id: "report", title: "x-skills report", icon: "activity", entry: "panel.html" },
     ]);
   });
 
