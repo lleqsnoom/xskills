@@ -44,19 +44,21 @@ function singleFilePanel(): Plugin {
 /**
  * The app builds into `dist/`, which `scripts/report-server.mjs` serves. In dev, Vite owns the page and
  * proxies `/api` to the report server, so a change to a component reloads without restarting anything.
+ * `npm run dev` starts both and passes the server's URL in `REPORT_URL`, so `--port 9000` is followed.
  *
  * `--mode panel` builds the second target instead: `dist-panel/`, one file, which
  * `scripts/report-panel.mjs` bakes a snapshot into for the Orca plugin's panel.
  */
 export default defineConfig(({ mode }) => {
   const panel = mode === "panel";
+  const reportUrl = process.env.REPORT_URL ?? "http://127.0.0.1:8787";
   return {
     plugins: [solid(), ...(panel ? [singleFilePanel()] : [])],
     server: {
       port: 5173,
       proxy: {
-        "/api": { target: "http://127.0.0.1:8787", changeOrigin: false },
-        "/history.jsonl": { target: "http://127.0.0.1:8787", changeOrigin: false },
+        "/api": { target: reportUrl, changeOrigin: false },
+        "/history.jsonl": { target: reportUrl, changeOrigin: false },
       },
     },
     build: panel

@@ -13,6 +13,7 @@
     "test": "node --test test/*.test.cjs",
     "sync:run-folders": "node scripts/sync-run-folders.js",
     "check:run-folders": "node scripts/sync-run-folders.js --check",
+    "dev": "node scripts/dev.mjs",
     "report": "node scripts/report-server.mjs",
     "report:open": "node scripts/report-open.mjs",
     "report:window": "node scripts/report-open.mjs --window",
