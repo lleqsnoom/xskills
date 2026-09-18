@@ -35,11 +35,14 @@ export function run(command, args, { cwd = process.cwd(), timeout = 20_000 } = {
   return {
     code: result.status ?? 1,
     stdout: result.stdout ?? "",
-    stderr: result.stderr ?? result.error?.message ?? "",
+    stderr: (result.stderr ?? "").trim() || result.error?.message || "",
   };
 }
 
 const firstLine = (text) => (text ?? "").trim().split("\n")[0] ?? "";
+
+/** What a failed CLI call has to say: its own words, or the fact that it exited without any. */
+const complained = (result) => firstLine(result.stderr || result.stdout) || `it exited ${result.code} without saying why`;
 
 /** Is something already answering the report's API at this URL? */
 export async function isUp(url, { timeoutMs = 1500 } = {}) {
@@ -83,12 +86,12 @@ export function openInOrca({ url, exec = run, cli = ORCA, cwd = REPO_ROOT }) {
       const focused = exec(cli, ["tab", "switch", "--page", existing.pageId, "--focus"], { cwd });
       return focused.code === 0
         ? { ok: true, surface: "orca", how: "focused", url, message: `focused the Orca tab already showing the report` }
-        : { ok: false, surface: "orca", how: "focus-failed", url, message: `Orca would not focus its tab: ${firstLine(focused.stderr || focused.stdout)}` };
+        : { ok: false, surface: "orca", how: "focus-failed", url, message: `Orca would not focus its tab: ${complained(focused)}` };
     }
   }
   const created = exec(cli, ["tab", "create", "--url", url], { cwd });
   if (created.code !== 0) {
-    return { ok: false, surface: "orca", how: "create-failed", url, message: `Orca would not open a tab: ${firstLine(created.stderr || created.stdout)}` };
+    return { ok: false, surface: "orca", how: "create-failed", url, message: `Orca would not open a tab: ${complained(created)}` };
   }
   return { ok: true, surface: "orca", how: "created", url, message: "opened the report in an Orca tab" };
 }

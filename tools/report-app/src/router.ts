@@ -1,4 +1,5 @@
 import { createSignal } from "solid-js";
+import { bakedReport, navProps } from "./baked.mjs";
 
 /**
  * A router in eighty lines: the path is a signal, and a link is an anchor whose click is intercepted.
@@ -18,7 +19,7 @@ export type Route =
 
 export function parseRoute(pathname: string): Route {
   const parts = pathname.split("/").filter(Boolean).map(decodeURIComponent);
-  // The root is the skills screen as well: it is the app's default, and the address a bookmark holds.
+  // The root is the skills screen as well: it is the app's default, and the address a panel or a bookmark holds.
   if (!parts.length) return { name: "skills" };
   if (parts[0] === "days" && parts.length === 1) return { name: "days" };
   if (parts[0] === "skills" && parts.length === 1) return { name: "skills" };
@@ -48,18 +49,30 @@ export function href(route: Route): string {
   }
 }
 
-const [route, setRoute] = createSignal<Route>(parseRoute(window.location.pathname));
+/** A panel cancels navigations, so a snapshot keeps its route in memory and never touches history. */
+const baked = bakedReport() !== null;
 
-window.addEventListener("popstate", () => setRoute(parseRoute(window.location.pathname)));
+const [route, setRoute] = createSignal<Route>(baked ? { name: "skills" } : parseRoute(window.location.pathname));
+
+if (!baked) window.addEventListener("popstate", () => setRoute(parseRoute(window.location.pathname)));
 
 /** The current route, as a tracked accessor: reading it in JSX re-renders on a navigation. */
 export function current(): Route {
   return route();
 }
 
+/**
+ * Re-read the screen being shown, without going anywhere: the same route as a *new* object, which is what the
+ * keyed view in `App.tsx` remounts on. The address bar and the scroll position are left alone — this is a
+ * refresh, not a navigation.
+ */
+export function refreshRoute(): void {
+  setRoute((current) => ({ ...current }));
+}
+
 export function navigate(to: Route, { replace = false } = {}) {
   const path = href(to);
-  if (path !== window.location.pathname) {
+  if (!baked && path !== window.location.pathname) {
     if (replace) window.history.replaceState(null, "", path);
     else window.history.pushState(null, "", path);
   }
@@ -67,11 +80,17 @@ export function navigate(to: Route, { replace = false } = {}) {
   window.scrollTo({ top: 0 });
 }
 
+/** The attrs a link needs, in the shape the JSX spread accepts: an href, or a role and a tab stop. */
+function navAttrs(to: Route): { href?: string; role?: "link"; tabindex?: number } {
+  // `baked.mjs` is JavaScript, so the literal type of `role` is lost at the boundary: declare it here.
+  return navProps({ baked, href: href(to) }) as { href?: string; role?: "link"; tabindex?: number };
+}
+
 /**
  * An anchor that routes instead of reloading, so a link keeps the keyboard and the back button.
  *
- * A modified click or a middle click is the browser's business: `href` is on the element, so "open in a new
- * tab" and "copy link address" work without a handler of ours.
+ * In a snapshot it is an anchor *without* an href, because the panel host swallows those clicks: see
+ * `navProps`. The role and the tab stop are then ours to supply, and Enter or Space activates it.
  */
 export function linkProps(to: Route) {
   const go = () => navigate(to);
@@ -80,6 +99,15 @@ export function linkProps(to: Route) {
     event.preventDefault();
     go();
   };
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    go();
+  };
 
-  return { href: href(to), onClick };
+  return {
+    ...navAttrs(to),
+    onClick,
+    ...(baked ? { onKeyDown } : {}),
+  };
 }

@@ -2,35 +2,51 @@
 /**
  * The Orca plugin's worker: it puts the x-skills report in front of the reader.
  *
- * Orca loads this as a plain Node process (no Electron) when a command runs. Everything here is a *client* of
- * the live report, never a copy of it:
+ * Orca loads this as a plain Node process (no Electron) when a command runs. Three things happen here, and
+ * each of them is a *client* of the report rather than a copy of it:
  *   - the report is opened through the server's own `POST /api/open`, so the tab logic lives in one place;
- *   - the day the reader has not seen is announced once, from the server's own answers;
- *   - the plugin's own files are read, never written: a plugin is a content-hashed tree, so anything this
- *     worker changed at runtime would invalidate the reader's consent and ask them to install it again.
+ *   - the panel's snapshot is baked by the repository's own baker (`scripts/report-panel.mjs`), so the panel
+ *     and the served app are the same build rather than two implementations, and it is re-baked as the record
+ *     moves — a panel cannot read anything, so this is where its liveness comes from;
+ *   - the day the reader has not seen is announced once, from the server's own answers.
  *
- * That last rule is why the panel is a static document and not a snapshot: a panel is a document with no
- * network, so a copy of the record in it would be stale the moment it was written — and rewriting it is the
- * one thing a plugin may not do. The record is read where it lives, at the address below.
+ * The worker runs with no working directory of its own (Orca forks it without one), so where the report lives
+ * is *asked for* — Orca knows the focused branch, and its CLI maps a branch to a path.
  */
+
+import fs from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 export const DEFAULT_URL = "http://127.0.0.1:8787";
 export const PROBE_TIMEOUT_MS = 1500;
 export const EVENT_CHECK_INTERVAL_MS = 60_000;
+/** How often the worker asks whether the record moved, while it is alive to hold the panel current. */
+export const RECORD_POLL_MS = 2_000;
 
 /** The events Orca offers, all three of them: a worktree coming or going, and an agent changing state. */
 export const PLUGIN_EVENTS = ["worktree.created", "worktree.removed", "agent.status.changed"];
+
+const ORCA_CLI = process.env.ORCA_CLI ?? "orca";
+const ROOT_KEY = "reportRoot";
 
 const DAYS_PATH = "/api/days";
 const REFRESH_PATH = "/api/refresh";
 const MOVEMENT_PATH = "/api/movement";
 const OPEN_PATH = "/api/open";
 const NAME = "x-skills report";
-const START_TEXT = "npm run report";
 const NOTIFY_BODY_LIMIT = 1000;
 const TIMEOUT_NAMES = new Set(["AbortError", "TimeoutError"]);
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const ADDRESS_KEY = "url";
+const RECORD_DIR = [".x-skills", "daily"];
+const CONSOLE_TITLE = "x-skills report";
+const CONSOLE_KEY = "consoleTerminal";
+const CONSOLE_SCRIPT = ["scripts", "report-console.mjs"];
+const SERVER_SCRIPT = ["scripts", "report-server.mjs"];
+const SERVER_WAIT_MS = 15_000;
+const SERVER_POLL_MS = 250;
 const LAST_SEEN_KEY = "lastSeenDay";
 const NOTIFY_KEY = "notifyOnNewDay";
 
@@ -114,7 +130,12 @@ function trimBody(text) {
 
 const logTo = (orca) => (message) => orca.log(`${NAME}: ${message}`);
 const notifyVia = (orca) => (body) =>
-  orca.host.call("notifications.show", { title: NAME, body: trimBody(body) });
+  orca.host
+    .call("notifications.show", { title: NAME, body: trimBody(body) })
+    .catch((error) => {
+      orca.log(`${NAME}: could not notify: ${error?.message ?? error}`);
+      return null;
+    });
 
 /** The one place a request leaves the worker: JSON, and never without a deadline. */
 function makeRequest({ origin, fetchImpl, timeoutMs }) {
@@ -133,7 +154,7 @@ function makeRequest({ origin, fetchImpl, timeoutMs }) {
 async function readOwnSettings({ orca, log }) {
   try {
     const answer = await orca.host.call("settings.get", {});
-    const settings = answer?.ok === true ? answer.value?.settings : null;
+    const settings = answer?.settings;
     return settings && typeof settings === "object" ? settings : {};
   } catch (error) {
     log(`could not read the settings: ${error?.message ?? error}`);
@@ -144,7 +165,7 @@ async function readOwnSettings({ orca, log }) {
 /** One of the plugin's own storage keys, or undefined. */
 async function readOwnStorage({ orca, key, log }) {
   try {
-    return (await orca.host.call("storage.get", { key }))?.value?.value;
+    return (await orca.host.call("storage.get", { key }))?.value;
   } catch (error) {
     log(`could not read the storage: ${error?.message ?? error}`);
     return undefined;
@@ -268,50 +289,41 @@ async function reportRefresh({ origin, request, notify }) {
   return answer.ok ? { recorded: true, day: answer.day } : { recorded: false, reason: answer.reason };
 }
 
-/** Where the start command should be typed, or the sentence explaining there is nowhere. */
-async function startTarget(orca, log) {
-  const context = await readContext(orca, log);
-  if (!context) return { reason: "no worktree is focused in Orca, so there is no terminal to start the report in" };
-  const terminal = (context.terminals ?? [])[0];
-  return terminal ? { terminal } : { reason: "this worktree has no terminal to start the report in" };
+/**
+ * Bring the report up, the reader's way: the plugin starts it, and says what happened.
+ *
+ * This is the one command whose whole job is the server, so it does not wait for a quiet port to notice — it
+ * asks the ensurer directly, which resolves the record root, starts the process at most once, and answers
+ * either the pid or the sentence explaining why there is nothing to serve.
+ */
+async function reportStart({ origin, notify, ensure, log }) {
+  if (!ensure) {
+    const reason = "this report's address was refused, so there is nothing to start at it";
+    await notify(reason);
+    return { started: false, reason };
+  }
+  const outcome = await ensure();
+  if (!outcome.ok) {
+    await notify(outcome.reason);
+    return { started: false, reason: outcome.reason };
+  }
+  const said = outcome.started
+    ? `started the report at ${origin} (pid ${outcome.pid})`
+    : `the report was already answering at ${origin}`;
+  log(said);
+  await notify(said);
+  return { started: true, pid: outcome.pid ?? null, origin };
 }
 
 /** The focused worktree's terminals, or null when nothing is focused. */
 async function readContext(orca, log) {
   try {
     const answer = await orca.host.call("workspace.readContext", {});
-    return answer?.ok === true ? answer.value : null;
+    return answer ?? null;
   } catch (error) {
     log(`could not read the workspace context: ${error?.message ?? error}`);
     return null;
   }
-}
-
-/**
- * Start the report the reader's way: type the command into a terminal they can see.
- *
- * The plugin has no process of its own to start, so this is the whole of "start" — the server exists because
- * someone ran that command, not because this plugin did.
- */
-async function reportStart({ orca, notify, log }) {
-  const target = await startTarget(orca, log);
-  if (!target.terminal) {
-    await notify(target.reason);
-    return { sent: false, reason: target.reason };
-  }
-  const answer = await orca.host.call("terminal.sendText", {
-    terminalId: target.terminal.id,
-    text: START_TEXT,
-    enter: true,
-  });
-  if (answer?.ok !== true) {
-    const reason = answer?.error ?? "the terminal refused the text";
-    await notify(reason);
-    return { sent: false, reason };
-  }
-  log(`typed ${START_TEXT} into ${target.terminal.id}`);
-  await notify(`sent ${START_TEXT} to ${target.terminal.id} — watch it there`);
-  return { sent: true, terminalId: target.terminal.id };
 }
 
 /** The server's answer to an open request, as either an opener or a reason to show. */
@@ -330,16 +342,41 @@ async function requestOpen({ origin, request }) {
   return { ok: false, reason: answer.message ?? `${origin} would not open a tab (${response.status})` };
 }
 
+/**
+ * The report, up — or the sentence explaining why it is not.
+ *
+ * A refused address has nothing at it; a port answering as something else is never adopted; a quiet port is the
+ * one case that starts a process (through `ensure`, once per activation). What to *do* about a report that is up
+ * is the caller's business, which is why this returns rather than opens.
+ */
+async function reportUp({ origin, request, timeoutMs, refused, ensure = null }) {
+  if (refused) return { up: false, reason: refused.reason };
+
+  let found = await probeReport({ origin, request, timeoutMs });
+  if (!found.up) found = await bringUpIfQuiet({ origin, request, timeoutMs, found, ensure });
+  if (found.up) return { up: true, found };
+  return { up: false, reason: found.ensureReason ?? notFoundMessage(found) };
+}
+
+/**
+ * A quiet port is the one thing that starts a report; anything else is left exactly as it was found.
+ *
+ * The ensurer's own reason travels with the probe it failed for, because "there is nothing to serve" is a more
+ * useful sentence than "it is not answering" when that is why nothing answered.
+ */
+async function bringUpIfQuiet({ origin, request, timeoutMs, found, ensure }) {
+  if (found.kind !== "unreachable" || !ensure) return found;
+  const outcome = await ensure();
+  if (!outcome.ok) return { ...found, ensureReason: `${outcome.reason} — or run: npm run report` };
+  return probeReport({ origin, request, timeoutMs });
+}
+
 /** Ask the server to show the report, and say why when it cannot. */
-async function openReport({ origin, request, timeoutMs, notify, log, refused }) {
-  if (refused) {
-    await notify(refused.reason);
-    return { opened: false, reason: refused.reason };
-  }
-  const found = await probeReport({ origin, request, timeoutMs });
-  if (!found.up) {
-    await notify(notFoundMessage(found));
-    return { opened: false, reason: found.reason };
+async function openReport({ origin, request, timeoutMs, notify, log, refused, ensure }) {
+  const report = await reportUp({ origin, request, timeoutMs, refused, ensure });
+  if (!report.up) {
+    await notify(report.reason);
+    return { opened: false, reason: report.reason };
   }
   const outcome = await requestOpen({ origin, request });
   if (!outcome.ok) {
@@ -350,16 +387,246 @@ async function openReport({ origin, request, timeoutMs, notify, log, refused }) 
   return { opened: true, how: outcome.how };
 }
 
+/**
+ * The record a checkout would serve, or the sentence explaining there is none.
+ *
+ * A reader asked for "the JSONs in the current project", so the root is the focused worktree's `.x-skills/daily`
+ * and never a path latched at install time: work in another checkout and the report follows.
+ */
+function recordRootOf(repo, { exists = fs.existsSync } = {}) {
+  const root = path.join(repo, ...RECORD_DIR);
+  return exists(root)
+    ? { root }
+    : { root: null, reason: `${repo} has no ${RECORD_DIR.join("/")}, so there is nothing to serve` };
+}
+
+/** Which record to serve: the focused worktree's, resolved through Orca rather than guessed. */
+export async function resolveRecordRoot({ orca, own = {}, log = () => {}, run: runCommand = run } = {}) {
+  const repo = await findReportRoot({ orca, own, log, run: runCommand });
+  if (!repo) return { root: null, reason: "no worktree is focused in Orca, so there is no record to read" };
+  return recordRootOf(repo);
+}
+
+/**
+ * The one process this plugin starts: the repository's own report server, detached, on a loopback port.
+ *
+ * The argv is built here and never from a string, so nothing a reader or a record contains can become a command;
+ * the script is resolved out of the record root, so the server that runs is the checkout the record belongs to.
+ */
+export function startReportServer({
+  origin,
+  root,
+  log = () => {},
+  exec = process.execPath,
+  spawnImpl = spawn,
+  exists = fs.existsSync,
+} = {}) {
+  const script = path.resolve(root, "..", "..", ...SERVER_SCRIPT);
+  if (!exists(script)) return { started: false, reason: `${script} is not there, so ${root} cannot be served` };
+  const port = new URL(origin).port || DEFAULT_PORT;
+  const child = spawnImpl(exec, [script, "--port", port, "--root", root], { detached: true, stdio: "ignore" });
+  child.unref();
+  log(`started the report at ${origin} (pid ${child.pid})`);
+  return { started: true, pid: child.pid ?? null };
+}
+
+/**
+ * Bring the report up, or say why it cannot be.
+ *
+ * One attempt per activation, and only when the probe found the port quiet: an address that answers as
+ * something else is never adopted, and a reader who presses Open twice gets one server, not two.
+ */
+export function makeEnsurer({
+  orca,
+  origin,
+  request,
+  timeoutMs,
+  own = {},
+  log = () => {},
+  run: runCommand = run,
+  startServer = startReportServer,
+  waitMs = SERVER_WAIT_MS,
+  pollMs = SERVER_POLL_MS,
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+} = {}) {
+  let attempt = null;
+  return async () => {
+    if (attempt) return attempt;
+    attempt = ensureOnce({ orca, origin, request, timeoutMs, own, log, runCommand, startServer, waitMs, pollMs, sleep });
+    return attempt;
+  };
+}
+
+async function ensureOnce({ orca, origin, request, timeoutMs, own, log, runCommand, startServer, waitMs, pollMs, sleep }) {
+  const record = await resolveRecordRoot({ orca, own, log, run: runCommand });
+  if (!record.root) {
+    log(record.reason);
+    return { ok: false, started: false, reason: record.reason };
+  }
+  const started = startServer({ origin, root: record.root, log });
+  if (!started.started) return { ok: false, started: false, reason: started.reason };
+
+  for (const deadline = Date.now() + waitMs; Date.now() < deadline; await sleep(pollMs)) {
+    const found = await probeReport({ origin, request, timeoutMs });
+    if (found.up) return { ok: true, started: true, pid: started.pid, day: found.day, root: record.root };
+  }
+  const reason = `started the report at ${origin} (pid ${started.pid}), but it did not answer within ${Math.round(waitMs / 1000)}s`;
+  log(reason);
+  return { ok: false, started: true, pid: started.pid, reason };
+}
+
+/** The terminals Orca has, as its CLI reports them: a handle, its title, and the checkout it belongs to. */
+export function parseTerminals(stdout) {
+  try {
+    const payload = JSON.parse(stdout);
+    const list = payload?.result?.terminals ?? payload?.terminals ?? [];
+    return list
+      .map((entry) => ({
+        handle: entry.handle ?? entry.id ?? null,
+        title: entry.title ?? "",
+        worktreePath: entry.worktreePath ?? null,
+      }))
+      .filter((entry) => entry.handle);
+  } catch {
+    return [];
+  }
+}
+
+/** The pane this plugin opened: the handle it remembers, or a terminal of ours in this checkout. */
+function consoleTerminal(terminals, { remembered = null, worktreePath = null } = {}) {
+  const mine = (entry) => entry.title === CONSOLE_TITLE && (!worktreePath || entry.worktreePath === worktreePath);
+  return terminals.find((entry) => remembered && entry.handle === remembered && mine(entry)) ?? terminals.find(mine) ?? null;
+}
+
+/**
+ * The console, in a terminal of its own: created once, then focused.
+ *
+ * The pane is identified by its title *and* its checkout, because a reader with two worktrees would otherwise
+ * get the other one's numbers. The command is built here from absolute paths, so the terminal's own working
+ * directory cannot matter.
+ */
+export function openConsole({ repo, origin, log = () => {}, run: runCommand = run, remembered = null, exists = fs.existsSync } = {}) {
+  const script = path.join(repo, ...CONSOLE_SCRIPT);
+  if (!exists(script)) return { ok: false, how: "no-console", reason: `${script} is not in ${repo}` };
+
+  const existing = findConsoleTerminal({ repo, remembered, run: runCommand });
+  if (existing) return focusConsole({ handle: existing.handle, run: runCommand, log });
+  return createConsole({ script, origin, run: runCommand, log });
+}
+
+/** The console this plugin already has here, if any: the remembered handle, else one of ours in this checkout. */
+function findConsoleTerminal({ repo, remembered, run: runCommand }) {
+  const listed = runCommand(ORCA_CLI, ["terminal", "list", "--json"]);
+  const terminals = listed.code === 0 ? parseTerminals(listed.stdout) : [];
+  return consoleTerminal(terminals, { remembered, worktreePath: repo });
+}
+
+/** Bring the pane forward, or say what the CLI said when it would not. */
+function focusConsole({ handle, run: runCommand, log }) {
+  const focused = runCommand(ORCA_CLI, ["terminal", "switch", "--terminal", handle]);
+  if (focused.code !== 0) {
+    return { ok: false, how: "focus-failed", handle, reason: firstLine(focused.stderr || focused.stdout) };
+  }
+  log(`focused the console in ${handle}`);
+  return { ok: true, how: "focused", handle };
+}
+
+/** A terminal of its own, running the console against this report. */
+function createConsole({ script, origin, run: runCommand, log }) {
+  const created = runCommand(ORCA_CLI, [
+    "terminal",
+    "create",
+    "--worktree",
+    "active",
+    "--title",
+    CONSOLE_TITLE,
+    "--command",
+    `node ${script} --url ${origin}`,
+    "--json",
+  ]);
+  if (created.code !== 0) return { ok: false, how: "create-failed", reason: firstLine(created.stderr || created.stdout) };
+
+  const handle = parseCreatedTerminal(created.stdout);
+  if (!handle) return { ok: false, how: "create-failed", reason: "Orca created a terminal but did not name it" };
+  log(`opened the console in ${handle}`);
+  return { ok: true, how: "created", handle };
+}
+
+/** The handle of a terminal Orca just created, or null when the answer is not the shape it documents. */
+function parseCreatedTerminal(stdout) {
+  try {
+    const payload = JSON.parse(stdout);
+    const terminal = payload?.result?.terminal ?? payload?.result?.terminals?.[0] ?? payload?.terminal ?? null;
+    return terminal?.handle ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The console pane: the report first, then a terminal to read it in.
+ *
+ * The order matters and is not a preference: the console exits at once when nothing answers, so a pane opened
+ * before the server is a pane that shows an error and stays open.
+ */
+async function reportConsole({ orca, own, origin, ensure, notify, log, run: runCommand, refused, open = openConsole }) {
+  if (refused) {
+    await notify(refused.reason);
+    return { opened: false, reason: refused.reason };
+  }
+  const up = await ensure();
+  if (!up.ok) {
+    await notify(up.reason);
+    return { opened: false, reason: up.reason };
+  }
+  const repo = path.resolve(up.root, "..", "..");
+  const opened = await openConsolePane({ orca, repo, origin, log, run: runCommand, open });
+  if (!opened.ok) {
+    await notify(opened.reason);
+    return { opened: false, reason: opened.reason };
+  }
+  await notify(consoleSentence(opened));
+  return { opened: true, how: opened.how, handle: opened.handle };
+}
+
+/** Open the pane, remembering the terminal so the next press focuses it rather than opening a second. */
+async function openConsolePane({ orca, repo, origin, log, run: runCommand, open }) {
+  const remembered = await readOwnStorage({ orca, key: CONSOLE_KEY, log });
+  const opened = open({
+    repo,
+    origin,
+    log,
+    run: runCommand,
+    remembered: typeof remembered === "string" ? remembered : null,
+  });
+  if (opened.ok && opened.how === "created") {
+    await writeStored({ orca, key: CONSOLE_KEY, value: opened.handle, log });
+  }
+  return opened;
+}
+
+/** What to tell the reader about the pane that is now in front of them. */
+function consoleSentence({ how, handle }) {
+  return how === "focused"
+    ? `focused the console pane “${CONSOLE_TITLE}” (${handle})`
+    : `the console is open as “${CONSOLE_TITLE}” (${handle}) — the keys are in the pane`;
+}
+
 /** Everything a command needs, resolved once per activation. */
-async function bindReport({ orca, fetchImpl, url, timeoutMs }) {
+async function bindReport({ orca, fetchImpl, url, timeoutMs, ensure, open = openConsole, run: runCommand = run }) {
   const log = logTo(orca);
   const own = await readOwnSettings({ orca, log });
   const address = url === undefined ? await resolveUrl({ orca, own, log }) : explicitAddress(url);
+  const request = address.origin ? makeRequest({ origin: address.origin, fetchImpl, timeoutMs }) : null;
   return {
     own,
     source: address.source,
     origin: address.origin,
-    request: address.origin ? makeRequest({ origin: address.origin, fetchImpl, timeoutMs }) : null,
+    request,
+    // A refused address has nothing to start at it, whatever a caller passed in.
+    ensure: address.origin ? (ensure ?? makeEnsurer({ orca, origin: address.origin, request, timeoutMs, own, log, run: runCommand })) : null,
+    run: runCommand,
+    open,
     refused: address.refused ?? null,
     announce: await resolveFlag({ orca, own, key: NOTIFY_KEY, fallback: true, log }),
     timeoutMs,
@@ -429,10 +696,11 @@ export async function checkNewDay({ orca, origin, request, timeoutMs, notify, lo
 }
 
 /** The palette, as Orca sees it: one entry per contributed command. */
-function commandTable({ binding, startDeps, orca }) {
+function commandTable({ binding, orca, bake }) {
   const afterChecking = async (work) => {
     const bound = await binding();
     await checkNewDay({ orca, ...bound });
+    await bake(bound);
     return work(bound);
   };
 
@@ -440,16 +708,145 @@ function commandTable({ binding, startDeps, orca }) {
     "report-open": () => afterChecking(openReport),
     "report-status": () => afterChecking(reportStatus),
     "report-refresh": () => afterChecking(reportRefresh),
-    "report-start": async () => reportStart(startDeps),
+    "report-start": () => afterChecking(reportStart),
+    "report-console": () => afterChecking(reportConsole),
   };
+}
+
+/** Run a command and hand back what it printed: the seam a test replaces. */
+export function run(command, args, { cwd = process.cwd(), timeout = 5000 } = {}) {
+  const result = spawnSync(command, args, { cwd, encoding: "utf8", timeout });
+  return {
+    code: result.status ?? 1,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? result.error?.message ?? "",
+  };
+}
+
+const firstLine = (text) => (text ?? "").trim().split("\n")[0] ?? "";
+
+/** The focused worktree Orca names, as its CLI reports it. */
+export function parseActiveWorktree(stdout) {
+  try {
+    const payload = JSON.parse(stdout);
+    const worktree = payload?.result?.worktree ?? payload?.worktree ?? null;
+    return worktree?.path ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The checkout the report lives in.
+ *
+ * A reader-set `reportRoot` wins, then what the plugin remembered, and only then does it ask: the worker's
+ * own working directory is Orca's, not a checkout's, so the path comes from Orca itself — the worktree it has
+ * focused, asked for by that name. A branch could not answer it: `refs/heads/main` is the branch of every
+ * repository on main, so matching one named whichever came first in the list. The answer is remembered, so
+ * this costs one CLI call per checkout rather than one per wake.
+ */
+export async function findReportRoot({ orca, own = {}, log = () => {}, run: runCommand = run } = {}) {
+  const known = await readOwn({ orca, own, key: ROOT_KEY, log });
+  if (typeof known === "string" && known) return known;
+
+  const context = await readContext(orca, log);
+  if (!context?.branch) return null;
+
+  const found = focusedWorktree({ log, run: runCommand });
+  if (found) await writeStored({ orca, key: ROOT_KEY, value: found, log });
+  return found;
+}
+
+/** The path of the worktree Orca has focused, or null: the one question the worker cannot answer itself. */
+function focusedWorktree({ log, run: runCommand }) {
+  const shown = runCommand(ORCA_CLI, ["worktree", "show", "--worktree", "active", "--json"]);
+  if (shown.code !== 0) {
+    log(`could not ask Orca for the focused worktree: ${firstLine(shown.stderr || shown.stdout)}`);
+    return null;
+  }
+  const found = parseActiveWorktree(shown.stdout);
+  if (!found) log("Orca named no focused worktree");
+  return found;
+}
+
+const loadBakerFrom = (root) => import(pathToFileURL(path.join(root, "scripts", "report-panel.mjs")).href);
+const loadFollowerFrom = (root) => import(pathToFileURL(path.join(root, "scripts", "report-server.mjs")).href);
+
+/**
+ * Keep the panel current for as long as this worker is alive.
+ *
+ * The panel cannot read anything (a sandboxed document with no network), so liveness comes from here: the
+ * record is polled with the checkout's own rule (`followPacks`, the one the running server uses), and a bake
+ * runs whenever it moved. The bake is the shared one too, and it only writes when the panel would show
+ * something else — so a change the app does not read is not a repaint, and a reader keeps their place.
+ */
+export async function followRecord({
+  orca,
+  own = {},
+  log = () => {},
+  run: runCommand = run,
+  bake,
+  loadFollower = loadFollowerFrom,
+  loadBaker = loadBakerFrom,
+  intervalMs = RECORD_POLL_MS,
+} = {}) {
+  const record = await resolveRecordRoot({ orca, own, log, run: runCommand });
+  if (!record.root) {
+    log(`nothing to follow: ${record.reason}`);
+    return null;
+  }
+  const checkout = path.resolve(record.root, "..", "..");
+  try {
+    const [{ followPacks }, { recordFingerprint }] = await Promise.all([loadFollower(checkout), loadBaker(checkout)]);
+    const follower = followPacks({
+      root: record.root,
+      intervalMs,
+      rebake: () => bake({ own, log }),
+      fingerprint: async (dir) => recordFingerprint(dir),
+    });
+    log(`following ${record.root} for changes`);
+    return follower;
+  } catch (error) {
+    log(`could not follow ${record.root}: ${error?.message ?? error}`);
+    return null;
+  }
+}
+
+/**
+ * Bake the panel, wherever the report lives.
+ *
+ * The baker is the repository's own module, imported from the checkout: one implementation of "what the panel
+ * holds" serves the server and the plugin, and a panel that cannot be baked is a log line, never a failed
+ * command.
+ */
+export async function bakePanel({ orca, own = {}, log = () => {}, run: runCommand = run, loadBaker = loadBakerFrom } = {}) {
+  const root = await findReportRoot({ orca, own, log, run: runCommand });
+  if (!root) {
+    log("no report checkout yet: open a workspace in Orca, or set the plugin's reportRoot");
+    return { baked: false, reason: "no checkout" };
+  }
+  try {
+    const { bakeIfStale } = await loadBaker(root);
+    const result = bakeIfStale({
+      root: path.join(root, ".x-skills", "daily"),
+      dist: path.join(root, "tools", "report-app", "dist-panel"),
+      out: path.join(root, "tools", "orca-plugin", "panel.html"),
+    });
+    log(result.baked ? `baked the panel for ${result.stamp}` : `panel is current (${result.stamp})`);
+    return result;
+  } catch (error) {
+    log(`could not bake the panel: ${error?.message ?? error}`);
+    return { baked: false, reason: String(error?.message ?? error) };
+  }
 }
 
 /**
  * One check per interval, whatever the event volume.
  *
  * The newest day changes about once a day and an agent fleet changes state constantly, so the interval is what
- * keeps a busy workspace from becoming a busy plugin. There is no timer here: `now` is read when an event
- * arrives, so a worker that slept cannot drift and nothing keeps its process alive.
+ * keeps a busy workspace from becoming a busy plugin. There is no timer *here*: `now` is read when an event
+ * arrives, so a worker that slept cannot drift. The one timer the worker holds is `followRecord`'s, which is
+ * what keeps the panel current between events.
  */
 /** The window a check opens: one run, then a wait, and a count of what arrived while it waited. */
 class CheckWindow {
@@ -524,24 +921,25 @@ export function makePathNote({ log }) {
   };
 }
 
-/** What an Orca event does: look for a new day. */
-function checkOnEvent({ orca, binding, noteFailure }) {
+/** What an Orca event does: look for a new day, then make the next panel open current. */
+function checkThenBake({ orca, binding, bake, noteFailure }) {
   return async () => {
     const bound = await binding();
     const result = await checkNewDay({ orca, ...bound });
     if (!result.checked) noteFailure(result.reason);
+    await bake(bound);
     return result;
   };
 }
 
 /** Orca's events: the plugin looks when something happens, and stays quiet when nothing is there. */
-function subscribeToEvents({ orca, binding, log, now, intervalMs }) {
+function subscribeToEvents({ orca, binding, log, now, intervalMs, bake }) {
   const notePath = makePathNote({ log });
   const onEvent = makeEventCheck({
     now,
     intervalMs,
     log,
-    check: checkOnEvent({ orca, binding, noteFailure: makeFailureLog({ log }) }),
+    check: checkThenBake({ orca, binding, bake, noteFailure: makeFailureLog({ log }) }),
   });
 
   for (const name of PLUGIN_EVENTS) {
@@ -553,7 +951,7 @@ function subscribeToEvents({ orca, binding, log, now, intervalMs }) {
 }
 
 /** The object a caller drives: one function per decision, without the palette in the way. */
-function pluginSurface({ orca, binding, commands, now, intervalMs }) {
+function pluginSurface({ orca, binding, commands, now, intervalMs, bake }) {
   return {
     probe: async () => {
       const report = await binding();
@@ -563,12 +961,11 @@ function pluginSurface({ orca, binding, commands, now, intervalMs }) {
     open: commands["report-open"],
     register: () => {
       for (const [id, handler] of Object.entries(commands)) orca.commands.register(id, handler);
-      subscribeToEvents({ orca, binding, log: logTo(orca), now, intervalMs });
+      subscribeToEvents({ orca, binding, log: logTo(orca), now, intervalMs, bake });
     },
   };
 }
 
-const startDepsFor = (orca) => ({ orca, notify: notifyVia(orca), log: logTo(orca) });
 
 export function createPlugin({
   orca,
@@ -577,11 +974,17 @@ export function createPlugin({
   timeoutMs = PROBE_TIMEOUT_MS,
   now = Date.now,
   intervalMs = EVENT_CHECK_INTERVAL_MS,
+  bake = null,
+  ensure = null,
+  run = null,
+  open = null,
 } = {}) {
   let pending = null;
-  const binding = () => (pending ??= bindReport({ orca, fetchImpl, url, timeoutMs }));
-  const commands = commandTable({ binding, orca, startDeps: startDepsFor(orca) });
-  return pluginSurface({ orca, binding, commands, now, intervalMs });
+  const binding = () =>
+    (pending ??= bindReport({ orca, fetchImpl, url, timeoutMs, ensure, open: open ?? openConsole, run: run ?? undefined }));
+  const rebake = bake ?? ((bound) => bakePanel({ orca, own: bound.own, log: bound.log, run: bound.run }));
+  const commands = commandTable({ binding, orca, bake: rebake });
+  return pluginSurface({ orca, binding, commands, now, intervalMs, bake: rebake });
 }
 
 /** Orca's worker entry. The second argument is ours: tests inject a fetch and a timeout. */
@@ -589,5 +992,11 @@ export default function activate(orca, deps = {}) {
   const plugin = createPlugin({ orca, ...deps });
   plugin.register();
   orca.log(`${NAME}: worker cwd ${process.cwd()}`);
+  const log = (line) => orca.log(`${NAME}: ${line}`);
+  const bake = deps.bakePanel ?? (({ own, log: say }) => bakePanel({ orca, own, log: say }));
+  void bake({ own: {}, log });
+  if (deps.follow !== false) {
+    void followRecord({ orca, own: {}, log, bake, loadFollower: deps.loadFollower, loadBaker: deps.loadBaker });
+  }
   return plugin;
 }

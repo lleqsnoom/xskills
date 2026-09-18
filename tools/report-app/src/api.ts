@@ -1,4 +1,23 @@
-/** The shapes `scripts/report-server.mjs` answers with, and the one place that fetches them. */
+/** The shapes `scripts/report-server.mjs` answers with, and the one place that asks for them. */
+
+import { createBackend } from "./backend.mjs";
+import { bakedReport } from "./baked.mjs";
+
+/**
+ * The one backend this document is: `http` in the served app, `snapshot` in a plugin panel. Everything below
+ * is written against the interface, so a third way of answering (a pane granted its own origin — see
+ * `backend.mjs` and `PANE-REQUEST.md`) is a new entry there and no change here.
+ */
+const backend = createBackend();
+
+/** True when this build is a baked panel: answers come from the snapshot, and nothing is written. */
+export const isSnapshot = () => backend.kind === "snapshot";
+
+/**
+ * Whether this copy can change the record. A screen asks this, not "am I a snapshot": the question a write
+ * control's presence hangs on is whether there is anywhere to write to.
+ */
+export const canWrite = () => backend.canWrite;
 
 export type Band = { key: "good" | "fair" | "weak" | "unknown"; label: string };
 
@@ -199,55 +218,26 @@ export type SessionDetail = { date: string; session: Session; signals: Signal[] 
 
 
 /**
- * One request per URL, shared by whichever screens ask for it: the rail, the movement table and the calendar
- * all want the same movement payload, and three identical requests on first paint is three chances to
- * disagree. A write clears the lot, because every answer here is derived from the same files.
+ * The app's read routes and its two writes, each one a call on the backend. Nothing here knows whether that
+ * backend is a server or a file: `read` rejects with a sentence worth showing, `write` refuses in a snapshot,
+ * and `bundleName` says nothing at all when no build is being served.
  */
-const cache = new Map<string, Promise<unknown>>();
-
-async function get<T>(path: string): Promise<T> {
-  const cached = cache.get(path);
-  if (cached) return cached as Promise<T>;
-  const request = (async () => {
-    const response = await fetch(path);
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({ error: `${response.status} ${response.statusText}` }));
-      throw new Error(body.error ?? `failed: ${path}`);
-    }
-    return (await response.json()) as T;
-  })();
-  cache.set(path, request);
-  request.catch(() => cache.delete(path)); // a failure is not worth remembering
-  return request;
-}
-
 export const api = {
-  movement: (days = 14) => get<MovementPage>(`/api/movement?days=${days}`),
-  day: (date: string) => get<Day>(`/api/day/${date}`),
-  session: (date: string, id: string) => get<SessionDetail>(`/api/day/${date}/session/${encodeURIComponent(id)}`),
-  skill: (name: string) => get<Skill>(`/api/skill/${name}`),
-  todos: () => get<Todos>("/api/todos"),
-  /** Which bundle the server is serving now — asked afresh, because a cached answer is the wrong answer here. */
-  version: async (): Promise<{ build: string | null }> => {
-    const response = await fetch("/api/version", { cache: "no-store" });
-    if (!response.ok) throw new Error(`could not ask for the version: ${response.status}`);
-    return (await response.json()) as { build: string | null };
-  },
+  movement: (days = 14) => backend.read<MovementPage>(`/api/movement?days=${days}`),
+  day: (date: string) => backend.read<Day>(`/api/day/${date}`),
+  session: (date: string, id: string) =>
+    backend.read<SessionDetail>(`/api/day/${date}/session/${encodeURIComponent(id)}`),
+  skill: (name: string) => backend.read<Skill>(`/api/skill/${name}`),
+  todos: () => backend.read<Todos>("/api/todos"),
+  /** Which bundle the server is serving now; null in a snapshot, which has no bundle to compare. */
+  version: async (): Promise<{ build: string | null }> => ({ build: await backend.bundleName() }),
   refresh: async () => {
-    const result = await get<{ ok: boolean; day?: string; inUse?: number; packs?: string[]; reason?: string }>("/api/refresh");
-    cache.clear();
+    const result = await backend.read<{ ok: boolean; day?: string; inUse?: number; packs?: string[]; reason?: string }>(
+      "/api/refresh"
+    );
+    backend.invalidate();
     return result;
   },
-  invalidate: () => cache.clear(),
-  saveTodos: async (items: TodoItem[]): Promise<Todos> => {
-    const response = await fetch("/api/todos", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ items }),
-    });
-    if (!response.ok) throw new Error(`could not save: ${response.status}`);
-    const written = (await response.json()) as Todos;
-    cache.clear();
-    return written;
-  },
+  invalidate: () => backend.invalidate(),
+  saveTodos: (items: TodoItem[]) => backend.write<Todos>("/api/todos", { items }),
 };

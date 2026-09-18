@@ -407,6 +407,18 @@ describe("report:open — the surfaces the report can be read in", async () => {
     assert.doesNotMatch(result.message, /more/, "only the first line of a tool's complaint is quoted");
   });
 
+  it("still names a reason when the CLI fails without a word", () => {
+    const result = open.openInOrca({ url: "http://127.0.0.1:8787/", exec: () => ({ code: 1, stdout: "", stderr: "" }) });
+    assert.equal(result.ok, false);
+    assert.match(result.message, /it exited 1 without saying why/);
+  });
+
+  it("carries the reason a command that never started has to give", () => {
+    const result = open.run("xskills-no-such-command-here", []);
+    assert.notEqual(result.code, 0);
+    assert.ok(result.stderr.trim().length > 0, "a command that could not be started still says something");
+  });
+
   it("falls back to a window when Orca cannot answer, and says what it skipped", () => {
     const launched = [];
     const result = open.openReport({
@@ -776,40 +788,103 @@ describe("the chart's geometry — what a hundred days do to the axis", async ()
   });
 });
 
-describe("the app is live-only: there is no snapshot to bake", async () => {
+describe("report:panel — the app running on a snapshot", async () => {
+  const baked = await import(path.join(ROOT, "tools", "report-app", "src", "baked.mjs"));
+  const baker = await import(path.join(ROOT, "scripts", "report-panel.mjs"));
   const SERVER_MODULE = await import(SERVER);
-  const source = (name) => fs.readFileSync(path.join(ROOT, "tools", "report-app", "src", name), "utf8");
 
-  it("has no snapshot module, and no window.__REPORT__ anywhere in the app", () => {
-    assert.equal(fs.existsSync(path.join(ROOT, "tools", "report-app", "src", "baked.mjs")), false);
-    for (const file of fs.readdirSync(path.join(ROOT, "tools", "report-app", "src"))) {
-      if (!file.endsWith(".ts") && !file.endsWith(".tsx") && !file.endsWith(".mjs")) continue;
-      assert.doesNotMatch(source(file), /__REPORT__/, `${file} still answers from a snapshot`);
+  const snapshot = {
+    bakedAt: "2026-09-17T21:40:12.000Z",
+    newest: "2026-09-17",
+    days: ["2026-09-17"],
+    data: { "/api/movement": { days: 2 }, "/api/day/2026-09-17": { date: "2026-09-17" } },
+  };
+
+  /** A daily root with a pack per date, which is all a bake needs to have something to bake. */
+  function dailyRoot(dates = ["2026-09-17"]) {
+    const dir = tmp();
+    const lines = [];
+    for (const date of dates) {
+      const pack = path.join(dir, date);
+      fs.mkdirSync(pack, { recursive: true });
+      const session = {
+        id: "s1",
+        host: "crush",
+        uuid: "s1",
+        title: "One session",
+        project: "/tmp/p",
+        modified: `${date}T10:00:00Z`,
+        stats: { messages: 4, userMessages: 1, assistantMessages: 3, toolCalls: 2, toolResults: 2, panels: 1, toolFailures: 0, expectedExits: 0, repeats: 0, corrections: 0, reprompts: 0, proseQuestions: 0 },
+        skills: { loaded: ["x-plan"], used: ["x-plan"], unused: [] },
+        checks: [],
+        graphs: [],
+        runFolders: [],
+        artifacts: [],
+      };
+      const signal = { id: "S1", kind: "tool-failure", severity: "medium", summary: "bash failed", count: 1, suspects: ["x-plan"], session: "s1", sessionTitle: "One session", evidence: [] };
+      fs.writeFileSync(
+        path.join(pack, "summary.json"),
+        JSON.stringify({ pack: `.x-skills/daily/${date}`, generatedAt: `${date} 05:00`, hosts: [], counts: { scanned: 1 }, skills: { touched: [], idle: [] }, sessions: [session], signals: [signal], runFolders: [], artifacts: [], warnings: [], notes: [] })
+      );
+      lines.push(`${JSON.stringify(line(date, [scored("x-plan", 70, { trigger: 0.6 })], { sessions: 4 }))}\n`);
     }
+    fs.writeFileSync(path.join(dir, "history.jsonl"), lines.join(""));
+    return dir;
+  }
+
+  /** A built panel: one HTML file that points at a script and a stylesheet, as Vite emits it. */
+  function panelBundle() {
+    const dir = tmp();
+    fs.mkdirSync(path.join(dir, "assets"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "assets", "app.js"), "console.log('the app');");
+    fs.writeFileSync(path.join(dir, "assets", "app.css"), "body{color:#18181b}");
+    fs.writeFileSync(
+      path.join(dir, "index.html"),
+      '<!doctype html>\n<html lang="en">\n<head>\n<link rel="stylesheet" href="/assets/app.css">\n</head>\n<body>\n<div id="root"></div>\n<script type="module" src="/assets/app.js"></script>\n</body>\n</html>\n'
+    );
+    return dir;
+  }
+
+  it("answers a path the snapshot holds, query or not", () => {    assert.deepEqual(baked.bakedAt(snapshot, "/api/movement"), { days: 2 });
+    assert.deepEqual(baked.bakedAt(snapshot, "/api/movement?days=14"), { days: 2 }, "the query is a knob");
+    assert.deepEqual(baked.bakedAt(snapshot, "/api/day/2026-09-17"), { date: "2026-09-17" });
   });
 
-  it("has no baker, and no build target that would produce one", () => {
-    assert.equal(fs.existsSync(path.join(ROOT, "scripts", "report-panel.mjs")), false);
-    const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
-    assert.equal(scripts["report:panel"], undefined);
-    const appScripts = JSON.parse(fs.readFileSync(path.join(ROOT, "tools", "report-app", "package.json"), "utf8")).scripts;
-    assert.equal(appScripts["build:panel"], undefined);
-    const vite = fs.readFileSync(path.join(ROOT, "tools", "report-app", "vite.config.ts"), "utf8");
-    assert.doesNotMatch(vite, /dist-panel|singleFilePanel|mode === "panel"/, "one output: the live page");
+  it("says which days the snapshot holds when it holds no such path", () => {
+    assert.equal(baked.bakedAt(snapshot, "/api/day/2026-09-16"), null);
+    assert.match(baked.missingSentence(snapshot, "/api/day/2026-09-16"), /2026-09-17 only/);
+    assert.match(baked.missingSentence(snapshot, "/api/day/2026-09-16"), /live report/);
+
+    const window = { ...snapshot, days: ["2026-09-17", "2026-09-16"] };
+    assert.match(baked.missingSentence(window, "/api/day/2026-09-15"), /2 days, up to 2026-09-17/);
+    assert.match(baked.missingSentence({ data: {} }, "/api/movement"), /holds no day/);
   });
 
-  it("has no re-bake hook left on the server", async () => {
-    assert.equal(typeof SERVER_MODULE.followPacks, "undefined");
-    const root = tmp();
-    const server = SERVER_MODULE.createServer({ root, appDist: path.join(root, "no-app") });
-    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-    try {
-      const base = `http://127.0.0.1:${server.address().port}`;
-      const refreshed = await fetch(`${base}/api/refresh`);
-      assert.equal(refreshed.status, 200, "recording the newest day is not a bake trigger any more");
-    } finally {
-      server.close();
-    }
+  it("knows whether it is running on a snapshot at all", () => {
+    assert.equal(baked.isBaked(null), false);
+    assert.equal(baked.isBaked(snapshot), true);
+    assert.equal(baked.bakedAt(null, "/api/movement"), null, "no snapshot is not a crash");
+    assert.equal(baked.bakedReport(), null, "in Node there is no window to carry one");
+  });
+
+  it("says a write is unavailable rather than leaving a button looking broken", () => {
+    assert.match(baked.writeRefused(snapshot, "/api/todos"), /cannot write/);
+    assert.match(baked.writeRefused(snapshot, "/api/todos"), /live report/);
+  });
+
+  it("keeps the href out of a snapshot, because the host swallows those clicks", () => {
+    const served = baked.navProps({ baked: false, href: "/day/2026-09-17" });
+    assert.deepEqual(served, { href: "/day/2026-09-17" });
+
+    const panel = baked.navProps({ baked: true, href: "/day/2026-09-17" });
+    assert.equal("href" in panel, false, "an <a href> is a click the host cancels before the app sees it");
+    assert.deepEqual(panel, { role: "link", tabindex: 0 }, "so the anchor keeps a role and a tab stop instead");
+  });
+
+  it("keeps the pointer on a link that carries no href", () => {
+    const css = fs.readFileSync(path.join(ROOT, "tools", "report-app", "src", "styles.css"), "utf8");
+    assert.match(css, /a\[role="link"\]\s*\{[^}]*cursor:\s*pointer/, "an href-less anchor is still a link");
+    assert.match(css, /\.chart-point[^{]*\{[^}]*cursor:\s*crosshair/, "which must not make the chart's hover columns a hand");
   });
 
   it("underlines a link only while it is pointed at", () => {
@@ -821,9 +896,480 @@ describe("the app is live-only: there is no snapshot to bake", async () => {
     assert.match(css, /\.rail nav a \{[^}]*text-decoration: none/, "a tab is not a link: never underlined");
   });
 
-  it("keeps the chart's hover columns a crosshair, not a hand", () => {
-    const css = fs.readFileSync(path.join(ROOT, "tools", "report-app", "src", "styles.css"), "utf8");
-    assert.match(css, /\.chart-point[^{]*\{[^}]*cursor:\s*crosshair/);
+  it("inlines the entry and the stylesheet, leaving no external reference", () => {
+    const assets = { "/assets/app.js": "console.log('the app');", "/assets/app.css": "body{color:#18181b}" };
+    const html = baker.inlineAssets(fs.readFileSync(path.join(panelBundle(), "index.html"), "utf8"), assets);
+
+    assert.doesNotMatch(html, /<script[^>]+src=/);
+    assert.doesNotMatch(html, /<link[^>]+href=/);
+    assert.match(html, /console\.log\('the app'\)/);
+    assert.match(html, /body\{color:#18181b\}/);
+  });
+
+  it("splices the snapshot in before the document ends", () => {
+    const html = baker.withSnapshot("<html><body><div id=\"root\"></div></body></html>", snapshot);
+    assert.ok(html.indexOf("window.__REPORT__") < html.indexOf("</body>"));
+    assert.match(html, /"\/api\/movement":\{"days":2\}/);
+  });
+
+  it("builds the payload table out of what the app asks for", () => {
+    const table = baker.payloadTable({ root: dailyRoot() });
+
+    assert.ok(table["/api/movement"], "the default screen");
+    assert.ok(table["/api/days"], "the calendar");
+    assert.ok(table["/api/todos"], "the selection");
+    assert.ok(table["/api/day/2026-09-17"], "the newest day");
+    assert.ok(table["/api/day/2026-09-17/session/s1"], "its sessions");
+    assert.ok(table["/api/skill/x-plan"], "the skills its movement rows name");
+  });
+
+  it("bakes every day a reader can reach, not only the newest", () => {
+    const table = baker.payloadTable({ root: dailyRoot(["2026-09-16", "2026-09-17"]) });
+
+    assert.ok(table["/api/day/2026-09-16"], "a day the rail offers is a day that opens");
+    assert.ok(table["/api/day/2026-09-16/session/s1"], "and its sessions open too");
+    assert.ok(table["/api/day/2026-09-17"], "the newest day is still there");
+    assert.deepEqual(baker.bakedDays(table), ["2026-09-17", "2026-09-16"], "newest first, read off the table");
+  });
+
+  it("stops at the byte budget, and keeps the newest day whatever it holds", () => {
+    const root = dailyRoot(["2026-09-16", "2026-09-17"]);
+    const kept = baker.payloadTable({ root, budget: 1 });
+
+    assert.deepEqual(baker.bakedDays(kept), ["2026-09-17"], "the day the reader lands on is never the one dropped");
+    assert.ok(kept["/api/day/2026-09-17/session/s1"], "and its drill-downs come with it");
+    assert.equal(kept["/api/day/2026-09-16"], undefined, "a day past the budget is left out, and says so");
+    assert.ok(kept["/api/movement"] && kept["/api/skill/x-plan"], "the record's own screens are not the budget's problem");
+  });
+
+  it("records the days it baked, so a snapshot can name them", () => {
+    const out = path.join(tmp(), "panel.html");
+    baker.bake({ root: dailyRoot(["2026-09-16", "2026-09-17"]), dist: panelBundle(), out });
+
+    const written = fs.readFileSync(out, "utf8");
+    assert.match(written, /"days":\["2026-09-17","2026-09-16"\]/);
+  });
+
+  it("writes one file with the app and the snapshot in it", () => {
+    const out = path.join(tmp(), "nested", "panel.html");
+    const written = baker.bake({ root: dailyRoot(), dist: panelBundle(), out });
+
+    assert.equal(written, out);
+    const html = fs.readFileSync(out, "utf8");
+    assert.match(html, /window\.__REPORT__/);
+    assert.match(html, /"\/api\/movement"/);
+    assert.match(html, /console\.log\('the app'\)/, "the app, inlined");
+    assert.doesNotMatch(html, /<script[^>]+src=/);
+    assert.doesNotMatch(html, /<link[^>]+href=/);
+  });
+
+  it("refuses to bake without a built panel, and names the command", () => {
+    assert.throws(() => baker.readPanelBundle(path.join(tmp(), "missing")), /report:panel/);
+  });
+
+  it("puts the signpost in place when there is no panel, and a failed bake keeps it", () => {
+    const out = path.join(tmp(), "panel.html");
+    const root = dailyRoot();
+
+    // A checkout that has never baked has no panel file at all; a blank pane is not an answer, so the baker
+    // starts from the signpost. It never overwrites a panel that exists, so the last good bake cannot be lost.
+    assert.equal(baker.ensureFallback({ out }).written, true);
+    assert.match(fs.readFileSync(out, "utf8"), /not been rendered into this pane/);
+    assert.equal(baker.ensureFallback({ out }).written, false, "a panel that exists is left alone");
+
+    assert.throws(() => baker.bakeIfStale({ root, dist: path.join(root, "no-dist"), out }), /report:panel/);
+    assert.match(fs.readFileSync(out, "utf8"), /not been rendered into this pane/, "the signpost survives the failure");
+  });
+
+  it("re-bakes on a refresh, and leaves the panel alone when there is no baker", async () => {
+    const srv = await import(SERVER);
+    const root = dailyRoot();
+    const baked = [];
+
+    const server = srv.createServer({
+      root,
+      appDist: path.join(root, "no-app"),
+      rebake: async () => {
+        baked.push(1);
+      },
+    });
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const base = `http://127.0.0.1:${server.address().port}`;
+      const refreshed = await fetch(`${base}/api/refresh`);
+      assert.equal(refreshed.status, 200);
+      assert.equal(baked.length, 1, "recording the day re-bakes what the panel shows");
+    } finally {
+      server.close();
+    }
+
+    const plain = srv.createServer({ root, appDist: path.join(root, "no-app") });
+    await new Promise((resolve) => plain.listen(0, "127.0.0.1", resolve));
+    try {
+      const base = `http://127.0.0.1:${plain.address().port}`;
+      assert.equal((await fetch(`${base}/api/refresh`)).status, 200);
+      assert.equal(baked.length, 1, "no baker is no bake");
+    } finally {
+      plain.close();
+    }
+  });
+
+  /** Move a pack on disk the way the collector does: same shape, new content. */
+  function touchPack(root) {
+    const file = path.join(root, "2026-09-17", "summary.json");
+    const pack = JSON.parse(fs.readFileSync(file, "utf8"));
+    pack.generatedAt = `${pack.generatedAt} (again)`;
+    fs.writeFileSync(file, JSON.stringify(pack));
+  }
+
+  it("fingerprints every file, so something added, edited or deleted is visible", () => {
+    const root = dailyRoot();
+    const first = baker.recordFingerprint(root);
+    assert.ok(first.includes("2026-09-17/summary.json:"), "every file under the record is in it, by a relative path");
+
+    const added = path.join(root, "2026-09-17", "arrived.txt");
+    fs.writeFileSync(added, "hello");
+    assert.notEqual(baker.recordFingerprint(root), first, "an added file is a new fingerprint");
+    fs.rmSync(added);
+    assert.equal(baker.recordFingerprint(root), first, "removing it leaves the record as it was");
+
+    touchPack(root);
+    assert.notEqual(baker.recordFingerprint(root), first, "an edited file is a new fingerprint");
+    assert.equal(baker.recordFingerprint(path.join(root, "nowhere")), "none", "an absent record is a fingerprint too");
+  });
+
+  it("bakes only when the panel would show something else", () => {
+    const root = dailyRoot();
+    const dist = panelBundle();
+    const out = path.join(tmp(), "panel.html");
+
+    assert.equal(baker.bakeIfStale({ root, dist, out }).baked, true, "nothing baked yet");
+    assert.equal(baker.bakeIfStale({ root, dist, out }).baked, false, "the same record is not baked twice");
+    assert.equal(baker.bakeIfStale({ root, dist, out, force: true }).baked, true, "unless it is forced");
+
+    touchPack(root);
+    assert.equal(baker.bakeIfStale({ root, dist, out }).baked, true, "a rewritten pack bakes again");
+    assert.equal(fs.existsSync(`${out}.fingerprint`), true, "the marker keeps two callers from fighting");
+  });
+
+  it("leaves the panel alone when the record moved but nothing it shows did", () => {
+    const root = dailyRoot();
+    const dist = panelBundle();
+    const out = path.join(tmp(), "panel.html");
+    assert.equal(baker.bakeIfStale({ root, dist, out }).baked, true);
+
+    const before = baker.recordFingerprint(root);
+    fs.writeFileSync(path.join(root, "2026-09-17", "DIGEST.prev-run.md"), "a previous run's prose, which no screen reads");
+    assert.notEqual(baker.recordFingerprint(root), before, "the record moved");
+    assert.equal(baker.bakeIfStale({ root, dist, out }).baked, false, "but a reader's place is not thrown away for it");
+  });
+
+  it("re-bakes when the packs change, once per change", async () => {
+    const srv = SERVER_MODULE;
+    const root = dailyRoot();
+    let tick = null;
+    const baked = [];
+    const follower = srv.followPacks({
+      root,
+      rebake: async () => {
+        baked.push(baker.recordFingerprint(root));
+      },
+      fingerprint: async (dir) => baker.recordFingerprint(dir),
+      timer: (fn) => {
+        tick = fn;
+        return 1;
+      },
+      clear: () => {},
+    });
+
+    await tick();
+    assert.equal(baked.length, 0, "nothing has changed yet");
+
+    touchPack(root);
+    await tick();
+    assert.equal(baked.length, 1, "a new pack re-bakes the panel the reader will open next");
+
+    await tick();
+    assert.equal(baked.length, 1, "an unchanged record is not a bake");
+
+    follower.stop();
+  });
+
+  it("answers the refresh even when the bake fails", async () => {
+    const srv = await import(SERVER);
+    const root = dailyRoot();
+    const server = srv.createServer({
+      root,
+      appDist: path.join(root, "no-app"),
+      rebake: async () => {
+        throw new Error("no built panel in dist-panel");
+      },
+    });
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const base = `http://127.0.0.1:${server.address().port}`;
+      const refreshed = await fetch(`${base}/api/refresh`);
+      assert.equal(refreshed.status, 200, "the record is written either way");
+      assert.equal((await refreshed.json()).ok, true);
+    } finally {
+      server.close();
+    }
+  });
+});
+
+describe("one interface, two backends: the served app, and a panel the worker rendered into", async () => {
+  const { createBackend, httpBackend, snapshotBackend } = await import(
+    path.join(ROOT, "tools", "report-app", "src", "backend.mjs")
+  );
+
+  const report = {
+    bakedAt: "2026-09-17T21:40:12.000Z",
+    newest: "2026-09-17",
+    days: ["2026-09-17"],
+    data: { "/api/movement": { days: 2 }, "/api/todos": { updatedAt: null, items: [] } },
+  };
+
+  /** A fetch that answers the routes it was given and counts what it was asked for. */
+  function server(routes, { fail = false } = {}) {
+    const stub = async (url, options = {}) => {
+      stub.calls.push({ url: String(url), method: options.method ?? "GET", body: options.body });
+      if (fail) return { ok: false, status: 503, json: async () => ({ error: "the report is not answering" }) };
+      const route = routes[String(url)];
+      if (!route) return { ok: false, status: 404, json: async () => ({ error: "no route" }) };
+      return { ok: true, status: 200, json: async () => route };
+    };
+    stub.calls = [];
+    return stub;
+  }
+
+  it("picks the http backend for a served page, and the snapshot one for a panel", () => {
+    assert.equal(createBackend({ report: null }).kind, "http");
+    assert.equal(createBackend({ report }).kind, "snapshot");
+
+    // The served app is the copy that can be written; a panel has nowhere to write to, and says so.
+    assert.equal(createBackend({ report: null }).canWrite, true);
+    assert.equal(createBackend({ report }).canWrite, false);
+  });
+
+  it("reads a route over http, asks once for the same route, and surfaces the server's own error", async () => {
+    const fetchImpl = server({ "/api/movement?days=14": { days: 3 }, "/api/todos": { items: [] } });
+    const backend = httpBackend({ fetchImpl });
+
+    assert.deepEqual(await backend.read("/api/movement?days=14"), { days: 3 });
+    assert.deepEqual(await backend.read("/api/movement?days=14"), { days: 3 });
+    assert.equal(fetchImpl.calls.length, 1, "two screens asking for the same payload is one request");
+
+    const failing = httpBackend({ fetchImpl: server({}, { fail: true }) });
+    await assert.rejects(() => failing.read("/api/movement?days=14"), /the report is not answering/);
+  });
+
+  it("writes over http, and forgets what it read because a write makes it stale", async () => {
+    const fetchImpl = server({ "/api/todos": { updatedAt: null, items: [] }, "/api/version": { build: "index-a.js" } });
+    const backend = httpBackend({ fetchImpl });
+
+    await backend.read("/api/todos");
+    const written = await backend.write("/api/todos", { items: [{ id: "P1" }] });
+    assert.deepEqual(written, { updatedAt: null, items: [] });
+    assert.equal(fetchImpl.calls[1].method, "POST");
+    assert.equal(fetchImpl.calls[1].url, "/api/todos");
+    assert.equal(JSON.parse(fetchImpl.calls[1].body).items[0].id, "P1");
+
+    await backend.read("/api/todos");
+    assert.equal(fetchImpl.calls.length, 3, "the read after the write is a fresh request");
+
+    assert.equal(await backend.bundleName(), "index-a.js", "the served bundle names itself");
+  });
+
+  it("answers a snapshot from what the worker rendered in, and nothing else", async () => {
+    const backend = snapshotBackend({ report });
+
+    assert.deepEqual(await backend.read("/api/movement?days=14"), { days: 2 }, "the query is a knob, not a key");
+    assert.deepEqual(await backend.read("/api/todos"), { updatedAt: null, items: [] });
+
+    await assert.rejects(() => backend.read("/api/day/2026-09-16"), /2026-09-17 only/);
+    assert.equal(await backend.bundleName(), null, "a snapshot has no bundle to compare");
+  });
+
+  it("refuses a write in a snapshot with a sentence worth showing a reader", async () => {
+    const backend = snapshotBackend({ report });
+
+    await assert.rejects(() => backend.write("/api/todos", { items: [] }), /cannot write/);
+    await assert.rejects(() => backend.write("/api/todos", { items: [] }), /live report is where the to-do buttons work/);
+    assert.doesNotThrow(() => backend.invalidate());
+  });
+});
+
+describe("a report that is current when it is looked at", async () => {
+  const { due, watchFreshness } = await import(path.join(ROOT, "tools", "report-app", "src", "revalidate.mjs"));
+
+  /**
+   * A document and a window that only do what the watcher asks of them: a listener registry, a visibility flag,
+   * and a timer the test drives by hand. No jsdom, no sleeping.
+   */
+  function fakeDom({ visibility = "visible" } = {}) {
+    const listeners = new Map();
+    let tick = null;
+    const target = {
+      get visibilityState() {
+        return visibility;
+      },
+      addEventListener: (name, handler) => listeners.set(`doc:${name}`, handler),
+      removeEventListener: (name) => listeners.delete(`doc:${name}`),
+    };
+    const win = {
+      addEventListener: (name, handler) => listeners.set(`win:${name}`, handler),
+      removeEventListener: (name) => listeners.delete(`win:${name}`),
+    };
+    return {
+      target,
+      win,
+      setVisibility: (value) => {
+        visibility = value;
+      },
+      fire: (key) => listeners.get(key)?.({}),
+      timer: (fn) => {
+        tick = fn;
+        return "handle";
+      },
+      cleared: [],
+      tick: () => tick?.(),
+      listeners,
+    };
+  }
+
+  function watcher(options = {}) {
+    const calls = [];
+    const dom = fakeDom(options);
+    const clear = (handle) => dom.cleared.push(handle);
+    const stop = watchFreshness({
+      target: dom.target,
+      win: dom.win,
+      timer: dom.timer,
+      clear,
+      gapMs: 5000,
+      intervalMs: 30_000,
+      onDue: () => calls.push(options.now?.() ?? 0),
+      ...options,
+    });
+    return { calls, dom, stop };
+  }
+
+  it("says when a check is due, on the gap alone", () => {
+    assert.equal(due({ now: 0, last: -Infinity, gapMs: 5000 }), true, "nothing has been checked yet");
+    assert.equal(due({ now: 1000, last: 0, gapMs: 5000 }), false, "a thousandth of a second later is the same look");
+    assert.equal(due({ now: 5000, last: 0, gapMs: 5000 }), true);
+    assert.equal(due({ now: 9000, last: 5000, gapMs: 5000 }), false);
+  });
+
+  it("checks when the tab is focused or becomes visible, and not while hidden", () => {
+    const clock = { at: 0 };
+    const { calls, dom } = watcher({ now: () => clock.at });
+
+    dom.fire("win:focus");
+    assert.equal(calls.length, 1, "coming back to the tab is the moment to re-read");
+
+    clock.at = 1000;
+    dom.fire("win:focus");
+    assert.equal(calls.length, 1, "a second focus inside the gap is the same look");
+
+    clock.at = 6000;
+    dom.fire("doc:visibilitychange");
+    assert.equal(calls.length, 2, "becoming visible again is a fresh look");
+
+    dom.setVisibility("hidden");
+    clock.at = 20_000;
+    dom.fire("win:focus");
+    dom.tick();
+    assert.equal(calls.length, 2, "a hidden tab asks nothing of the server");
+  });
+
+  it("checks on its own timer, and stops when told to", () => {
+    const clock = { at: 0 };
+    const { calls, dom, stop } = watcher({ now: () => clock.at });
+    const handle = "handle";
+
+    clock.at = 30_000;
+    dom.tick();
+    assert.equal(calls.length, 1, "the interval keeps a page left open honest");
+
+    clock.at = 60_000;
+    dom.tick();
+    assert.equal(calls.length, 2);
+
+    stop();
+    assert.deepEqual(dom.cleared, [handle], "the timer is cleared");
+    assert.equal(dom.listeners.size, 0, "and every listener is removed");
+    clock.at = 90_000;
+    dom.tick();
+    assert.equal(calls.length, 2, "a stopped watcher is silent");
+  });
+
+  it("is inert without a document, and survives a check that throws", () => {
+    const nothing = watchFreshness({ target: null, win: null });
+    assert.equal(typeof nothing, "function");
+    assert.doesNotThrow(() => nothing());
+
+    const dom = fakeDom();
+    let calls = 0;
+    watchFreshness({
+      target: dom.target,
+      win: dom.win,
+      timer: dom.timer,
+      clear: () => {},
+      gapMs: 0,
+      onDue: () => {
+        calls += 1;
+        throw new Error("the check exploded");
+      },
+    });
+    assert.throws(() => dom.fire("win:focus"), /the check exploded/);
+    assert.throws(() => dom.fire("win:focus"), /the check exploded/);
+    assert.equal(calls, 2, "a failing check does not unhook the watcher");
+  });
+});
+
+describe("the app re-reads the screen it is showing", async () => {
+  const app = () => fs.readFileSync(path.join(ROOT, "tools", "report-app", "src", "App.tsx"), "utf8");
+  const router = () => fs.readFileSync(path.join(ROOT, "tools", "report-app", "src", "router.ts"), "utf8");
+
+  it("arms the freshness watcher, and disarms it on cleanup", () => {
+    const source = app();
+    assert.match(source, /import \{ watchFreshness \} from "\.\/revalidate\.mjs"/);
+    assert.match(source, /onMount\(\(\) => \{\s*if \(isSnapshot\(\)\) return;[\s\S]{0,400}watchFreshness\(/, "a panel arms nothing");
+    assert.match(source, /onCleanup\(\s*watchFreshness\(/, "what it arms, it hands to a cleanup");
+    assert.match(source, /onCleanup\(watchBuild\(/, "including the bundle check, which used to leak its listeners");
+  });
+
+  it("names both live surfaces where a copy has to speak for itself", () => {
+    const source = app();
+    const line = source.slice(source.indexOf("function Snapshot"), source.indexOf("function keepCurrent"));
+    assert.match(line, /x-skills report: Open/, "the tab, and");
+    assert.match(line, /x-skills report: Console/, "the pane that can be typed at");
+    assert.match(line, /read-only/, "and that this copy is not one of them");
+
+    for (const view of ["DayView.tsx", "TodosView.tsx"]) {
+      const component = fs.readFileSync(path.join(ROOT, "tools", "report-app", "src", "components", view), "utf8");
+      const titles = [...component.matchAll(/title="read-only in this pane[^"]*"/g)].map((match) => match[0]);
+      assert.ok(titles.length, `${view} explains its disabled write control`);
+      for (const title of titles) assert.match(title, /Console/, `${view} names where the write does happen`);
+    }
+  });
+
+  it("re-reads by remounting the screen, not by navigating", () => {
+    const source = router();
+    assert.match(source, /export function refreshRoute\(\): void \{/, "the seam exists");
+    assert.match(source, /setRoute\(\(current\) => \(\{ \.\.\.current \}\)\)/, "a new object, same values, is what a keyed view remounts on");
+    assert.doesNotMatch(
+      source.slice(source.indexOf("export function refreshRoute"), source.indexOf("export function navigate")),
+      /history\.|scrollTo/,
+      "a refresh leaves the address bar and the scroll position alone"
+    );
+  });
+
+  it("calls the watcher's due once the write clears the cache, in that order", () => {
+    const source = app();
+    const handler = source.slice(source.indexOf("onDue: () =>"), source.indexOf("onDue: () =>") + 160);
+    assert.ok(handler.indexOf("api.invalidate()") < handler.indexOf("refreshRoute()"), "clear first, then re-read");
   });
 });
 

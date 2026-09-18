@@ -7,13 +7,13 @@
  * edit to a component hot-reloads the page without a restart. Vite proxies `/api` and `/history.jsonl` to
  * the report server (see `tools/report-app/vite.config.ts`), which is why one URL answers with both.
  *
- * Nothing here is baked, and nothing in this loop writes to the plugin: `tools/orca-plugin/panel.html` is a
- * committed document, and the report server has no baker left to call. Pass `--panel` and it is ignored, which
- * is what a flag that outlived its feature deserves; it stays in the parser one release so an old habit does not
- * become a startup error.
+ * The panel is not baked here. The server bakes it by default, and a bake is a write to
+ * `tools/orca-plugin/panel.html` on every restart, which turns a dev loop into a dirty worktree. Pass
+ * `--panel` to bake it anyway; `npm run report` still bakes it beside the built app.
  *
  * Flags:
  *   --port <n>   Port for the report server (default 8787). Vite is told where it moved to.
+ *   --panel      Bake the Orca plugin's panel too (off by default here).
  *   --help       Show this help.
  *
  * Anything else is passed through to the report server: `--days`, `--root`, `--no-refresh`.
@@ -37,6 +37,7 @@ const USAGE = [
   "",
   "Flags:",
   "  --port <n>   Port for the report server (default 8787)",
+  "  --panel      Bake the Orca plugin's panel on every restart (off by default in dev)",
   "  --no-watch   Do not restart the server when its own files change",
   "  --help       Show this help",
   "",
@@ -45,7 +46,7 @@ const USAGE = [
 ].join("\n");
 
 function parseArgs(args) {
-  const out = { port: Number(process.env.PORT) || 8787, watch: true, server: [], help: false };
+  const out = { port: Number(process.env.PORT) || 8787, panel: false, watch: true, server: [], help: false };
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--help" || arg === "-h") {
@@ -56,14 +57,14 @@ function parseArgs(args) {
     } else if (arg.startsWith("--port=")) {
       out.port = Number(arg.slice("--port=".length)) || out.port;
     } else if (arg === "--panel") {
-      // Accepted and ignored: there is nothing to bake, and a dev loop that errored on an old flag would be
-      // worse than one that quietly does the right thing.
+      out.panel = true;
     } else if (arg === "--no-watch") {
       out.watch = false;
     } else {
       out.server.push(arg);
     }
   }
+  if (!out.panel) out.server.push("--no-panel");
   out.server.push("--port", String(out.port));
   return out;
 }

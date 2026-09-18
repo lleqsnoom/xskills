@@ -83,6 +83,10 @@ body { background: var(--background); color: var(--foreground);
 a { color: var(--link); text-decoration: none;
   text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 2px; }
 a:hover { text-decoration: underline; }
+/* A baked panel's links carry no href — the host swallows those clicks — and a browser hands an href-less
+   anchor the text cursor, which is what "every button shows an I-beam" was. The role is what says it is still
+   a link, so the pointer hangs off the role; the served app's links keep the browser's own. */
+a[role="link"] { cursor: pointer; }
 code, .mono { font-family: var(--font-mono); overflow-wrap: anywhere; }
 code { background: var(--muted); padding: .05em .3em; border-radius: var(--radius-sm); }
 /* Charts are drawn at a fixed reading size and scale down rather than pushing the page sideways. */
@@ -121,6 +125,9 @@ h4 { font-size: var(--t-body); font-weight: 500; margin: 0; }
   text-decoration: none; }
 .rail nav a.active { background: var(--background); color: var(--foreground); font-weight: 500;
   box-shadow: 0 1px 2px 0 rgb(0 0 0 / .05); }
+/* A snapshot's own line: a panel cannot reach the server, so what a reader needs to know is when the numbers
+   were taken. It lives under the tabs, which is the only chrome the shell has left. */
+.rail .snapshot { display: block; margin-top: .75rem; font-size: var(--t-chrome); color: var(--muted-foreground); }
 .main { grid-column: 2; grid-row: 1; padding: 1.25rem 1.75rem 4rem; min-width: 0; }
 .facts { color: var(--muted-foreground); margin: .3rem 0 0; max-width: 90ch; }
 button, .button { font: inherit; font-size: var(--t-chrome); font-weight: 500; padding: .2rem .55rem; min-height: 26px;
@@ -197,6 +204,8 @@ dl.fields dd { margin: 0; overflow-wrap: anywhere; }
      height. Only the geometry changes with the orientation — a segmented control is one component. */
   .rail nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .rail nav a { justify-content: center; padding: 0 .25rem; }
+  /* The panel's snapshot line, one line under the tabs. */
+  .rail .snapshot { margin: .35rem 0 0; text-align: center; }
   .main { grid-column: 1; grid-row: 2; padding: .9rem .9rem 4rem; }
   /* A thumb is not a mouse: controls grow, and an input at 16px is the size that stops iOS zooming the page
      on focus. */

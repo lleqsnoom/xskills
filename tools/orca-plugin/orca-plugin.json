@@ -14,10 +14,10 @@
       { "id": "report-open", "title": "x-skills report: Open" },
       { "id": "report-status", "title": "x-skills report: Status" },
       { "id": "report-refresh", "title": "x-skills report: Record the newest day" },
-      { "id": "report-start", "title": "x-skills report: Start the server here" }
+      { "id": "report-start", "title": "x-skills report: Start the server here" },
+      { "id": "report-console", "title": "x-skills report: Console" }
     ],
     "panels": [{ "id": "report", "title": "x-skills report", "icon": "activity", "entry": "panel.html" }],
-    "keybindings": [{ "command": "report-open", "key": "Mod+Alt+X", "when": "global" }],
     "events": [
       { "on": "worktree.created" },
       { "on": "worktree.removed" },
