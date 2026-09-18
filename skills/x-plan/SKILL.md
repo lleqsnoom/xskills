@@ -38,11 +38,28 @@ graph LR
 ```bash
 node <skill>/scripts/scenario.mjs start --slug <slug> [--goal <text>]
 node <skill>/scripts/scenario.mjs record --dir <dir> --event research --data "<finding>"
+node <skill>/scripts/scenario.mjs record --dir <dir> --event question --data "<the open question>"
+node <skill>/scripts/scenario.mjs record --dir <dir> --event answer --data "<the answer>" --target Q1
 node <skill>/scripts/scenario.mjs record --dir <dir> --event option --data "<approach>"
+node <skill>/scripts/scenario.mjs record --dir <dir> --event decide --data "<the pick>"
+node <skill>/scripts/scenario.mjs record --dir <dir> --event approve --data "yes"
 node <skill>/scripts/scenario.mjs record --dir <dir> --to <node>
 node <skill>/scripts/scenario.mjs guard  --dir <dir> --gate <name>
-node <skill>/scripts/scenario.mjs verify --dir <dir>   # exit 0 iff the stop is justified
+node <skill>/scripts/scenario.mjs verify --dir <dir>   # exit 0 only at a stop, see below
 ```
+
+The guard that refuses a transition reads an event, so recording the right kind is not optional — the
+gate you did not feed is the gate that stops the run. These are the kinds the script accepts, and the
+guard each one satisfies:
+
+| Kind | Records | Satisfies |
+|------|---------|-----------|
+| `research` | one finding (or `--status not-run --reason "<why>"`) | `research_recorded` |
+| `question` | one open question, answered later as `Q<n>` | `no_open_questions` |
+| `answer --target Q<n>` | the answer to that question | `no_open_questions` |
+| `option` | one approach with its trade-off | `three_options` |
+| `decide` | the approach the user picked | `decision_made` |
+| `approve` | the user's approval of the spec | `gate_approved` |
 
 | Gate | Passes when |
 |------|-------------|
@@ -51,7 +68,11 @@ node <skill>/scripts/scenario.mjs verify --dir <dir>   # exit 0 iff the stop is 
 | `three_options` | three distinct approaches are recorded |
 | `decision_made` | the user picked an approach |
 | `spec_complete` | the spec has `contract`, `invariant`, `test`, and `## Layers` |
-| `gate_approved` | the user approved the handoff |
+| `gate_approved` | an `approve` event is recorded |
+
+A mid-run `verify` exits 1 even when every guard passes: it answers only whether the run is finished, and
+mid-run it is not. That is the normal state, not a failure. To ask about a single gate while the run is
+still going, use `guard --gate <name>` — it exits 0 or 1 on that gate alone.
 
 Completion: `verify` exits 0, or the run moved to `abandon`.
 

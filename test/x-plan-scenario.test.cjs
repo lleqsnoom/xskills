@@ -107,7 +107,7 @@ describe("x-plan scenario — CLI", () => {
     assert.ok(fs.existsSync(path.join(cwd, dir, "memory.md")));
     const state = readJson(path.join(cwd, dir, "state.json"));
     assert.equal(state.node, "intake");
-    assert.ok(fs.existsSync(path.join(cwd, state.report)));
+    assert.ok(fs.existsSync(path.join(cwd, dir, state.report)));
   });
 
   it("exits 1 without --slug", async () => {
@@ -184,7 +184,7 @@ describe("x-plan scenario — CLI", () => {
 
     const state = readJson(path.join(cwd, dir, "state.json"));
     fs.writeFileSync(
-      path.join(cwd, state.report),
+      path.join(cwd, dir, state.report),
       "# Plan\ncontract: x\ninvariant: y\ntest: z\n## Layers\n- L0\n"
     );
     res = await record(cwd, dir, ["--to", "gate"]);
@@ -197,7 +197,6 @@ describe("x-plan scenario — CLI", () => {
     res = await run(["verify", "--dir", path.join(cwd, dir)], cwd);
     assert.equal(res.code, 0, res.stderr);
     assert.equal(JSON.parse(res.stdout).ok, true);
-    void report;
   });
 
   it("renders exactly one Mermaid block after several persists", async () => {
@@ -206,7 +205,71 @@ describe("x-plan scenario — CLI", () => {
     await record(cwd, dir, ["--event", "research", "--data", "x"]);
     await record(cwd, dir, ["--to", "research"]);
     await record(cwd, dir, ["--to", "clarify"]);
-    const text = fs.readFileSync(path.join(cwd, state.report), "utf8");
+    const text = fs.readFileSync(path.join(cwd, dir, state.report), "utf8");
     assert.equal(text.split("```mermaid").length - 1, 1);
+  });
+
+  it("advances from a directory other than the one that started the run", async () => {
+    const home = await start(cwd);
+    const elsewhere = tmp();
+    const res = await run(["record", "--dir", path.join(cwd, home), "--event", "research", "--data", "found it"], elsewhere);
+    assert.equal(res.code, 0, res.stderr);
+    const moved = await run(["record", "--dir", path.join(cwd, home), "--to", "research"], elsewhere);
+    assert.equal(moved.code, 0, moved.stderr);
+
+    const state = readJson(path.join(cwd, home, "state.json"));
+    assert.equal(state.node, "research", "the node moved");
+    const report = path.join(cwd, home, state.report);
+    assert.ok(fs.existsSync(report), "the plan is still inside the run folder");
+    assert.equal(fs.readFileSync(report, "utf8").split("```mermaid").length - 1, 1);
+    assert.deepEqual(fs.readdirSync(elsewhere), [], "nothing was written where the command ran");
+  });
+
+  it("leaves the node where it was when the plan cannot be written", async () => {
+    const dir = await start(cwd);
+    const file = path.join(cwd, dir, "state.json");
+    const state = readJson(file);
+    state.report = "E99-nope/deep/E00-plan.md";
+    fs.writeFileSync(file, `${JSON.stringify(state, null, 2)}\n`);
+
+    const res = await record(cwd, dir, ["--event", "research", "--data", "lost"]);
+    assert.equal(res.code, 1);
+    assert.match(res.stderr, /ENOENT/);
+
+    const after = readJson(file);
+    assert.equal(after.events.length, state.events.length, "the state did not advance");
+  });
+});
+
+describe("x-plan scenario — the SKILL.md agrees with the script", () => {
+  const kindsInSource = () => {
+    const source = fs.readFileSync(SCENARIO, "utf8");
+    const kinds = new Set();
+    for (const match of source.matchAll(/if \(kind === "([a-z]+)"/g)) kinds.add(match[1]);
+    for (const match of source.matchAll(/event\.kind === "([a-z]+)"/g)) kinds.add(match[1]);
+    return [...kinds].sort();
+  };
+
+  it("names every event kind the guards and applyEvent read", () => {
+    const kinds = kindsInSource();
+    assert.deepEqual(kinds, ["answer", "approve", "decide", "option", "question", "research"], "the source scan found the kinds");
+    const skill = fs.readFileSync(path.join(SKILL, "SKILL.md"), "utf8");
+    const missing = kinds.filter((kind) => !new RegExp("`[^`]*\\b" + kind + "\\b[^`]*`").test(skill));
+    assert.deepEqual(missing, [], "a kind the script accepts is not documented, so the gate it feeds will fail");
+  });
+
+  it("verify exits 1 with stop false while the run is mid-graph", async () => {
+    const cwd = tmp();
+    const dir = await start(cwd);
+    const res = await run(["verify", "--dir", path.join(cwd, dir)], cwd);
+    assert.equal(res.code, 1, "a mid-run verify is not a failure and not a success");
+    const out = JSON.parse(res.stdout);
+    assert.equal(out.stop, false);
+    assert.equal(out.ok, false);
+    assert.ok(out.checks.length === 0, "no stop checks apply mid-run");
+    assert.ok(Object.values(out.guards).some((guard) => guard.pass), "guards can pass while verify still exits 1");
+
+    const skill = fs.readFileSync(path.join(SKILL, "SKILL.md"), "utf8");
+    assert.match(skill, /mid-run `verify` exits 1/, "the SKILL.md says so, rather than promising exit 0");
   });
 });
