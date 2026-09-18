@@ -1864,3 +1864,36 @@ describe("a page that is older than the app reloads itself", async () => {
     assert.equal(typeof stop, "function", "a no-op still hands back the stopper, so a caller cannot tell the difference");
   });
 });
+
+describe("report:install, the app's dependencies without the parent's allow-scripts", async () => {
+  const install = await import(path.join(ROOT, "scripts", "report-install.mjs"));
+
+  it("installs in the app, so the install is the one the app's lockfile describes", () => {
+    const calls = [];
+    const spawnImpl = (...args) => (calls.push(args), { on: () => {} });
+    install.installApp({ env: {}, spawnImpl });
+    assert.equal(calls.length, 1, "one command");
+    assert.equal(calls[0][0], "npm");
+    assert.deepEqual(calls[0][1], ["install"], "and it is the install");
+    assert.equal(calls[0][2].cwd, install.APP_DIR, "run in the app's own directory");
+    assert.equal(calls[0][2].stdio, "inherit", "with npm's output where the reader can see it");
+  });
+
+  it("drops the setting npm refuses from the environment, and only that one", () => {
+    const env = install.installEnv({
+      PATH: "/bin",
+      npm_config_registry: "https://example.com",
+      npm_config_allow_scripts: "tree-sitter,tree-sitter-javascript",
+      npm_config_allow_scripts_pending: "false",
+    });
+    assert.equal(env.npm_config_allow_scripts, undefined, "npm reads this as a command-line flag, which it rejects here");
+    assert.equal(env.npm_config_registry, "https://example.com", "the rest of the reader's config still reaches npm");
+    assert.equal(env.npm_config_allow_scripts_pending, "false", "its neighbour is a different setting, and is not what npm refuses");
+    assert.equal(env.PATH, "/bin");
+  });
+
+  it("is what `npm run report:install` runs", () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+    assert.equal(pkg.scripts["report:install"], "node scripts/report-install.mjs", "a bare nested `npm install` is the bug this replaces");
+  });
+});

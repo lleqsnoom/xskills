@@ -17,7 +17,7 @@
     "report": "node scripts/report-server.mjs",
     "report:open": "node scripts/report-open.mjs",
     "report:window": "node scripts/report-open.mjs --window",
-    "report:install": "npm --prefix tools/report-app install",
+    "report:install": "node scripts/report-install.mjs",
     "report:build": "npm --prefix tools/report-app run build && npm run report:panel",
     "report:dev": "npm --prefix tools/report-app run dev",
     "report:typecheck": "npm --prefix tools/report-app run typecheck",
