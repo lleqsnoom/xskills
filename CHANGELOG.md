@@ -1,3 +1,8 @@
+## [5.30.2] - 2026-09-18
+
+* Merge pull request #62 from lleqsnoom/fix/orca-plugin-declared-panel (3639702)
+* fix(orca-plugin): commit the panel entry so Orca can load the plugin (48e8d27)
+
 ## [5.30.1] - 2026-09-18
 
 * Merge pull request #64 from lleqsnoom/feat/autoreflection-heal (d369e11)
