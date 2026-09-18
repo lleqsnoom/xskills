@@ -114,10 +114,10 @@ actions — `create`, `merge`, `split`, `delete` — are decided by a human, nev
 - **Findings** group signals by `(kind, primary suspect)`. Recurrence counts *distinct sessions*, so
   the same gap in three sessions is one defect, not three. Ranked recurrence first, then severity,
   then count. Each carries an improvement `class` from `gap-taxonomy.md`'s map and a `change` hint.
-- **Portfolio** is mechanical where it can be: `delete` from `skill-unused` in ≥2 sessions, `split`
-  when one skill's findings span ≥3 kinds, `create` from a recurring failure that names no skill.
-  `merge` is a judgement call — the evidence is two skills fighting over one file or trigger — so the
-  heal skill records it by hand from the same report.
+- **Portfolio** is mechanical where it can be: `delete` from `skill-unused` in ≥2 sessions, `create`
+  from a recurring failure that names no skill. `merge` and `split` are judgement calls — no scan
+  signal can tell that a skill mixes two jobs, only that it was used a lot — so the heal skill records
+  them by hand after reading the skills.
 
 ## Panels
 
