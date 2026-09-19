@@ -82,8 +82,75 @@ function scriptFiles(dir) {
     .map((file) => path.join("scripts", file));
 }
 
-export function importSpecifiers(text) {
-  const out = [];
+/**
+ * The ESM main-module test compares `import.meta.url`, which Node resolves through symlinks, with
+ * `process.argv[1]`, which it does not. A script reached through a symlinked install such as
+ * `~/.claude/skills/<name>` therefore never runs `main()`: it prints nothing and exits 0.
+ */
+const FRAGILE_MAIN_GUARD_RE = /pathToFileURL\(\s*process\.argv\[1\]/;
+
+export function fragileMainGuards(dir) {
+  return scriptFiles(dir).filter((rel) => FRAGILE_MAIN_GUARD_RE.test(fs.readFileSync(path.join(dir, rel), "utf8")));
+}
+
+/** Accepted findings grow a skill's expectations; a file with more lines than this is a spec, not a check. */
+const MAX_EXPECTATIONS = 7;
+
+/**
+ * A skill's optional `evals/expectations.json`: the behaviours reviews confirmed the user wants, in the
+ * user's words, and the findings they came from. It is never required — expectations are grown from
+ * accepted findings, not written up front — but one that exists must be readable by the judge.
+ */
+export function expectationProblems(dir, name) {
+  const file = path.join(dir, "evals", "expectations.json");
+  if (!fs.existsSync(file)) return [];
+  let parsed;
+  try {
+    parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (err) {
+    return [`evals/expectations.json is not JSON: ${err.message}`];
+  }
+  const behaviours = parsed?.expected_behavior;
+  const valid = Array.isArray(behaviours) && behaviours.length >= 1 && behaviours.length <= MAX_EXPECTATIONS && behaviours.every((line) => typeof line === "string" && line.trim());
+  return [
+    ...(parsed?.skill === name ? [] : [`evals/expectations.json names skill "${parsed?.skill}", not "${name}"`]),
+    ...(valid ? [] : [`expected_behavior must hold 1-${MAX_EXPECTATIONS} non-empty lines`]),
+    ...(Array.isArray(parsed?.source) ? [] : ["source must list the findings the expectations came from"]),
+  ];
+}
+
+/** A triggers file is a description-tuning set, not a spot check: fewer than this per side tests nothing. */
+const MIN_TRIGGERS_PER_SIDE = 4;
+
+/**
+ * A skill's optional `evals/triggers.json`: labeled should/should-not-trigger queries for tuning the
+ * description, the valuable negatives being near-misses that share the skill's vocabulary. It is never
+ * required, but one that exists must be usable by a trigger-rate runner.
+ */
+export function triggerProblems(dir, name) {
+  const file = path.join(dir, "evals", "triggers.json");
+  if (!fs.existsSync(file)) return [];
+  let parsed;
+  try {
+    parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (err) {
+    return [`evals/triggers.json is not JSON: ${err.message}`];
+  }
+  const queries = parsed?.queries;
+  if (!Array.isArray(queries)) return ["queries must be an array of { query, should_trigger }"];
+  const wellFormed = queries.every((entry) => typeof entry?.query === "string" && entry.query.trim() && typeof entry?.should_trigger === "boolean");
+  const positive = queries.filter((entry) => entry.should_trigger === true).length;
+  const negative = queries.filter((entry) => entry.should_trigger === false).length;
+  return [
+    ...(parsed?.skill === name ? [] : [`evals/triggers.json names skill "${parsed?.skill}", not "${name}"`]),
+    ...(wellFormed ? [] : ["every query needs a non-empty query string and a boolean should_trigger"]),
+    ...(positive >= MIN_TRIGGERS_PER_SIDE && negative >= MIN_TRIGGERS_PER_SIDE
+      ? []
+      : [`needs at least ${MIN_TRIGGERS_PER_SIDE} should-trigger and ${MIN_TRIGGERS_PER_SIDE} should-not-trigger queries, has ${positive}/${negative}`]),
+  ];
+}
+
+export function importSpecifiers(text) {  const out = [];
   const re =
     /(?:import\s[^'"]*?from\s*['"]([^'"]+)['"])|(?:import\s*\(\s*['"]([^'"]+)['"]\s*\))|(?:require\s*\(\s*['"]([^'"]+)['"]\s*\))|(?:import\s*['"]([^'"]+)['"])/g;
   let m;
@@ -179,6 +246,20 @@ export function lintRepo(root = REPO_ROOT) {
     for (const hit of crossSkillImports(dir, name)) {
       violations.push({ skill: name, rule: "cross-skill-import", file: hit.file, detail: `imports ${hit.spec}` });
     }
+    for (const detail of expectationProblems(dir, name)) {
+      violations.push({ skill: name, rule: "expectations-shape", detail });
+    }
+    for (const detail of triggerProblems(dir, name)) {
+      violations.push({ skill: name, rule: "triggers-shape", detail });
+    }
+    for (const file of fragileMainGuards(dir)) {
+      violations.push({
+        skill: name,
+        rule: "fragile-main-guard",
+        file,
+        detail: "compares import.meta.url with the unresolved argv[1]; through a symlinked install main() never runs",
+      });
+    }
   }
 
   violations.push(...copyDrift(skillsDir, names));
@@ -220,6 +301,6 @@ function main() {
   process.exit(result.violations.length === 0 ? 0 : 1);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href) {
   main();
 }

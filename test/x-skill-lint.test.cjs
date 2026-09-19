@@ -172,8 +172,125 @@ describe("x-skill-lint — standalone scripts", async () => {
     );
   });
 
-  it("stays clean on the real repo", async () => {
-    const res = await runCli([]);
+  it("flags a main guard that a symlinked install never passes", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "x-skill-lint-guard-"));
+    try {
+      const guards = {
+        "x-fragile": 'if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {\n  main();\n}\n',
+        "x-sturdy": 'if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href) {\n  main();\n}\n',
+      };
+      for (const [name, guard] of Object.entries(guards)) {
+        const scripts = path.join(root, "skills", name, "scripts");
+        fs.mkdirSync(scripts, { recursive: true });
+        fs.writeFileSync(path.join(root, "skills", name, "SKILL.md"), `---\nname: ${name}\ndescription: d\n---\n`);
+        fs.writeFileSync(path.join(scripts, "run.mjs"), guard);
+      }
+      fs.writeFileSync(path.join(root, "README.md"), "| `x-fragile` | d |\n| `x-sturdy` | d |\n");
+      const hits = mod.lintRepo(root).violations.filter((v) => v.rule === "fragile-main-guard");
+      assert.deepEqual(hits.map((v) => [v.skill, v.file]), [["x-fragile", "scripts/run.mjs"]]);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("checks a skill's expectations file only when it has one", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "x-skill-lint-expect-"));
+    try {
+      const make = (name, expectations) => {
+        fs.mkdirSync(path.join(root, "skills", name, "evals"), { recursive: true });
+        fs.writeFileSync(path.join(root, "skills", name, "SKILL.md"), `---\nname: ${name}\ndescription: d\n---\n`);
+        if (expectations !== undefined) fs.writeFileSync(path.join(root, "skills", name, "evals", "expectations.json"), expectations);
+      };
+      make("x-none");
+      make("x-good", JSON.stringify({ skill: "x-good", expected_behavior: ["reads every named input, or says which it could not"], source: ["F3"] }));
+      make("x-wrong", JSON.stringify({ skill: "x-other", expected_behavior: [], source: "F1" }));
+      make("x-broken", "{ not json");
+      fs.writeFileSync(path.join(root, "README.md"), "| `x-none` | d |\n| `x-good` | d |\n| `x-wrong` | d |\n| `x-broken` | d |\n");
+      const hits = mod.lintRepo(root).violations.filter((v) => v.rule === "expectations-shape");
+      assert.deepEqual([...new Set(hits.map((v) => v.skill))].sort(), ["x-broken", "x-wrong"]);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("checks a skill's triggers file only when it has one", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "x-skill-lint-triggers-"));
+    try {
+      const make = (name, triggers) => {
+        fs.mkdirSync(path.join(root, "skills", name, "evals"), { recursive: true });
+        fs.writeFileSync(path.join(root, "skills", name, "SKILL.md"), `---\nname: ${name}\ndescription: d\n---\n`);
+        if (triggers !== undefined) fs.writeFileSync(path.join(root, "skills", name, "evals", "triggers.json"), triggers);
+      };
+      const queries = (positives, negatives) =>
+        JSON.stringify({
+          skill: "x-good",
+          queries: [
+            ...Array.from({ length: positives }, (_, i) => ({ query: `positive ${i}`, should_trigger: true })),
+            ...Array.from({ length: negatives }, (_, i) => ({ query: `negative ${i}`, should_trigger: false })),
+          ],
+        });
+      make("x-none");
+      make("x-good", queries(4, 4));
+      make("x-thin", JSON.stringify({ skill: "x-thin", queries: [{ query: "only one", should_trigger: true }] }));
+      make("x-misnamed", queries(4, 4).replace('"x-good"', '"x-other"'));
+      fs.writeFileSync(path.join(root, "README.md"), "| `x-none` | d |\n| `x-good` | d |\n| `x-thin` | d |\n| `x-misnamed` | d |\n");
+      const hits = mod.lintRepo(root).violations.filter((v) => v.rule === "triggers-shape");
+      assert.deepEqual([...new Set(hits.map((v) => v.skill))].sort(), ["x-misnamed", "x-thin"]);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("stays clean on the real repo", async () => {    const res = await runCli([]);
     assert.equal(res.code, 0, res.stderr);
+  });
+});
+
+describe("a skill script launched through a symlinked install", () => {
+  function runNode(file, args = []) {
+    return new Promise((resolve, reject) => {
+      const child = spawn("node", [file, ...args], { stdio: ["ignore", "pipe", "pipe"] });
+      let stdout = "";
+      child.stdout.on("data", (c) => (stdout += c.toString()));
+      child.on("error", reject);
+      child.on("close", (code) => resolve({ code, stdout: stdout.trim() }));
+    });
+  }
+
+  function linkedInstall(target) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "x-skill-link-"));
+    const link = path.join(dir, "skills");
+    fs.symlinkSync(target, link);
+    return { dir, link };
+  }
+
+  it("runs main() with the realpath guard, and silently does nothing with the old one", async () => {
+    const real = fs.mkdtempSync(path.join(os.tmpdir(), "x-skill-real-"));
+    const { dir, link } = linkedInstall(real);
+    try {
+      const head = 'import fs from "node:fs";\nimport { pathToFileURL } from "node:url";\n';
+      fs.writeFileSync(path.join(real, "old.mjs"), `${head}if (import.meta.url === pathToFileURL(process.argv[1] || "").href) console.log("ran");\n`);
+      fs.writeFileSync(
+        path.join(real, "new.mjs"),
+        `${head}if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href) console.log("ran");\n`,
+      );
+      assert.deepEqual(await runNode(path.join(link, "old.mjs")), { code: 0, stdout: "" }, "the bug: exit 0, no output");
+      assert.deepEqual(await runNode(path.join(link, "new.mjs")), { code: 0, stdout: "ran" });
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.rmSync(real, { recursive: true, force: true });
+    }
+  });
+
+  it("prints help for the repo's own scripts when reached through a symlink", async () => {
+    const { dir, link } = linkedInstall(path.join(__dirname, "..", "skills"));
+    try {
+      for (const script of ["x-autoreflection/scripts/read-session.mjs", "x-autoreflection/scripts/scan-session.mjs", "x-research/scripts/state.mjs"]) {
+        const res = await runNode(path.join(link, script), ["--help"]);
+        assert.notEqual(res.stdout, "", `${script} printed nothing through the symlink`);
+      }
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

@@ -1,21 +1,25 @@
 ---
 name: x-autoreflection
-description: Reflect on a session and improve the skills it used — read the transcript of this or an earlier session, mechanically extract friction signals (failed commands, repeated calls, user corrections, loaded-but-unused skills, questions asked in prose), check each against the real skill files, and turn the survivors into evidence-backed proposals with a target file and a check, then route them to a fix, a spec, or tasks.
-version: 1.0.0
+description: Reflect on a session and improve the skills it used — read the transcript of this or an earlier session, mechanically extract friction signals (failed commands, repeated calls, user corrections, loaded-but-unused skills, questions asked in prose) and quality anchors (the user asking for the work again, handing it to another agent, refusing a skill's step, a skill script that silently did nothing), check each against the real skill files and the user's own words, and turn the survivors into evidence-backed proposals with a target file, a check, and the rate each should move, then route them to a fix, a spec, or tasks.
+version: 1.1.0
 author: Community
 tags: [reflection, retrospective, self-improvement, transcript, session, process-improvement, skills]
 user-invocable: true
 ---
 
-# X-Autoreflection — Turn a Session's Friction into Skill Improvements
+# X-Autoreflection — Turn a Session's Friction and Shortfalls into Skill Improvements
 
 A session is a test run of the skills it used. This skill reads that transcript, finds where the
-skills made the agent stumble, and proposes concrete edits to those skills — each one citing the
-message it came from and naming the file to change.
+skills made the agent stumble — or where the session ran clean and still fell short of what the user
+wanted — and proposes concrete edits to those skills, each one citing the message it came from and
+naming the file to change.
 
-The friction is found by a **script, not a feeling**: `scan-session.mjs` extracts signals from the
-transcript, so two agents reading the same session start from the same evidence. Judgement about
-what to change is yours.
+Two kinds of evidence, both found by a **script, not a feeling**. **Friction** is a step that failed,
+repeated, or was corrected. **Quality anchors** are what a clean-but-weak session leaves instead: the
+user asked for the work again, handed it to another agent, refused a skill's step, or a skill script
+"succeeded" without printing anything. `scan-session.mjs` extracts both, so two agents reading the same
+session start from the same evidence. Judgement about what to change is yours — and for an anchor, the
+user's own words are the evidence you judge against.
 
 ## When to use
 
@@ -35,14 +39,21 @@ node <skill>/scripts/read-session.mjs --list
 node <skill>/scripts/read-session.mjs --session last --out /tmp/session.json
 node <skill>/scripts/read-session.mjs --file <raw.json> --out /tmp/session.json
 
-# step 2 — extract the friction signals
+# step 2 — extract the friction signals and quality anchors
 node <skill>/scripts/scan-session.mjs --input /tmp/session.json --out /tmp/signals.json
+
+# step 2b (optional) — have a model read the user's turns, then scan again with its answers
+node <skill>/scripts/classify-turns.mjs --input /tmp/session.json --prompt > /tmp/turns-prompt.txt
+<your model> < /tmp/turns-prompt.txt > /tmp/turns-answers.txt
+node <skill>/scripts/classify-turns.mjs --input /tmp/session.json --labels /tmp/turns-answers.txt --out /tmp/turns.json
+node <skill>/scripts/scan-session.mjs --input /tmp/session.json --turns /tmp/turns.json --out /tmp/signals.json
 
 # steps 3-4 — mint the artifact, then verify and propose into it
 node <skill>/scripts/save-reflection.mjs --slug <slug> --session "<title>"
 
-# step 5 — gate: every high signal has a verdict, every proposal a target and a check
-node <skill>/scripts/check-reflection.mjs --file "<run folder>/E<nn>-reflection.md" --scan /tmp/signals.json
+# step 5 — gate: every high signal has a verdict, every proposal a target and a check,
+#          every kept quality anchor a quote the transcript really contains
+node <skill>/scripts/check-reflection.mjs --file "<run folder>/E<nn>-reflection.md" --scan /tmp/signals.json --transcript /tmp/session.json
 ```
 
 | Gate | Passes when | Checked by |
@@ -54,6 +65,7 @@ node <skill>/scripts/check-reflection.mjs --file "<run folder>/E<nn>-reflection.
 | `proposals_shaped` | each proposal has a `Signal`, `Target`, `Change`, and `Check` line | `check-reflection.mjs` (`proposal-shape`) |
 | `high_signals_answered` | every `high` signal has a keep / re-grade / drop verdict, and a kept one is cited by a proposal | `check-reflection.mjs` (`unanswered-high`, `kept-without-proposal`) |
 | `scan_is_evidence` | the scan reports messages and tool calls, so it is a session and not a stub | `check-reflection.mjs` (`scan-not-evidence`) |
+| `quality_anchored` | every kept quality anchor has a `## Quality` line whose quote is in the transcript and whose skill line exists, and its proposal names a `Watch:` rate | `check-reflection.mjs --transcript` (`quality-unanchored`, `quality-quote`, `quality-skill-line`, `quality-watch`) |
 | `reflection_checked` | `check-reflection.mjs` exits 0 | the exit code |
 | `route_chosen` | the user picked which proposals to pursue | *contract* — recorded in `Routes` |
 
@@ -104,15 +116,27 @@ fragment shorter than the line it came from.
 
 Completion: one session is chosen, and its export reports a non-zero message count.
 
-### 2. Scan for friction
+### 2. Scan for friction and quality anchors
 
 ```bash
 node <skill>/scripts/scan-session.mjs --input /tmp/session.json --out /tmp/signals.json
 ```
 
-It prints JSON: `stats`, the skills that were `loaded` and `used`, the run folders and artifacts the
-session touched, and `signals` — each with a `kind`, a `severity`, the `suspects` (skills the signal
-points at), and `evidence` (message index plus a quoted excerpt).
+It prints JSON: `stats`, the session's `model`, its opening `request`, the skills that were `loaded`
+and `used` (a name seen only in a tool's output or an injected skill body is `mentioned`, not used),
+the run folders and artifacts the session touched, and `signals` — each with a `kind`, a `severity`,
+the `suspects`, and `evidence` (message index plus a quoted excerpt). For a quality anchor the suspect
+is the **owner**: the skill invoked, loaded, or whose script ran just before the moment — not every
+skill the session touched.
+
+The anchors, and what each usually means, are in `references/gap-taxonomy.md`. An `interrupt` is only
+context: it says the user stopped a turn, not why. The next user turn usually says why.
+
+**Optional: let a model read the user's turns.** Plain words find few real complaints ("NOOO we ONLY
+want…", "IDK how to open it"); a small model reading each turn next to the reply before it finds most
+of them. `classify-turns.mjs --prompt` builds the prompt, any model answers it, `--labels` reads the
+answers back, and `scan-session.mjs --turns` adds them as `user-pushback`. Treat those as unvalidated
+leads — they never outrank the anchors above.
 
 Writing the scan beside the reflection (`--out "<run folder>/signals.json"`) lets the checker find
 it on its own, so the artifact carries the evidence it was judged against.
@@ -142,6 +166,12 @@ A gap you found by reading rather than from a signal gets the id **`manual`** �
 `- **manual (medium, kept)** — …` and cite `**Signal:** manual` in its proposal. Not every defect
 leaves a failed command; a wrong-but-successful output leaves nothing for the scanner to see.
 
+**A quality anchor is judged at the anchor, never across the whole session.** Follow
+`references/quality-judge.md`: read the anchor's message and the reply the user reacted to, open what
+the session produced, and answer one narrow question — which line of the request or of the owner's
+`SKILL.md` did that reply not meet? Quote both. When no line says it, the finding is that the skill
+never said it. For each kept anchor write one `## Quality` line: the user's words, then the skill line.
+
 Signals you are answering together — the low repeats, or a crowd of `expected-exit` misses — take
 the id **`group`**: `- **group (low, dropped)** — S4, S11 …`. A grouped verdict never satisfies a
 `high` signal: those each need their own line, so a gate can never be quietened by bundling.
@@ -158,6 +188,7 @@ Use `references/gap-taxonomy.md` to pick the improvement for each signal kind, t
 **Target:** `skills/x-example/SKILL.md:64`
 **Change:** <what to write, concretely enough that someone else could make the edit>
 **Check:** `node skills/x-example/scripts/check.mjs` exits 0
+**Watch:** (quality gaps only) the skill, the model, the rate that should drop, and the window
 ```
 
 Rules:
@@ -169,6 +200,9 @@ Rules:
   belongs in the prose; a pattern that keeps recurring belongs in a test or the linter.
 - **Ship the check with the fix.** If the gap was "a documented command that cannot run", the check
   is usually a new test or a `x-skill-lint` rule, not a re-read.
+- **A quality gap also names what it should move.** Its `Check` proves the edit landed; its `Watch`
+  says which anchor rate should fall afterwards, for which skill and model, so the next digests can show
+  whether the fix helped. A fix that moves nothing is a fix to revisit.
 
 Completion: every high signal has a verdict, and every kept finding has a proposal with its four
 lines filled.
@@ -177,7 +211,7 @@ lines filled.
 
 ```bash
 node <skill>/scripts/save-reflection.mjs --slug <slug> --session "<session title>"
-node <skill>/scripts/check-reflection.mjs --file "<run folder>/E<nn>-reflection.md" --scan /tmp/signals.json
+node <skill>/scripts/check-reflection.mjs --file "<run folder>/E<nn>-reflection.md" --scan /tmp/signals.json --transcript /tmp/session.json
 ```
 
 Pass `--slug <slug>` of the run you are reflecting on so the reflection lands in that run folder
@@ -226,6 +260,11 @@ Completion: the user picked, and each chosen proposal has a route and a next act
 - **S3 (high, kept)** — `x-example` documents `--topic`, the script rejects it. `x-example/SKILL.md:64`
 - **S7 (medium, dropped)** — `grep` exited 1 because the match was absent; correct behaviour.
 - **manual (low, kept)** — something you saw while reading, which no exit code recorded.
+- **S9 (high, kept)** — user-redo owned by `x-research`: the user asked for the research again.
+
+## Quality
+
+- **S9** — user: "Do another full round … read internet sources" — skill: `skills/x-research/references/research-first.md:9` "Fetch official docs and prior art"
 
 ## Proposals
 
@@ -235,9 +274,17 @@ Completion: the user picked, and each chosen proposal has a route and a next act
 **Change:** replace `--topic` with `--slug`, and show the `--run` flag in the same block.
 **Check:** `node skills/x-skill-lint/scripts/lint.mjs` exits 0, plus a `save-spec` CLI test.
 
+### P2 — depth-floor: a research loop adds evidence, not prose
+**Signal:** S9
+**Target:** `skills/x-research/SKILL.md:76`
+**Change:** a criterion counts as met only with a cited source; each loop reads something new.
+**Check:** `node --test test/x-research.test.cjs` exits 0
+**Watch:** x-research user-redo per session on deepseek-v4-flash, next 14 days
+
 ## Routes
 
 - P1 → direct edit, then `x-skill-lint`
+- P2 → `x-fix`
 ````
 
 ## Constraints
@@ -247,10 +294,15 @@ Completion: the user picked, and each chosen proposal has a route and a next act
 2. **The script finds, you judge.** Do not report a raw signal as a finding; verify it first.
 3. **Never propose a change to a skill you did not open.** Read the file before naming a line.
 4. **Blame the instruction, not the agent.** "The SKILL.md did not say" is a gap; "I forgot" is not.
+   For a model that ignores a rule the skill does state, the gap is where the rule sits, or which model
+   it fails on — name the model.
 5. **Small, checkable fixes win.** A proposal whose check cannot be run is not finished.
 6. **Two panels at most** — one to choose the session and the proposals, one `confirm` before
    writing. Do not interview the user.
 7. **Ask as a panel.** Never ask in prose and never bury a question in a paragraph.
+8. **The user is the sensor.** A session where the user asked again, gave up, or refused a step fell
+   short, however clean its tool calls were. Quote the user; never argue a quality anchor away with
+   "every command exited 0".
 
 ## Anti-patterns
 
@@ -261,15 +313,22 @@ Completion: the user picked, and each chosen proposal has a route and a next act
 - Reflecting on a session you never read, from memory or from the summary
 - Proposing a new skill when a sentence in an existing one is the fix
 - Editing the skill mid-reflection: write the proposal, route it, then change the file
+- Asking "what went wrong in this session?" instead of judging one anchor with one narrow question
+- Treating model-read `user-pushback` as proven — it is a lead until the review's verdicts validate it
+- Filing an `interrupt` as a gap on its own
 
 ## Files
 
 - `scripts/read-session.mjs` — lists and exports a session transcript as normalized JSON.
-- `scripts/scan-session.mjs` — extracts friction signals, suspect skills, and run folders.
+- `scripts/scan-session.mjs` — extracts friction signals, quality anchors, suspect skills, and run folders.
+- `scripts/reactions.mjs` — the quality anchors: redo, handoff, rejected tool call, interrupt, silent skill script, and the owner of each moment.
+- `scripts/classify-turns.mjs` — builds the prompt a model answers about each user turn, and reads its answers back for `--turns`.
+- `scripts/anchors.mjs` — across sessions: requests asked again, the sessions a daily reflection reads, and the day's audit pick.
 - `scripts/save-reflection.mjs` — writes `<run folder>/E<nn>-reflection.md`.
 - `scripts/check-reflection.mjs` — fails while a proposal is unshaped or a high signal has no verdict.
 - `scripts/check-questions.mjs` — enforces the panel rules on your questions file.
 - `scripts/metrics.mjs` — scores every skill in a window of packs: five rates, published weights, a sample floor, and the day-by-day `history.jsonl` that outlives a pruned pack.
 - `scripts/derive.mjs` — the movement, the calendar and the bands the report UI reads. Data only: the app under `tools/report-app/` draws, this decides what is true.
 - `references/gap-taxonomy.md` — signal kind → the improvement that answers it.
+- `references/quality-judge.md` — how to judge a quality anchor: one narrow question, quoted evidence, a `## Quality` line.
 - `references/questions.md` — how to ask as a panel, and when to stop asking.

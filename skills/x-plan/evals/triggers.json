@@ -1,0 +1,21 @@
+{
+  "skill": "x-plan",
+  "queries": [
+    { "query": "plan the notifications feature before we build it", "should_trigger": true },
+    { "query": "I want to add caching, help me think it through and write a spec", "should_trigger": true },
+    { "query": "propose three approaches for the sync engine with trade-offs", "should_trigger": true },
+    { "query": "write a spec for the offline mode", "should_trigger": true },
+    { "query": "let's scope the rework of the permissions system", "should_trigger": true },
+    { "query": "turn this vague idea into a plan I can approve", "should_trigger": true },
+    { "query": "spec out the plugin architecture with contracts and invariants", "should_trigger": true },
+    { "query": "I need a layered plan for the dashboard rebuild", "should_trigger": true },
+    { "query": "implement the plan in E00", "should_trigger": false },
+    { "query": "decompose this epic into tasks", "should_trigger": false },
+    { "query": "fix the failing test in the planner", "should_trigger": false },
+    { "query": "what did we decide in the last plan", "should_trigger": false },
+    { "query": "write the epic for this approved spec", "should_trigger": false },
+    { "query": "debug why the scenario script crashes", "should_trigger": false },
+    { "query": "roast this plan document", "should_trigger": false },
+    { "query": "plan my day", "should_trigger": false }
+  ]
+}

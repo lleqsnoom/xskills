@@ -478,15 +478,40 @@ describe("x-research agent-judged evaluator — pure", async () => {
     );
   });
 
-  it("agent coverage drives the same keep/revert/stop machinery", () => {
+  it("agent coverage keeps real progress, and stops only when every criterion is met with evidence", () => {
     const s = m.startState({ slug: "t", metric: "criteria_coverage", evaluator: "agent", criteria: 3 });
+    assert.equal(s.evidenceRequired, true, "an agent run cites its evidence unless told otherwise");
     m.recordBaseline(s, { score: m.coverageVerdict("1/3").score, pass: m.coverageVerdict("1/3").pass });
-    m.recordCandidate(s, { pass: false, score: m.coverageVerdict("2/3").score, changed: ["notes.md"] });
-    assert.equal(s.history.at(-1).decision, "revert");
-    assert.equal(s.best.score, 0.333);
-    m.recordCandidate(s, { pass: true, score: m.coverageVerdict("3/3").score, changed: ["notes.md"] });
+    m.recordCandidate(s, { pass: false, score: m.coverageVerdict("2/3").score, changed: ["notes.md"], evidence: { cited: 2 } });
+    assert.equal(s.history.at(-1).decision, "keep", "the text is kept, so the trail says so");
+    assert.equal(s.best.score, 0.667);
+    m.recordCandidate(s, { pass: true, score: m.coverageVerdict("3/3").score, changed: ["notes.md"], evidence: { cited: 3 } });
     assert.equal(s.phase, "done");
     assert.equal(m.verify(s).ok, true);
+  });
+
+  it("does not count coverage nobody can cite", () => {
+    const s = m.startState({ slug: "t", metric: "criteria_coverage", evaluator: "agent", criteria: 2 });
+    m.recordBaseline(s, { score: 0, pass: false });
+    m.recordCandidate(s, { pass: true, score: 1, changed: ["notes.md"] });
+    assert.equal(s.history.at(-1).decision, "revert");
+    assert.deepEqual(s.history.at(-1).gates.evidence, { actual: 0, expected: 2, pass: false });
+    assert.equal(s.phase, "iterate", "typing 2/2 without sources does not finish the run");
+    m.recordCandidate(s, { pass: true, score: 1, changed: ["notes.md"], evidence: { cited: 1 } });
+    assert.equal(s.phase, "iterate", "one cited criterion does not cover two");
+  });
+
+  it("lets a run opt out of evidence explicitly, and says so", () => {
+    const s = m.startState({ slug: "t", metric: "criteria_coverage", evaluator: "agent", criteria: 2, evidence: false });
+    assert.equal(s.evidenceRequired, false);
+    m.recordBaseline(s, { score: 0, pass: false });
+    m.recordCandidate(s, { pass: true, score: 1, changed: ["notes.md"] });
+    assert.equal(s.phase, "done");
+  });
+
+  it("counts the criteria an evidence file cites with a URL or a file:line", () => {
+    const text = ["- C1: https://arxiv.org/abs/2503.13657 — MAST modes", "C2 — skills/x-research/SKILL.md:118 agent mode", "C3: read it somewhere", "- C1: https://example.org/again"].join("\n");
+    assert.deepEqual(m.evidenceCount(text, 3), { cited: 2, criteria: [1, 2] });
   });
 });
 
@@ -516,8 +541,12 @@ describe("x-research agent-judged evaluator — CLI", async () => {
       const base = JSON.parse((await run(STATE, ["record", "--dir", dir, "--baseline", "--coverage", "0/2"])).stdout);
       assert.equal(base.next, "iterate");
       assert.equal(base.summary.baselineScore, 0);
+      const bare = JSON.parse((await run(STATE, ["record", "--dir", dir, "--candidate", "--coverage", "2/2", "--changed", "notes.md"])).stdout);
+      assert.equal(bare.phase, "iterate", "claimed coverage without evidence does not stop the run");
+      const evidence = path.join(root, "evidence.md");
+      await fsp.writeFile(evidence, "C1: https://example.org/one\nC2: notes.md:12\n");
       const rec = JSON.parse(
-        (await run(STATE, ["record", "--dir", dir, "--candidate", "--coverage", "2/2", "--changed", "notes.md", "--change", "cover the second source"])).stdout
+        (await run(STATE, ["record", "--dir", dir, "--candidate", "--coverage", "2/2", "--evidence", evidence, "--changed", "notes.md", "--change", "cover the second source"])).stdout
       );
       assert.equal(rec.phase, "done");
       assert.equal(rec.stop, true);

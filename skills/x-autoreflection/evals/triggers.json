@@ -1,0 +1,21 @@
+{
+  "skill": "x-autoreflection",
+  "queries": [
+    { "query": "reflect on this session and tell me which skills need fixes", "should_trigger": true },
+    { "query": "scan yesterday's transcript for friction", "should_trigger": true },
+    { "query": "which of my skills caused the most friction this week", "should_trigger": true },
+    { "query": "look at that failed session and propose skill improvements", "should_trigger": true },
+    { "query": "why does the agent keep asking in prose — check the session log", "should_trigger": true },
+    { "query": "review how the skills performed in my last claude session", "should_trigger": true },
+    { "query": "find the friction in this transcript and verify it against the skill files", "should_trigger": true },
+    { "query": "the agent keeps loading a skill and not using it, find out why from the sessions", "should_trigger": true },
+    { "query": "fix the bug in scan-session.mjs", "should_trigger": false },
+    { "query": "add a new signal kind to the scanner", "should_trigger": false },
+    { "query": "review the autoreflection skill's code quality", "should_trigger": false },
+    { "query": "what sessions did I have yesterday", "should_trigger": false },
+    { "query": "improve the description of x-research", "should_trigger": false },
+    { "query": "commit the reflection skill changes", "should_trigger": false },
+    { "query": "open the daily report", "should_trigger": false },
+    { "query": "plan a new self-improvement pipeline", "should_trigger": false }
+  ]
+}

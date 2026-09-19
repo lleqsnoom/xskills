@@ -26,6 +26,11 @@ export const CLASS_BY_KIND = {
   "user-correction": "missing-gate",
   "user-reprompt": "stopping-point",
   "prose-question": "panel-rule",
+  "user-redo": "missing-expectation",
+  "user-handoff": "missing-expectation",
+  "user-pushback": "missing-expectation",
+  "tool-rejected": "ritual-cost",
+  "skill-script-silent": "silent-success",
   // skill-unused and expected-exit have no per-file class: the first is a portfolio
   // decision, the second is not a gap at all.
 };
@@ -37,14 +42,22 @@ export const CHANGE_HINT = {
   "user-correction": "add the missing question or default so the agent does not proceed on a wrong assumption",
   "user-reprompt": "name the stopping point in the step's Completion: line",
   "prose-question": "point the asking section at the panel rule (references/questions.md)",
+  "user-redo": "quote the user's redo, name what the first answer missed, and add it to the skill as one expected behaviour",
+  "user-handoff": "read the turns before the handoff, name what the output lacked, and add it as an expected behaviour or a report-with-evidence rule",
+  "user-pushback": "quote the pushback, find the skill line that should have prevented it, or add the missing expected behaviour",
+  "tool-rejected": "make the step the user refused conditional on the situation that needs it",
+  "skill-script-silent": "make the script print a result line on success, and compare real paths in its main guard",
 };
 
 export const SEVERITY_WEIGHT = { high: 3, medium: 2, low: 1 };
 const MAX_EVIDENCE = 5;
 const DELETE_MIN_RECURRENCE = 2;
 
-/** The signals that are not gaps: expected-exit is an answer, not a failure. */
-const NON_GAP_KINDS = new Set(["expected-exit"]);
+/**
+ * The signals that are not gaps: expected-exit is an answer, not a failure, and an interrupt only says
+ * the user stopped a turn — the reason is in the anchor that follows it, if any.
+ */
+const NON_GAP_KINDS = new Set(["expected-exit", "interrupt"]);
 
 function firstSummary(summaries) {
   return summaries.filter(Boolean).sort((a, b) => a.length - b.length)[0] ?? "";
@@ -302,6 +315,34 @@ function nextE(runDir) {
 }
 // #endregion run-folder
 
+/** The cross-session view the sibling `anchors.mjs` computed: retries, reading order, audit. */
+export function withAnchors(report, anchors) {
+  return {
+    ...report,
+    retries: anchors?.retries ?? [],
+    select: anchors?.select ?? [],
+    recurring: anchors?.recurring ?? [],
+    audit: anchors?.audit ?? null,
+  };
+}
+
+function renderReadFirst(report) {
+  if (!report.select?.length) return [];
+  const lines = ["## Read first", ""];
+  for (const choice of report.select) {
+    const anchors = choice.anchors.map((anchor) => (anchor.message === null || anchor.message === undefined ? anchor.kind : `${anchor.kind} msg ${anchor.message}`));
+    lines.push(`- \`${choice.session}\` — ${choice.reason}${choice.owner ? ` (\`${choice.owner}\`)` : ""}${choice.model ? ` · ${choice.model}` : ""}${anchors.length ? ` · ${anchors.join(", ")}` : ""}`);
+  }
+  if (report.audit) lines.push(`- audit: \`${report.audit.session}\` — no anchor, read and label it anyway`);
+  lines.push("");
+  if (report.retries?.length) {
+    lines.push("## Asked again in a later session", "");
+    for (const retry of report.retries) lines.push(`- \`${retry.earlier}\` → \`${retry.later}\` after ${retry.hours} h: "${retry.excerpt}"`);
+    lines.push("");
+  }
+  return lines;
+}
+
 export function renderMarkdown(report) {
   const lines = [];
   lines.push(`# Skill-health analysis — ${report.window.hours}h window`);
@@ -312,6 +353,7 @@ export function renderMarkdown(report) {
   );
   lines.push("");
 
+  lines.push(...renderReadFirst(report));
   lines.push("## Skills in use");
   lines.push("");
   if (!report.skills.length) {
@@ -383,6 +425,23 @@ export function siblingScripts(root = path.resolve(__dirname, "..", "..")) {
 
 function runNode(script, args) {
   return execFileSync("node", [script, ...args], { encoding: "utf8", maxBuffer: 512 * 1024 * 1024 });
+}
+
+/**
+ * Retries, reading order and audit from the sibling `anchors.mjs`. A missing or failing sibling leaves
+ * the report without them and says so, rather than failing the whole analysis.
+ */
+export function anchorsFor(scans, { scripts, date = timestamp(new Date()).slice(0, 10) }) {
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "xskills-anchors-"));
+  try {
+    const input = path.join(workDir, "scans.json");
+    fs.writeFileSync(input, JSON.stringify(scans));
+    return JSON.parse(runNode(path.join(scripts, "anchors.mjs"), ["--input", input, "--date", date]));
+  } catch (err) {
+    return { retries: [], select: [], recurring: [], audit: null, error: err.message.slice(0, 160) };
+  } finally {
+    fs.rmSync(workDir, { recursive: true, force: true });
+  }
 }
 
 /** Enumerate the window's sessions by shelling to the sibling reader. */
@@ -472,7 +531,9 @@ function main() {
       reportFailed = failed;
     }
 
-    const report = aggregate(scans, { hours });
+    const anchors = anchorsFor(scans, { scripts: siblingScripts() });
+    const report = withAnchors(aggregate(scans, { hours }), anchors);
+    if (anchors.error) report.notes.push(`retries and reading order unavailable: ${anchors.error}`);
     if (hosts.length) {
       const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
       report.window.since = since;
@@ -518,6 +579,6 @@ function parseArgs(args) {
   return out;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href) {
   main();
 }

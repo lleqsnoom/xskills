@@ -1,7 +1,7 @@
 ---
 name: x-autoreflection-heal
-description: Heal the skills an x-autoreflection-analysis report flagged — read the report, turn the top findings into exact edits with a check, propose them as a multi-select panel, and on approval apply the changes with a revert-on-failure ledger.
-version: 1.0.0
+description: Heal the skills an x-autoreflection-analysis report flagged — read the report, turn the top findings into exact edits with a check, propose them as a multi-select panel, and on approval apply the changes with a revert-on-failure ledger. Quality fixes (a session that fell short without failing) are proposals that name the rate they should move, never applied by the script, and a detector or check is never edited together with the skill it measures.
+version: 1.1.0
 author: Community
 tags: [reflection, retrospective, self-improvement, fix, skills, healing]
 user-invocable: true
@@ -78,6 +78,22 @@ naming a line — never edit a skill you have not read. Then fill the item:
 - **`auto: true` only for the four mechanical classes** — `doc-command-drift`, `missing-gate`,
   `panel-rule`, `contract-drift`. Anything that needs judgement (`script-hardening`,
   `missing-check`, `stopping-point`) stays `auto: false`: propose it, do not auto-apply it.
+- **The six quality classes are never `auto`** — `rule-not-applied`, `missing-expectation`,
+  `unbacked-report`, `depth-floor`, `ritual-cost`, `silent-success`. Each is a judgement about what a
+  user expected. Fill their **`watch`**: the skill, the model, the anchor rate that should fall, and
+  the window (`x-research user-redo per session on deepseek-v4-flash, next 14 days`). The next digests
+  read it back, so a fix that moved nothing is visible and can be reverted.
+- **A `missing-expectation` fix is one line in `skills/<x>/evals/expectations.json`**, in the user's
+  words, with the finding in `source` (`{"skill", "expected_behavior": [...], "source": ["F2"]}`, at
+  most seven lines). The first accepted finding creates the file; `x-skill-lint` checks its shape. The
+  judge reads it next to `SKILL.md`, so an expectation the user once had to state is asked of every run.
+- **Deltas, not rewrites.** `find` is one line or a short paragraph, and `replace` changes only what
+  the finding needs. "Rewrite this section to be clearer" loses the detail the section was carrying —
+  rewriting prompts wholesale is how a skill forgets the one line that mattered.
+- **Never edit a measure with what it measures.** A detector or gate (`scan-session.mjs`,
+  `reactions.mjs`, `check-reflection.mjs`, `gap-taxonomy.md`, the lint) or a skill's own `check-*`
+  script is never edited in the same plan as a skill it measures, and never `auto`. Land the measure
+  on its own first, reviewed, then heal against it.
 - A `find`/`replace` that changes meaning, or a check you cannot write, is not an `auto` item.
 
 A portfolio item is never an edit: record it in the panel as a proposal, not in the plan.
@@ -89,7 +105,9 @@ node <skill>/scripts/check-heal.mjs --file "<run folder>/E<nn>-heal.json"
 ```
 
 Exit **0** clean, **1** when an `auto` item lacks a target, find or check, or names a class outside the
-auto whitelist, **2** on a usage error. Fix and re-run.
+auto whitelist; when a quality item has no `watch` (`item-watch`); when an item's check runs the file the
+item edits (`check-edits-itself`); when a detector or check is `auto` (`auto-measure`) or shares a plan
+with a skill it measures (`measure-and-measured`); **2** on a usage error. Fix and re-run.
 
 ### 5. Propose, then apply on approval
 
@@ -107,7 +125,9 @@ to print what would change without writing.
 ### 6. Report the ledger
 
 Say what was applied, reverted, stale, and skipped — one line each. A `reverted` item is a result to
-read, not silence: the check disagreed, so the fix was wrong and the report stays as the evidence.
+read, not silence: the check disagreed, so the fix was wrong and the report stays as the evidence. List
+the quality items as proposals with their `watch`: the script never applies them, so whoever lands one
+knows which number to read in the coming days.
 
 ## Panels
 
@@ -121,6 +141,9 @@ fixes at once). Ask in a panel, never in prose, and never bury a question in a p
 3. **Mechanical classes only, and reversible.** `auto` is four classes; everything else is a proposal.
 4. **Proof or revert.** Every applied edit ran its check and passed; a failed check reverted it.
 5. **Never silence the failure.** A reverted item stays reverted and named, not wrapped so the check passes.
+6. **The measure is not edited with the measured.** Detectors, gates, taxonomies and a skill's own checks
+   change only on their own, reviewed, never in a plan that also edits the skills they grade.
+7. **Deltas, not rewrites.** Every edit is the smallest `find`/`replace` that answers the finding.
 
 ## Anti-patterns
 
@@ -129,6 +152,9 @@ fixes at once). Ask in a panel, never in prose, and never bury a question in a p
 - A `check` that is a re-read ("open the file and confirm") rather than a command that exits 0.
 - Leaving a dropped finding in the plan as an empty item — delete it.
 - Proposing a portfolio `delete` as an edit — it is a decision, ask it in the panel, never auto-apply it.
+- Marking a quality class `auto`, or leaving its `watch` empty.
+- Loosening a check, a lint rule or a detector in the same plan as the edit it would have caught.
+- Replacing a whole SKILL.md section when one line answers the finding.
 
 ## Files
 

@@ -206,6 +206,25 @@ describe("crush host adapter", () => {
     });
   });
 
+  it("never lists the turn classifier's own directory, so its runs are not scanned the next morning", async () => {
+    await withTmpDir("crush-classifier", async (dir) => {
+      const project = path.join(dir, "project");
+      const classifier = path.join(dir, ".x-skills", "turn-classifier");
+      await fsp.mkdir(project, { recursive: true });
+      await fsp.mkdir(classifier, { recursive: true });
+      const projectsFile = await crushFixture(dir, [
+        { path: classifier, last_accessed: "2026-01-02T11:00:00Z" },
+        { path: project, last_accessed: "2026-01-02T11:00:00Z" },
+      ]);
+      const ctx = ctxFor({
+        hostOptions: { crush: { projectsFile } },
+        run: stubRun({ [`crush session list --json @${project}`]: JSON.stringify([session({ uuid: "real" })]) }),
+      });
+      assert.deepEqual(hosts.hostById("crush").list(ctx).sessions.map((s) => s.uuid), ["real"]);
+      assert.equal(ctx.run.calls.length, 1, "the classifier's directory was never asked");
+    });
+  });
+
   it("reports a project whose list command fails instead of dropping it silently", async () => {
     await withTmpDir("crush-warn", async (dir) => {
       const projectsFile = await crushFixture(dir, [{ path: dir, last_accessed: "2026-01-02T11:00:00Z" }]);
@@ -562,6 +581,35 @@ describe("spec-built file hosts", () => {
     });
   });
 
+  it("claude keeps each reply's model and records the skills the session loaded", async () => {
+    await withTmpDir("claude-skills", async (dir) => {
+      const project = path.join(dir, "projects", "-home-nobody-work");
+      const file = jsonl(path.join(project, "22222222-2222-3333-4444-555555555555.jsonl"), [
+        { type: "user", timestamp: "2026-01-02T10:00:01.000Z", sessionId: "22222222-2222-3333-4444-555555555555", cwd: "/home/nobody/work", message: { role: "user", content: "analyse it" } },
+        { type: "assistant", timestamp: "2026-01-02T10:00:02.000Z", message: { role: "assistant", model: "claude-opus-5", content: [{ type: "tool_use", id: "toolu_1", name: "Skill", input: { skill: "x-anal" } }] } },
+        { type: "user", timestamp: "2026-01-02T10:00:03.000Z", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_1", content: "Launching skill: x-anal" }] } },
+        { type: "user", timestamp: "2026-01-02T10:00:04.000Z", message: { role: "user", content: [{ type: "text", text: "Base directory for this skill: /home/nobody/.claude/skills/x-anal\n\n# X-Anal" }] } },
+        { type: "user", timestamp: "2026-01-02T10:00:05.000Z", message: { role: "user", content: [{ type: "text", text: "Base directory for this skill: /home/nobody/.claude/skills/x-plan\n\n# X-Plan" }] } },
+        { type: "assistant", timestamp: "2026-01-02T10:00:06.000Z", message: { role: "assistant", model: "claude-opus-5", content: [{ type: "text", text: "done" }] } },
+      ]);
+      const claude = hostFor("claude");
+      const ctx = ctxFor({ env: isolatedEnv({ CLAUDE_CONFIG_DIR: dir }) });
+      const [listed] = claude.list(ctx).sessions;
+      const raw = claude.read({ ...listed, file }, ctx);
+      assert.deepEqual(raw.meta.skills, [
+        { name: "x-anal", loaded_at: "2026-01-02T10:00:02.000Z" },
+        { name: "x-plan", loaded_at: "2026-01-02T10:00:05.000Z" },
+      ]);
+      assert.equal(raw.meta.headless, false, "an interactive session");
+      const headless = jsonl(path.join(project, "33333333-2222-3333-4444-555555555555.jsonl"), [
+        { type: "user", entrypoint: "sdk-cli", timestamp: "2026-01-02T11:00:00.000Z", sessionId: "33333333-2222-3333-4444-555555555555", cwd: "/home/nobody/work", message: { role: "user", content: "classify these" } },
+      ]);
+      assert.equal(claude.read({ id: "33333333-2222-3333-4444-555555555555", file: headless }, ctx).meta.headless, true, "claude -p writes entrypoint sdk-cli");
+      assert.equal(raw.messages[1].model, "claude-opus-5");
+      assert.equal("model" in raw.messages[0], false, "a user turn names no model");
+    });
+  });
+
   it("cursor reads its agent transcripts in both observed layouts", async () => {
     await withTmpDir("cursor", async (dir) => {
       const projects = path.join(dir, ".cursor", "projects", "home-nobody-work", "agent-transcripts");
@@ -825,6 +873,63 @@ describe("session discovery", () => {  /** `session()` defaults to a year before
   });
 });
 
+describe("daily-reflection turn classification", () => {
+  const raw = {
+    meta: { id: "aaaa1111", uuid: "uuid-a", title: "T", created: "2026-01-02T09:00:00Z", modified: "2026-01-02T10:00:00Z", skills: [] },
+    messages: [
+      { role: "user", parts: [{ type: "text", text: "write the report for the skills with every detail please" }] },
+      { role: "assistant", parts: [{ type: "text", text: "Report written, 4 pages." }] },
+      { role: "user", parts: [{ type: "text", text: "that is TOO long, ten seconds to scan is the max" }] },
+    ],
+  };
+  const adapters = new Map([["crush", { id: "crush", read: () => raw }]]);
+  const input = (classifier) => ({
+    sessions: [session({ uuid: "uuid-a", host: "crush" })],
+    adapters,
+    ctx: ctxFor(),
+    skills: { names: [], dir: null },
+    dirs: { write: false },
+    clip: 600,
+    classifier,
+  });
+
+  it("asks the classifier about the user's turns in batches and scans with its answers", () => {
+    const prompts = [];
+    const out = mod.scanSessions(input((prompt) => (prompts.push(prompt), "1 pushback\n")));
+    assert.equal(prompts.length, 1);
+    assert.match(prompts[0], /USER: that is TOO long/);
+    assert.ok(out.results[0].scan.signals.some((signal) => signal.kind === "user-pushback"));
+    assert.deepEqual(out.classification, { asked: 1, answered: 1, batches: 1, failed: 0 });
+  });
+
+  it("keeps collecting when the classifier fails, and says so", () => {
+    const out = mod.scanSessions(
+      input(() => {
+        throw new Error("payment required");
+      })
+    );
+    assert.equal(out.results.length, 1, "the session is still scanned");
+    assert.equal(out.results[0].scan.signals.some((signal) => signal.kind === "user-pushback"), false);
+    assert.equal(out.classification.failed, 1);
+    assert.ok(out.warnings.some((warning) => warning.scope === "classifier" && /payment required/.test(warning.reason)));
+  });
+
+  it("hands the command its prompt as a readable file, which a CLI that ignores sockets still reads", async () => {
+    await withTmpDir("classifier-stdin", async (dir) => {
+      // A stand-in for `crush run`: it refuses stdin that is a socket, the way the real CLI does.
+      const tool = path.join(dir, "strict.sh");
+      fs.writeFileSync(tool, '#!/bin/sh\nif [ -S /dev/stdin ]; then echo "No prompt provided." >&2; exit 1; fi\ngrep -c "USER:"\n');
+      await fsp.chmod(tool, 0o755);
+      const classify = mod.commandClassifier({ command: tool, cwd: dir });
+      assert.equal(classify("1. x\n   USER: a\n2. y\n   USER: b\n").trim(), "2");
+    });
+  });
+
+  it("asks nothing when no classifier is configured", () => {
+    assert.deepEqual(mod.scanSessions(input(null)).classification, { asked: 0, answered: 0, batches: 0, failed: 0 });
+  });
+});
+
 describe("daily-reflection aggregation", () => {
   it("counts loaded, used and loaded-but-unused per skill, and names the idle ones", () => {
     const scans = [
@@ -860,6 +965,120 @@ describe("daily-reflection aggregation", () => {
       signals.map((s) => `${s.id}:${s.session}`),
       ["S2:s2", "S1:s1"]
     );
+  });
+
+  it("ranks the sessions to read by their anchors, links a retry, and prints the verdict lines", () => {
+    const request = (created) => ({ message: 0, created, text: "Do a deep research on the reflection skills with online sources and loops" });
+    const scans = [
+      {
+        session: session({ uuid: "uuid-a", id: "aaaa1111", host: "crush", modified: "2026-01-01T11:00:00Z" }),
+        scan: fakeScan({
+          source: { model: "deepseek-v4-pro" },
+          request: request("2026-01-01T10:00:00Z"),
+          lastOwner: "x-research",
+          stats: { toolCalls: 9, userMessages: 3 },
+          signals: [signal({ kind: "user-redo", suspects: ["x-research"], evidence: [{ message: 8 }] })],
+        }),
+      },
+      {
+        session: session({ uuid: "uuid-b", id: "bbbb2222", host: "claude", modified: "2026-01-01T12:00:00Z" }),
+        scan: fakeScan({ source: { model: "claude-opus-5" }, request: request("2026-01-01T10:30:00Z"), stats: { toolCalls: 2, userMessages: 3 } }),
+      },
+    ];
+    const summary = mod.buildSummary({ ...summaryInput({ scans }), generatedAt: new Date("2026-01-02T05:00:00Z") });
+
+    assert.equal(summary.sessions[0].model, "deepseek-v4-pro");
+    assert.equal(summary.sessions[0].request.message, 0);
+    assert.deepEqual(summary.retries.map((retry) => [retry.earlier, retry.later]), [["crush:uuid-a", "claude:uuid-b"]]);
+    assert.equal(summary.select[0].session, "crush:uuid-a");
+    assert.equal(summary.select[0].reason, "cross-session-retry", "asked again elsewhere outranks a redo in the same session");
+    assert.deepEqual(summary.select[0].anchors.map((anchor) => anchor.kind), ["cross-session-retry", "user-redo"]);
+    assert.equal(summary.audit.session, "claude:uuid-b", "the quiet interactive session is the day's audit");
+    assert.deepEqual(summary.verdictLines, [
+      "- [ ] `aaaa1111` · cross-session-retry msg 0 · x-research · deepseek-v4-pro — good / below / not-a-skill-problem — note:",
+      "- [ ] audit `bbbb2222` · no anchor · no owner · claude-opus-5 — good / below / not-a-skill-problem — note:",
+    ]);
+    const markdown = mod.renderSummaryMarkdown(summary);
+    assert.match(markdown, /## Read today/);
+    assert.match(markdown, /## Verdicts \(copy into DIGEST\.md\)/);
+    assert.match(markdown, /## Asked again in a later session/);
+  });
+
+  it("adds a hand-edit signal when a file outlives its session with a later mtime", () => {
+    const scans = [
+      {
+        session: session({ uuid: "uuid-w", id: "wwww3333", modified: "2026-01-01T10:00:00Z" }),
+        scan: fakeScan({
+          request: { message: 0, created: "2026-01-01T09:00:00Z", text: "Rename the setting in the config file and update the docs" },
+          lastOwner: "x-implement",
+          stats: { toolCalls: 4, userMessages: 2 },
+          writes: [{ path: "/repo/config.json", message: 3 }],
+        }),
+      },
+    ];
+    const stale = mod.buildSummary({ ...summaryInput({ scans }), generatedAt: new Date("2026-01-02T05:00:00Z"), mtime: () => null });
+    assert.equal(stale.select.length, 0, "a missing file says nothing");
+    const touched = mod.buildSummary({
+      ...summaryInput({ scans }),
+      generatedAt: new Date("2026-01-02T05:00:00Z"),
+      mtime: () => Date.parse("2026-01-01T10:30:00Z"),
+    });
+    assert.equal(touched.select[0].reason, "user-handedit");
+    assert.equal(touched.select[0].owner, "x-implement");
+    assert.match(touched.verdictLines[0], /user-handedit/);
+  });
+
+  it("reads the newest earlier pack beside today's, and nothing when there is none", async () => {    await withTmpDir("previous", async (dir) => {
+      for (const [day, id] of [["2025-12-30", "old"], ["2026-01-01", "yesterday"]]) {
+        await fsp.mkdir(path.join(dir, day), { recursive: true });
+        fs.writeFileSync(path.join(dir, day, "summary.json"), JSON.stringify({ sessions: [{ id }] }));
+      }
+      assert.deepEqual(mod.previousSessions(path.join(dir, "2026-01-02")).map((entry) => entry.id), ["yesterday"]);
+      assert.deepEqual(mod.previousSessions(path.join(dir, "2025-12-30")), []);
+    });
+  });
+
+  it("keeps a headless run out of the reading list, the retries and the audit", () => {
+    const request = (created) => ({ message: 0, created, text: "Do a deep research on the reflection skills with online sources and loops" });
+    const scans = [
+      {
+        session: session({ uuid: "uuid-a", id: "aaaa1111", host: "claude" }),
+        scan: fakeScan({ source: { headless: true }, request: request("2026-01-01T10:00:00Z"), stats: { toolCalls: 1, userMessages: 3 }, signals: [signal({ kind: "user-redo", suspects: ["x-plan"] })] }),
+      },
+      {
+        session: session({ uuid: "uuid-b", id: "bbbb2222", host: "claude" }),
+        scan: fakeScan({ source: { headless: true }, request: request("2026-01-01T10:10:00Z"), stats: { toolCalls: 1, userMessages: 3 } }),
+      },
+    ];
+    const summary = mod.buildSummary({ ...summaryInput({ scans }), generatedAt: new Date("2026-01-02T05:00:00Z") });
+    assert.deepEqual([summary.select, summary.retries, summary.audit], [[], [], null]);
+  });
+
+  it("lets model-read pushback choose a session once the labels validate it", () => {
+    const scans = [
+      {
+        session: session({ uuid: "uuid-p", id: "pppp1111", host: "crush" }),
+        scan: fakeScan({ stats: { toolCalls: 1, userMessages: 3 }, signals: [signal({ kind: "user-pushback", severity: "medium", suspects: ["x-ui"] })] }),
+      },
+    ];
+    const unvalidated = mod.buildSummary({ ...summaryInput({ scans }), generatedAt: new Date("2026-01-02T05:00:00Z") });
+    assert.deepEqual(unvalidated.select, []);
+    const validated = mod.buildSummary({ ...summaryInput({ scans }), validated: new Set(["user-pushback"]), generatedAt: new Date("2026-01-02T05:00:00Z") });
+    assert.deepEqual(validated.select.map((choice) => choice.reason), ["user-pushback"]);
+  });
+
+  it("finds a retry whose first ask sits in yesterday's pack", () => {
+    const request = (created) => ({ message: 0, created, text: "Do a deep research on the reflection skills with online sources and loops" });
+    const scans = [
+      {
+        session: session({ uuid: "uuid-b", id: "bbbb2222", host: "claude" }),
+        scan: fakeScan({ request: request("2026-01-02T01:00:00Z"), stats: { toolCalls: 2, userMessages: 3 } }),
+      },
+    ];
+    const previous = [{ id: "aaaa1111", host: "crush", uuid: "uuid-a", model: "deepseek-v4-pro", request: request("2026-01-01T23:30:00Z"), lastOwner: "x-research" }];
+    const summary = mod.buildSummary({ ...summaryInput({ scans }), previous, generatedAt: new Date("2026-01-02T05:00:00Z") });
+    assert.deepEqual(summary.retries.map((retry) => [retry.earlier, retry.later, retry.hours]), [["crush:uuid-a", "claude:uuid-b", 1.5]]);
+    assert.deepEqual(summary.select, [], "yesterday's session was reviewed yesterday; today only records the retry");
   });
 
   it("builds a summary whose counts match the scans and name each session's host", () => {
@@ -1049,6 +1268,33 @@ posixOnly("daily-reflection CLI", () => {
     return home;
   }
 
+  it("reads user turns through the configured classifier command and records what it answered", async () => {
+    const now = new Date();
+    const talk = {
+      meta: { id: "cccc3333", uuid: "uuid-cccc3333", title: "Talk", created: "2026-01-01T00:00:00Z", modified: now.toISOString() },
+      messages: [
+        { role: "user", parts: [{ type: "text", text: "follow skills/x-fake/SKILL.md and write the whole report for me" }] },
+        { role: "assistant", parts: [{ type: "text", text: "Report written." }] },
+        { role: "user", parts: [{ type: "text", text: "that is TOO long, ten seconds to scan is the max" }] },
+      ],
+    };
+    await withFakeHost(
+      { sessions: [{ id: "cccc3333", uuid: "uuid-cccc3333", title: "Talk", created: "2026-01-01T00:00:00Z", modified: now.toISOString() }], shows: { cccc3333: talk } },
+      async ({ bin, out, skills, projectsFile }) => {
+        const env = { PATH: `${bin}${path.delimiter}${process.env.PATH}`, FAKE_FIXTURES: path.join(bin, "..", "fixtures") };
+        const run = await runCollect(
+          ["--host", "crush", "--out", out, "--skills-dir", skills, "--projects-file", projectsFile, "--no-prune", "--classifier", "cat >/dev/null; echo 1 pushback"],
+          env
+        );
+        assert.equal(run.code, 0, run.stderr);
+        const summary = JSON.parse(fs.readFileSync(path.join(out, "summary.json"), "utf8"));
+        assert.deepEqual(summary.classifier, { command: "cat >/dev/null; echo 1 pushback", asked: 1, answered: 1, batches: 1, failed: 0 });
+        assert.ok(summary.signals.some((signal) => signal.kind === "user-pushback"));
+        assert.ok(fs.existsSync(path.join(out, "sessions", "uuid-cccc3333.turns.json")));
+      }
+    );
+  });
+
   it("writes a pack, scans every session and passes the probe when an x-skill was used", async () => {
     const now = new Date();
     await withFakeHost(
@@ -1211,6 +1457,33 @@ posixOnly("daily-reflection CLI", () => {
       assert.equal(fs.existsSync(path.join(out, "report.html")), false, "no HTML: the app renders");
       const after = fs.existsSync(repoHistory) ? fs.readFileSync(repoHistory, "utf8") : null;
       assert.equal(after, before, "a run pointed elsewhere writes nothing into the repository");
+    });
+  });
+
+  it("reads the ticked verdicts of earlier digests into labels.jsonl beside the record", async () => {
+    await withTmpDir("labels", async (dir) => {
+      const yesterday = path.join(dir, "2026-01-01");
+      await fsp.mkdir(yesterday, { recursive: true });
+      fs.writeFileSync(
+        path.join(yesterday, "DIGEST.md"),
+        "## Verdicts\n\n- [x] `aaaa1111` · user-redo msg 4 · x-plan · deepseek-v4-flash — below — note: shallow\n"
+      );
+      const out = path.join(dir, "2026-01-02");
+      await fsp.mkdir(out, { recursive: true });
+      fs.writeFileSync(
+        path.join(out, "summary.json"),
+        JSON.stringify({ pack: "2026-01-02", window: { hours: 24 }, counts: {}, sessions: [], signals: [], skills: { touched: [], idle: [] } })
+      );
+      const summary = { warnings: [], sessions: [] };
+      mod.writePages(summary, { out });
+
+      const labels = fs
+        .readFileSync(path.join(dir, "labels.jsonl"), "utf8")
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+      assert.deepEqual(labels.map((label) => [label.date, label.session, label.verdict, label.note]), [["2026-01-01", "aaaa1111", "below", "shallow"]]);
+      assert.equal(summary.labels.labels, 1);
     });
   });
 });

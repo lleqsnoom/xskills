@@ -1,7 +1,7 @@
 ---
 name: x-anal
 description: Interactive analysis skill — research the project and web first, ask short plain questions until the user is sure, then produce a thesis with cited evidence and a mechanical check, propose three solutions with trade-offs, and route to fix or task creation; graph-driven with guards and a markdown memory.
-version: 1.0.0
+version: 1.1.0
 author: Community
 tags: [analysis, troubleshooting, diagnosis, problem-solving, investigation]
 user-invocable: true
@@ -55,7 +55,7 @@ guard each one satisfies:
 
 | Kind | Records | Satisfies |
 |------|---------|-----------|
-| `confirm` | the user's confirmation of your restatement in `--data` | `intent_confirmed` |
+| `confirm` | your restatement in `--data`, confirmed by the user — or taken from a written brief (Phase 1) | `intent_confirmed` |
 | `research` | one finding (or `--status not-run --reason "<why>"`) | `research_recorded` |
 | `question` | one open question, numbered `Q<n>` in `--target` | `no_open_questions` |
 | `answer --target Q<n>` | the answer to that question | `no_open_questions` |
@@ -72,7 +72,7 @@ still going, use `guard --gate <name>`: it exits 0 or 1 on that gate alone.
 
 | Gate | Passes when |
 |------|-------------|
-| `intent_confirmed` | the user confirmed your restatement |
+| `intent_confirmed` | the user confirmed your restatement, or it came from a written brief |
 | `research_recorded` | at least one research finding is recorded |
 | `no_open_questions` | every question is answered |
 | `evidence_cited` | at least one claim cites a `file:line` or URL |
@@ -100,6 +100,14 @@ You say something like: "So you're saying that when X happens, Y occurs instead 
 ```
 
 If the user corrects you, update your understanding and re-confirm. Do not proceed until intent is confirmed.
+
+**When the request already is a written brief, do not ask it back.** A prompt file, a spec, a task file,
+or a message that states the deliverable and its inputs has already been confirmed by the person who
+wrote it. Restate it in one line in your reply, record it as
+`--event confirm --data "<restatement> (from the written brief)"`, and go on to research. A confirm
+panel over a fully written brief tells the user you did not read it — the session that prompted this
+rule ended with the user refusing that panel. If one part of the brief is ambiguous, ask about that part
+alone, as a panel.
 
 ### Phase 2: Clarify Ambiguities
 
@@ -193,12 +201,13 @@ When routing to another skill, pass `<run folder>/E<nn>-analysis.md` as the inpu
 
 ## Constraints (MANIFESTO)
 
-1. **Confirm before proceeding** — never start analyzing until user confirms you understand their intent correctly.
+1. **Confirm before proceeding** — never start analyzing until the user confirms you understand their intent correctly, or the intent is written down in a brief they handed you (Phase 1).
 2. **Ask before assuming** — if anything is unclear, ask as a panel; don't fill in gaps yourself.
 3. **Evidence-based thesis only** — every claim must reference concrete evidence (log lines, code, symptoms). No speculation presented as fact.
 4. **Flag uncertainty explicitly** — never hide low confidence. Use the three-level scale and explain why.
 5. **One path at a time** — present options but guide toward a decision; don't leave user hanging with open choices.
 6. **Right-sized routing** — small fix → fix directly; moderate → tasks + implement; large → plan first. Don't over-engineer simple problems.
+7. **Report with evidence** — the closing message says what was read (the load-bearing sources by `file:line` or URL), what was named but not read and why, how confidence was judged, and what was left out. Never call an analysis complete or verified without the source or command behind the word.
 
 ## Anti-Patterns to Avoid
 
