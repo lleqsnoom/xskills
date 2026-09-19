@@ -1,3 +1,11 @@
+## [5.31.0] - 2026-09-19
+
+* Merge pull request #66 from lleqsnoom/lleqsnoom/feat-auto-improve (2ca43a0)
+* Merge remote-tracking branch 'origin/main' into lleqsnoom/feat-auto-improve (fb4ed94)
+* feat: detect below-expectation sessions via quality anchors, implicit signals, and skill evals (710de5d)
+* Merge pull request #65 from lleqsnoom/lleqsnoom/feat-spp-engine (32896fb)
+* refactor(report): remove the Orca plugin and pick a free dev port (4700029)
+
 ## [5.30.2] - 2026-09-18
 
 * Merge pull request #62 from lleqsnoom/fix/orca-plugin-declared-panel (3639702)
