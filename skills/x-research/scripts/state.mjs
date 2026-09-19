@@ -64,6 +64,23 @@ export function coverageVerdict(spec) {
   return { met, total, score: round(met / total), pass: met === total };
 }
 
+// A criterion counts as cited when its line names a URL or a file:line — something someone can
+// open. "I read it somewhere" is how a run reaches 1/1 without reading anything.
+const EVIDENCE_SOURCE_RE = /https?:\/\/\S+|\S+\.[A-Za-z0-9]+:\d+/;
+
+export function evidenceCount(text, total) {
+  const cited = new Set(
+    String(text || "")
+      .split(/\r?\n/)
+      .map((line) => line.trim().match(/^[-*]?\s*C(\d+)\b(.*)$/))
+      .filter((match) => match && EVIDENCE_SOURCE_RE.test(match[2]))
+      .map((match) => Number(match[1]))
+      .filter((id) => id >= 1 && id <= total)
+  );
+  const criteria = [...cited].sort((a, b) => a - b);
+  return { cited: criteria.length, criteria };
+}
+
 // Minimal glob: `**` crosses directories, `*` stays within one path segment.
 export function matchesGlob(pattern, target) {
   const p = String(pattern).trim();
@@ -122,6 +139,7 @@ export function startState({
   cap = DEFAULT_CAP,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   candidates = null,
+  evidence = true,
   now = new Date(),
 } = {}) {
   if (!slug || typeof slug !== "string") throw new Error("slug is required");
@@ -164,6 +182,8 @@ export function startState({
     evaluator: label,
     evaluatorKind: kind,
     criteria: resolvedCriteria,
+    // Agent-judged coverage must name a source per met criterion unless the run opted out at start.
+    evidenceRequired: kind === "agent" && evidence !== false,
     guard: guard || null,
     search: { allowed: normalizeList(allowed), forbidden: normalizeList(forbidden) },
     graph: GRAPH,
@@ -193,9 +213,13 @@ export function stopVerdict(state, best) {
   const metricGate = { actual: best.score, expected: state.target, pass: targetMet(state, best.score) };
   const evaluatorGate = best.gates.evaluator;
   const guardGate = state.guard ? best.gates.guard : null;
+  const evidenceGate = best.gates.evidence ?? null;
   const pass =
-    metricGate.pass && (evaluatorGate ? evaluatorGate.pass : true) && (guardGate ? guardGate.pass : true);
-  return { pass, gates: { metric: metricGate, evaluator: evaluatorGate, guard: guardGate } };
+    metricGate.pass &&
+    (evaluatorGate ? evaluatorGate.pass : true) &&
+    (guardGate ? guardGate.pass : true) &&
+    (evidenceGate ? evidenceGate.pass : true);
+  return { pass, gates: { metric: metricGate, evaluator: evaluatorGate, guard: guardGate, evidence: evidenceGate } };
 }
 
 function commitStopOrAdvance(state) {
@@ -261,7 +285,7 @@ export function recordBaseline(state, { score, samples, pass } = {}) {
   return touch(state);
 }
 
-export function recordCandidate(state, { pass, score, samples, guardPass, changed, change } = {}) {
+export function recordCandidate(state, { pass, score, samples, guardPass, changed, change, evidence = null } = {}) {
   if (STOP_PHASES.has(state.phase)) throw new Error(`loop already stopped (${state.phase})`);
   if (state.phase !== "iterate") throw new Error(`not awaiting a candidate (phase "${state.phase}")`);
   if (pass === undefined) throw new Error("candidate needs pass (boolean) — pass the evaluator output");
@@ -282,9 +306,18 @@ export function recordCandidate(state, { pass, score, samples, guardPass, change
   const improvement = state.direction === "minimize" ? prevBest - value : value - prevBest;
   const improvementGate = { actual: round(improvement), expected: state.minDelta, pass: improvement >= state.minDelta };
   const metricGate = { actual: value, expected: state.target, pass: targetMet(state, value) };
+  const agent = state.evaluatorKind === "agent";
+  const met = agent ? Math.round(value * state.criteria) : null;
+  const evidenceGate = state.evidenceRequired
+    ? { actual: evidence?.cited ?? 0, expected: met, pass: (evidence?.cited ?? 0) >= met }
+    : null;
+  // In agent mode a candidate that raises coverage is progress the run keeps: its text stays in the
+  // research file, and recording it as "revert" made the trail say the opposite of what happened.
+  const progress = agent && improvement > 0;
 
-  let keep = evaluatorGate.pass;
+  let keep = evaluatorGate.pass || progress;
   if (state.policy === "score_improvement") keep = keep && improvementGate.pass;
+  if (evidenceGate && !evidenceGate.pass) keep = false;
   if (noiseGate && !noiseGate.pass) keep = false;
   if (guardGate && !guardGate.pass) keep = false;
   if (atomicGate && !atomicGate.pass) keep = false;
@@ -300,7 +333,8 @@ export function recordCandidate(state, { pass, score, samples, guardPass, change
     delta: round(improvement),
     decision: keep ? "keep" : "revert",
     change: change || null,
-    gates: { metric: metricGate, evaluator: evaluatorGate, noise: noiseGate, guard: guardGate, atomic: atomicGate, search, improvement: improvementGate },
+    evidence: evidence ? { cited: evidence.cited, file: evidence.file ?? null } : null,
+    gates: { metric: metricGate, evaluator: evaluatorGate, noise: noiseGate, guard: guardGate, atomic: atomicGate, search, improvement: improvementGate, evidence: evidenceGate },
     ts: new Date().toISOString(),
   };
   state.history.push(entry);
@@ -618,7 +652,9 @@ function usage() {
     "  node state.mjs record --dir <dir> --baseline <n|file|-> [--samples a,b,c] [--pass true|false]",
     "  node state.mjs record --dir <dir> --baseline --coverage <k/n>",
     "  node state.mjs record --dir <dir> --candidate <file|->   # evaluator JSON: {\"pass\":bool,\"score\":number}",
-    "  node state.mjs record --dir <dir> --candidate --coverage <k/n> [--changed path1,path2] [--change <text>]",
+    "  node state.mjs record --dir <dir> --candidate --coverage <k/n> --evidence <file> [--changed path1,path2] [--change <text>]",
+    "      (agent mode: --evidence lists one line per met criterion, `C2: <URL or path:line>`; a run started",
+    "       with --no-evidence records coverage without it, and says so in its state)",
     "        [--guard true|false]",
     "  node state.mjs status --dir <dir>",
     "  node state.mjs verify --dir <dir>   # exit 0 iff the stop is justified",
@@ -677,6 +713,12 @@ function parseArgs(args) {
     }
   }
   return out;
+}
+
+function readEvidence(file, state) {
+  if (file === undefined) return null;
+  if (file === true) throw new Error("--evidence needs a file: one line per met criterion, e.g. `C2: https://… or path:line`");
+  return { ...evidenceCount(fs.readFileSync(file, "utf8"), state.criteria ?? 0), file };
 }
 
 function num(value, label) {
@@ -772,6 +814,7 @@ function main() {
         cap: args.cap === undefined ? DEFAULT_CAP : int(args.cap, "--cap"),
         timeoutMs: args.timeout === undefined ? DEFAULT_TIMEOUT_MS : num(args.timeout, "--timeout"),
         candidates: args.candidates === undefined || args.candidates === true ? null : readCandidates(args.candidates),
+        evidence: args["no-evidence"] !== true,
       });
       persist(dir, state);
       fs.writeFileSync(path.join(dir, "research_log.md"), `# Research log — ${state.slug}\n\n`);
@@ -806,6 +849,7 @@ function main() {
           guardPass: args.guard === undefined ? undefined : bool(args.guard, "--guard"),
           changed: args.changed,
           change: args.change === true ? null : args.change,
+          evidence: readEvidence(args.evidence, state),
         });
       } else {
         throw new Error("record needs --baseline or --candidate");
@@ -836,6 +880,6 @@ function main() {
   }
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href) {
   main();
 }

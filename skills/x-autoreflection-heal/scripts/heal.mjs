@@ -19,6 +19,34 @@ export const SCHEMA = "x-autoreflection-heal/1";
 /** The improvement classes a mechanical, verifiable, reversible edit may be applied unattended. */
 export const AUTO_CLASSES = new Set(["doc-command-drift", "missing-gate", "panel-rule", "contract-drift"]);
 
+/**
+ * The classes that answer a session falling short rather than failing. Each is a judgement about what
+ * the user expected, so none is ever applied unattended, and each names the rate it should move.
+ */
+export const QUALITY_CLASSES = new Set(["rule-not-applied", "missing-expectation", "unbacked-report", "depth-floor", "ritual-cost", "silent-success"]);
+
+/** The files that find the gaps and grade the reflections: they measure every skill. */
+const SHARED_MEASURES = [
+  /^skills\/x-autoreflection\/scripts\/(scan-session|reactions|anchors|classify-turns|check-reflection)\.mjs$/,
+  /^skills\/x-autoreflection\/references\/(gap-taxonomy|quality-judge)\.md$/,
+  /^skills\/x-autoreflection-analysis\/scripts\/(analyze|check-analysis)\.mjs$/,
+  /^skills\/x-autoreflection-heal\/scripts\/(heal|check-heal)\.mjs$/,
+  /^skills\/x-skill-lint\/scripts\/lint\.mjs$/,
+];
+const OWN_CHECK_RE = /^skills\/(x-[a-z0-9-]+)\/scripts\/(check|validate)-[A-Za-z0-9._-]+\.(mjs|js|cjs)$/;
+
+/**
+ * Which skills a file measures: `*` for the shared detectors and gates, one skill for its own
+ * `check-*` / `validate-*` script, null for a file that measures nothing. What is measured must not
+ * edit its own measure in the same step — the one self-improving agent that could rewrote its
+ * hallucination detector to report a perfect score.
+ */
+export function measuresOf(target) {
+  const file = path.posix.normalize(String(target ?? "").replace(/\\/g, "/")).replace(/^\.\//, "");
+  if (SHARED_MEASURES.some((re) => re.test(file))) return "*";
+  return file.match(OWN_CHECK_RE)?.[1] ?? null;
+}
+
 function pad2(value) {
   return String(value).padStart(2, "0");
 }
@@ -122,6 +150,7 @@ export function mintPlan(analysis, { analysisPath = null, date = new Date() } = 
     replace: "",
     check: "",
     auto: false,
+    ...(QUALITY_CLASSES.has(finding.class) ? { watch: "" } : {}),
     change: finding.change ?? "",
     evidence: finding.evidence ?? [],
   }));
@@ -176,7 +205,7 @@ export function applyItem(item, { cwd = process.cwd(), dryRun = false } = {}) {
     if (!dryRun) fs.writeFileSync(file, original);
     return { id: item.id, status: "reverted", detail: `check failed: ${check.stderr || check.stdout || item.check}`.slice(0, 200) };
   }
-  return { id: item.id, status: dryRun ? "would-apply" : "applied", detail: item.target };
+  return { id: item.id, status: dryRun ? "would-apply" : "applied", detail: item.target, ...(item.watch ? { watch: item.watch } : {}) };
 }
 
 export function applyHeal(plan, ids, { cwd = process.cwd(), dryRun = false } = {}) {
@@ -307,6 +336,6 @@ function main() {
   }
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href) {
   main();
 }

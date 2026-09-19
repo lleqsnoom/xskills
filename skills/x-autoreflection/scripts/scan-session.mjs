@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { DEFAULT_CLIP, isNormalized, loadSession, normalizeSession, parseArgs } from "./read-session.mjs";
+import { scanReactions } from "./reactions.mjs";
 
 /** Commands whose non-zero exit is an answer rather than a failure. */
 export const EXPECTED_NONZERO = ["diff", "cmp", "grep", "egrep", "fgrep", "test", "git diff", "git grep"];
@@ -23,6 +24,9 @@ const MAX_EVIDENCE = 3;
 
 const ARTIFACT_RE = /\bE(\d{2})-(?!\d)([a-z0-9][a-z0-9-]*)/g;
 const RUN_FOLDER_RE = /\.x-skills\/runs\/([A-Za-z0-9:._-]+)/g;
+
+/** Tool names that write a file; everything else that names a path only reads it. */
+const WRITE_TOOL_RE = /edit|write/i;
 
 function excerpt(text, limit = 160) {
   return String(text ?? "").replace(/\s+/g, " ").trim().slice(0, limit);
@@ -173,16 +177,34 @@ export function skillNamesOnDisk(dir = null) {
   return { dir: null, names: [] };
 }
 
+/** A skill body the host pasted in as a user message: it names the skills it routes to, not ones in use. */
+const INJECTED_SKILL_BODY_RE = /^Base directory for this skill:/;
+
+/**
+ * Whether a part is the session doing something rather than something it was shown. A tool result that
+ * lists `skills/` and an injected skill body name every skill they touch; counting those as use made
+ * one `ls` mark thirty skills used, so "loaded but unused" could never fire.
+ */
+function isOwnWords(part, message) {
+  if (part.type === "tool_result") return false;
+  return !(message.role === "user" && part.type === "text" && INJECTED_SKILL_BODY_RE.test(part.text ?? ""));
+}
+
+function namesIn(part, keep) {
+  return keep(skillMentions([part.name, part.input, part.text, part.content].filter(Boolean).join(" ")));
+}
+
 function collectSkills(session, keep) {
   const loaded = session.skills.map((skill) => skill.name);
-  const used = new Set();
-  for (const message of session.messages) {
-    for (const part of message.parts) {
-      const blob = [part.name, part.input, part.text, part.content].filter(Boolean).join(" ");
-      for (const name of keep(skillMentions(blob))) used.add(name);
-    }
-  }
-  return { loaded, used: [...used].sort(), unused: loaded.filter((name) => !used.has(name)) };
+  const parts = session.messages.flatMap((message) => message.parts.map((part) => ({ part, message })));
+  const used = new Set(parts.filter(({ part, message }) => isOwnWords(part, message)).flatMap(({ part }) => namesIn(part, keep)));
+  const mentioned = new Set(parts.flatMap(({ part }) => namesIn(part, keep)));
+  return {
+    loaded,
+    used: [...used].sort(),
+    unused: loaded.filter((name) => !used.has(name)),
+    mentioned: [...mentioned].sort(),
+  };
 }
 
 function countRoles(messages) {
@@ -304,6 +326,7 @@ function scanParts(messages, keep) {
   const failures = [];
   const runFolders = new Set();
   const artifacts = new Set();
+  const writes = new Map();
 
   const notePaths = (text) => {
     for (const match of String(text ?? "").matchAll(RUN_FOLDER_RE)) runFolders.add(match[1]);
@@ -316,6 +339,10 @@ function scanParts(messages, keep) {
         stats.toolCalls++;
         calls.set(part.id, part);
         notePaths(part.input);
+        if (WRITE_TOOL_RE.test(part.name ?? "")) {
+          const target = targetOf(part.input);
+          if (target && !writes.has(target)) writes.set(target, message.index);
+        }
         const key = `${part.name}|${part.input ?? ""}`;
         const seen = callCounts.get(key);
         if (seen) seen.count++;
@@ -345,7 +372,14 @@ function scanParts(messages, keep) {
       excerpt: excerpt(entry.part.input, 120),
     }));
 
-  return { stats: { ...stats, repeats: repeats.length }, failures, repeats, runFolders: [...runFolders].sort(), artifacts: [...artifacts].sort() };
+  return {
+    stats: { ...stats, repeats: repeats.length },
+    failures,
+    repeats,
+    runFolders: [...runFolders].sort(),
+    artifacts: [...artifacts].sort(),
+    writes: [...writes].map(([file, message]) => ({ path: file, message })),
+  };
 }
 
 /**
@@ -507,11 +541,12 @@ function unusedPayload(skills) {
   ];
 }
 
-function buildSignals({ partScan, users, turns, skills, keep }) {
+function buildSignals({ partScan, users, turns, skills, keep, reactions }) {
   const payloads = [
     ...failurePayloads(partScan.failures),
     ...repeatPayloads(partScan.repeats, keep),
     ...userPayloads({ users, turns, skills }),
+    ...reactions.payloads,
     ...unusedPayload(skills),
   ];
   return payloads.map((payload, index) => ({ id: `S${index + 1}`, ...payload }));
@@ -528,7 +563,7 @@ function buildNotes(stats) {
   return notes;
 }
 
-export function scanSession(session, { skillNames = [], skillsSource = null } = {}) {
+export function scanSession(session, { skillNames = [], skillsSource = null, turns: classified = [] } = {}) {
   const messages = session.messages ?? [];
   const allowed = new Set([...skillNames, ...session.skills.map((skill) => skill.name)]);
   const keep = (names) => (skillNames.length ? names.filter((name) => allowed.has(name)) : names);
@@ -538,6 +573,7 @@ export function scanSession(session, { skillNames = [], skillsSource = null } = 
   const turns = scanAssistantTurns(messages);
   const scripts = scanSkillScripts(messages);
   const skills = collectSkills(session, keep);
+  const reactions = scanReactions(messages, { keep, loaded: skills.loaded, turns: classified });
   const stats = {
     ...countRoles(messages),
     toolCalls: partScan.stats.toolCalls,
@@ -549,10 +585,13 @@ export function scanSession(session, { skillNames = [], skillsSource = null } = 
     corrections: users.corrections.length,
     reprompts: users.reprompts.length,
     proseQuestions: turns.proseQuestions.length,
+    ...reactions.stats,
   };
 
   return {
     source: session.source ?? null,
+    request: reactions.request,
+    lastOwner: reactions.lastOwner,
     stats,
     skillsSource,
     skills,
@@ -560,7 +599,8 @@ export function scanSession(session, { skillNames = [], skillsSource = null } = 
     graphs: scripts.graphs,
     runFolders: partScan.runFolders,
     artifacts: partScan.artifacts,
-    signals: buildSignals({ partScan, users, turns, skills, keep }),
+    writes: partScan.writes,
+    signals: buildSignals({ partScan, users, turns, skills, keep, reactions }),
     notes: buildNotes(stats),
   };
 }
@@ -571,6 +611,12 @@ export function readInput({ input = null, file = null, session = null, cwd = nul
     return isNormalized(raw) ? raw : normalizeSession(raw, { limit });
   }
   return loadSession({ file, session, cwd, limit });
+}
+
+/** A `classify-turns.mjs` result: `{ turns: [{ message, class }] }`, or the bare list. */
+export function readTurns(file) {
+  const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+  return Array.isArray(parsed) ? parsed : parsed.turns ?? [];
 }
 
 function usage() {
@@ -588,6 +634,7 @@ function usage() {
     "  --file <path>     Read a raw host dump, normalized on the way in",
     "  --out <path>      Write the scan JSON here (default: stdout)",
     "  --skills-dir <d>  Folder holding the skill directories (default: skills/, then .agents/skills/)",
+    "  --turns <path>    classify-turns.mjs output: adds model-read user-pushback signals",
     "  --cwd <dir>       Run the host command in this directory",
     "  --help            Show this help",
     "",
@@ -596,7 +643,7 @@ function usage() {
 
 function main() {
   const args = parseArgs(process.argv.slice(2), {
-    known: ["input", "session", "file", "out", "skills-dir", "cwd", "help"],
+    known: ["input", "session", "file", "out", "skills-dir", "cwd", "turns", "help"],
   });
   try {
     if (args.unknown.length) throw new Error(`Unknown argument "${args.unknown[0]}"`);
@@ -611,7 +658,8 @@ function main() {
       cwd: args.cwd || null,
     });
     const found = skillNamesOnDisk(typeof args["skills-dir"] === "string" ? args["skills-dir"] : null);
-    const result = scanSession(session, { skillNames: found.names, skillsSource: found.dir });
+    const classified = typeof args.turns === "string" ? readTurns(args.turns) : [];
+    const result = scanSession(session, { skillNames: found.names, skillsSource: found.dir, turns: classified });
     const json = `${JSON.stringify(result, null, 2)}\n`;
     if (typeof args.out === "string") {
       fs.mkdirSync(path.dirname(path.resolve(args.out)), { recursive: true });
@@ -632,6 +680,6 @@ function main() {
   }
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href) {
   main();
 }

@@ -13,7 +13,7 @@
 
 import { spawn, execSync } from "node:child_process";
 import { readdir, readFile, writeFile, mkdir, rm, appendFile, copyFile } from "node:fs/promises";
-import { existsSync, createWriteStream } from "node:fs";
+import { existsSync, createWriteStream, realpathSync } from "node:fs";
 import { join, basename, dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -461,7 +461,7 @@ async function main() {
 
 const quote = (s) => `"${String(s).replace(/"/g, '\\"')}"`;
 
-if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   main().catch((err) => {
     console.error("X-Parallel failed:", err);
     process.exit(1);

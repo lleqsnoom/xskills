@@ -1,7 +1,7 @@
 ---
 name: x-skill-lint
-description: Validate the repo's own skills — frontmatter parses and `name` matches the folder, every referenced `scripts/*` and `references/*` exists, no stray template tokens, and the README skills table lists every skill. Use when adding or editing a skill, or before shipping the repo.
-version: 1.0.0
+description: Validate the repo's own skills — frontmatter parses and `name` matches the folder, every referenced `scripts/*` and `references/*` exists, no stray template tokens, script main guards survive a symlinked install, an optional `evals/expectations.json` or `evals/triggers.json` is well-formed, and the README skills table lists every skill. Use when adding or editing a skill, or before shipping the repo.
+version: 1.1.0
 author: Community
 tags: [lint, validation, skills, frontmatter, repo-hygiene, discovery]
 user-invocable: true
@@ -43,6 +43,9 @@ violation is found, **2** on a usage error. Each violation names the `skill` and
 | `readme` | The skill is missing from the README skills table. |
 | `cross-skill-import` | A skill's script imports another skill's script — skills must stay standalone. |
 | `copy-drift` | A file shared across skills differs byte-for-byte between copies. |
+| `fragile-main-guard` | A script compares `import.meta.url` to `process.argv[1]` without `realpathSync`, so it does nothing when run through a symlinked install. |
+| `expectations-shape` | An optional `evals/expectations.json` names another skill, holds no or more than seven `expected_behavior` lines, or lacks a `source` list. |
+| `triggers-shape` | An optional `evals/triggers.json` names another skill, has a query without text or a non-boolean `should_trigger`, or holds fewer than four should-trigger or four should-not-trigger queries. |
 
 References that name *another* skill (a line mentioning a different `x-…`) are skipped, so
 cross-skill hops are not reported as local breakage.

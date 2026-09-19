@@ -11,6 +11,17 @@ import { HOUR_MS, firstLine } from "./shared.mjs";
 
 const DEFAULT_PROJECT_LOOKBACK_HOURS = 72;
 
+/**
+ * Where the daily collection runs its turn classifier through `crush run`. Crush registers every
+ * directory it runs in as a project, so without this the classifier's own runs — prompts full of other
+ * sessions' user turns — would be scanned the next morning as if a person had typed them.
+ */
+export const TURN_CLASSIFIER_DIR = path.join(".x-skills", "turn-classifier");
+
+export function isTurnClassifierDir(dir) {
+  return path.normalize(String(dir ?? "")).endsWith(path.sep + TURN_CLASSIFIER_DIR);
+}
+
 export function crushDataDir(env = process.env) {
   if (env.CRUSH_DATA_HOME) return env.CRUSH_DATA_HOME;
   const share = env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share");
@@ -45,7 +56,7 @@ export function recentProjects(projects, { hours = DEFAULT_PROJECT_LOOKBACK_HOUR
   };
 
   return (Array.isArray(projects) ? projects : [])
-    .filter((project) => typeof project?.path === "string" && withinLookback(project) && fs.existsSync(project.path))
+    .filter((project) => typeof project?.path === "string" && !isTurnClassifierDir(project.path) && withinLookback(project) && fs.existsSync(project.path))
     .sort((a, b) => accessedMs(b) - accessedMs(a));
 }
 

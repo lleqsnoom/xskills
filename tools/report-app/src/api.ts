@@ -188,6 +188,8 @@ export type Skill = MovementRow & {
   signals: (Signal & { date: string })[];
   /** The day the digest was read on, which is how a proposal found on a skill's screen still knows its day. */
   proposals: (Proposal & { date: string })[];
+  /** Shortfall per model: a skill is a prompt, and a moved rate is read first as "did the model mix move". */
+  models: Record<string, { sessions: number; shortfall: number; rate: number | null; kinds: Record<string, number> }> | null;
 };
 
 export type SessionDetail = { date: string; session: Session; signals: Signal[] };

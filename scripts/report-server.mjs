@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import http from "node:http";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { HISTORY_FILE, historyLine, readHistory, readProposals, scoresForSources, writeHistory } from "../skills/x-autoreflection/scripts/metrics.mjs";
+import { HISTORY_FILE, historyLine, readHistory, readProposals, scoresForSources, shortfallRates, writeHistory } from "../skills/x-autoreflection/scripts/metrics.mjs";
 import { band, loadHistory, movementPage, movement, recentDays, calendar, days as allDays } from "../skills/x-autoreflection/scripts/derive.mjs";
 import { openReport, safePath } from "./report-open.mjs";
 
@@ -119,6 +119,7 @@ export function readPack(root, date) {
       title: session.title,
       project: session.project,
       modified: session.modified,
+      model: session.model ?? null,
       stats: session.stats,
       skills: session.skills,
       checks: session.checks ?? [],
@@ -128,6 +129,7 @@ export function readPack(root, date) {
       high: (pack.signals ?? []).filter((signal) => signal.session === session.id && signal.severity === "high").length,
     })),
     signals: pack.signals ?? [],
+    retries: pack.retries ?? [],
     runFolders: pack.runFolders ?? [],
     artifacts: pack.artifacts ?? [],
     pruned: pack.pruned ?? [],
@@ -304,7 +306,11 @@ export function apiSkill({ root = DAILY_ROOT, name, maxDays = 14 } = {}) {
   const rank = { high: 0, medium: 1, low: 2 };
   signals.sort((a, b) => (rank[a.severity] ?? 3) - (rank[b.severity] ?? 3) || (b.count ?? 0) - (a.count ?? 0));
   proposals.reverse(); // newest day first
-  return { ...row, perDay, dimensions: row.series[row.series.length - 1]?.dimensions ?? null, signals, proposals };
+  // Per-model shortfall: a skill is a prompt, and a prompt is coupled to the model it was tuned on — a
+  // moved rate is read first as "did the model mix move", and this table is the only fair comparison.
+  const packs = dates.map((date) => readPack(root, date)).filter(Boolean);
+  const models = shortfallRates(packs)[name] ?? null;
+  return { ...row, perDay, dimensions: row.series[row.series.length - 1]?.dimensions ?? null, signals, proposals, models };
 }
 
 export function apiTodos({ root = DAILY_ROOT } = {}) {

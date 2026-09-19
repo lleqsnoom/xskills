@@ -151,3 +151,49 @@ describe("x-autoreflection-heal check-heal", async () => {
     assert.ok(violations.some((v) => v.rule === "auto-class"));
   });
 });
+
+describe("x-autoreflection-heal — quality fixes and the separation of powers", async () => {
+  const { QUALITY_CLASSES, mintPlan, applyItem } = await import(HEAL);
+  const { lintHeal } = await import(CHECK);
+  const plan = (items) => ({ schema: "x-autoreflection-heal/1", analysis: "E00-analysis.json", generatedAt: "t", items });
+  const rules = (items) => lintHeal(plan(items)).violations.map((violation) => violation.rule);
+
+  it("knows the six quality classes and never lets one be applied unattended", () => {
+    assert.deepEqual([...QUALITY_CLASSES].sort(), ["depth-floor", "missing-expectation", "ritual-cost", "rule-not-applied", "silent-success", "unbacked-report"]);
+    const item = { id: "F1", class: "depth-floor", target: "skills/x-research/SKILL.md", find: "a", replace: "b", check: "true", auto: true, watch: "x-research redo" };
+    assert.ok(rules([item]).includes("auto-class"));
+  });
+
+  it("carries a watch field for a quality finding, and asks for it before the plan passes", () => {
+    const minted = mintPlan({ findings: [{ id: "F1", kind: "user-redo", class: "missing-expectation", skill: "x-research", change: "c", evidence: [] }] });
+    assert.equal(minted.items[0].watch, "");
+    const item = { ...minted.items[0], target: "skills/x-research/SKILL.md" };
+    assert.ok(rules([item]).includes("item-watch"), "a quality item says which rate should move");
+    assert.equal(rules([{ ...item, watch: "x-research user-redo per session, deepseek-v4-flash, 14 days" }]).includes("item-watch"), false);
+  });
+
+  it("refuses an item whose check runs the file the item edits", () => {
+    const item = { id: "F1", class: "missing-check", target: "test/x-research.test.cjs", find: "a", replace: "b", check: "node --test test/x-research.test.cjs", auto: false };
+    assert.ok(rules([item]).includes("check-edits-itself"));
+  });
+
+  it("refuses a plan that edits a detector or gate and a skill it measures in one go", () => {
+    const skill = { id: "F1", class: "rule-not-applied", target: "skills/x-plan/SKILL.md", watch: "w", auto: false };
+    const detector = { id: "F2", class: "script-hardening", target: "skills/x-autoreflection/scripts/reactions.mjs", auto: false };
+    const ownCheck = { id: "F3", class: "missing-check", target: "skills/x-plan/scripts/check-questions.mjs", auto: false };
+    assert.ok(rules([skill, detector]).includes("measure-and-measured"), "the scanner that finds the gap is not edited with the fix");
+    assert.ok(rules([skill, ownCheck]).includes("measure-and-measured"), "a skill and its own check are not edited together");
+    assert.equal(rules([skill]).includes("measure-and-measured"), false);
+    const autoDetector = { ...detector, class: "doc-command-drift", find: "a", check: "true", auto: true };
+    assert.ok(rules([autoDetector]).includes("auto-measure"), "a detector is never edited unattended");
+  });
+
+  it("writes the watch into the ledger result", async () => {
+    await withTmpDir("heal-watch", async (dir) => {
+      fs.writeFileSync(path.join(dir, "f.md"), "old line\n");
+      const result = applyItem({ id: "F1", auto: true, target: "f.md", find: "old", replace: "new", check: "true", watch: "x-plan redo" }, { cwd: dir });
+      assert.equal(result.status, "applied");
+      assert.equal(result.watch, "x-plan redo");
+    });
+  });
+});

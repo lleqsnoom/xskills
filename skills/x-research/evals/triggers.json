@@ -1,0 +1,21 @@
+{
+  "skill": "x-research",
+  "queries": [
+    { "query": "research how other frameworks handle session replay and keep going until you can compare them", "should_trigger": true },
+    { "query": "keep tuning the vite config until the report page loads under 200ms", "should_trigger": true },
+    { "query": "compile the literature on LLM-as-judge biases with cited sources", "should_trigger": true },
+    { "query": "run an experiment loop on the prompt until the judge stops failing it", "should_trigger": true },
+    { "query": "research whether we should move the cache to redis, with sources", "should_trigger": true },
+    { "query": "summarize the prior art on agent self-improvement until every sub-question is answered", "should_trigger": true },
+    { "query": "optimize the Dockerfile one change at a time and keep only what measurably helps", "should_trigger": true },
+    { "query": "find out what the options are for vector search and compile a sourced overview", "should_trigger": true },
+    { "query": "fix the flaky test in the nightly job", "should_trigger": false },
+    { "query": "review this diff for me", "should_trigger": false },
+    { "query": "plan the migration to postgres", "should_trigger": false },
+    { "query": "write an essay about our research findings", "should_trigger": false },
+    { "query": "what does the research.md file contain", "should_trigger": false },
+    { "query": "implement the tasks in E02", "should_trigger": false },
+    { "query": "investigate why the crawler crashed last night", "should_trigger": false },
+    { "query": "search the codebase for the word research", "should_trigger": false }
+  ]
+}

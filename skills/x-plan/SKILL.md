@@ -1,7 +1,7 @@
 ---
 name: x-plan
 description: Plan before coding — research the project and the web first, ask short plain questions until the user is sure, propose three approaches with trade-offs, then write a layered spec (contract, invariant, test) as a graph-driven scenario with guards and a memory file; gate on user approval
-version: 2.0.0
+version: 2.1.0
 author: Community
 tags: [plan, spec, requirements, architecture, clarification, testable, layers, prototype]
 user-invocable: true
@@ -83,6 +83,7 @@ Completion: `verify` exits 0, or the run moved to `abandon`.
 3. **Propose three approaches** — record each with a trade-off; let the user pick.
 4. **Write the spec** — See Spec Format below. Always include a Layer Roadmap starting with L0 (prototype).
 5. **Gate** — confirm with user before handing off to `x-epic`.
+6. **Report with evidence** — the message that presents the spec says what it rests on: the sources read (`file:line` or URL), the inputs the user named that could not be read, the questions still open, and the parts written from assumption. A spec that looks complete but skipped a named input is the result a user has to send back.
 
 ## Spec Format
 

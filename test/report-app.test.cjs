@@ -241,6 +241,44 @@ describe("report server — the JSON packs as a database", async () => {
     assert.equal(srv.apiSkill({ root: dir, name: "nope" }), null);
   });
 
+  it("splits a skill's shortfall by model, so a regression can be read as a model change", () => {
+    const dir = tmp();
+    const daySession = (id, model) => ({
+      id,
+      host: "crush",
+      uuid: id,
+      title: id,
+      project: "/tmp/p",
+      modified: "2026-09-17T10:00:00Z",
+      model,
+      stats: { messages: 6, userMessages: 2, assistantMessages: 4, toolCalls: 2, toolResults: 2, panels: 0, toolFailures: 0, expectedExits: 0, repeats: 0, corrections: 0, reprompts: 0, proseQuestions: 0 },
+      skills: { loaded: ["x-plan"], used: ["x-plan"], unused: [] },
+      runFolders: [],
+      artifacts: [],
+    });
+    const mkPack = (date, sessions, signals) => {
+      fs.mkdirSync(path.join(dir, date), { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, date, "summary.json"),
+        JSON.stringify({ pack: `.x-skills/daily/${date}`, generatedAt: `${date} 05:00`, window: { hours: 24 }, hosts: [], counts: { scanned: sessions.length }, skills: { touched: [], idle: [] }, sessions, signals, retries: [], runFolders: [], artifacts: [], warnings: [], notes: [] })
+      );
+    };
+    mkPack("2026-09-16", [daySession("s-old", "deepseek-v4-pro")], []);
+    mkPack(
+      "2026-09-17",
+      [daySession("s-new", "claude-opus-5")],
+      [{ id: "S1", kind: "user-redo", severity: "high", summary: "asked again", count: 1, suspects: ["x-plan"], session: "s-new", sessionTitle: "s-new", evidence: [] }]
+    );
+    fs.writeFileSync(
+      path.join(dir, "history.jsonl"),
+      `${JSON.stringify(line("2026-09-16", [scored("x-plan", 80, {})], { sessions: 1 }))}\n${JSON.stringify(line("2026-09-17", [scored("x-plan", 70, {})], { sessions: 1 }))}\n`
+    );
+    const skill = srv.apiSkill({ root: dir, name: "x-plan" });
+    assert.deepEqual(skill.models["deepseek-v4-pro"], { sessions: 1, shortfall: 0, rate: 0, kinds: {} });
+    assert.deepEqual(skill.models["claude-opus-5"], { sessions: 1, shortfall: 1, rate: 1, kinds: { "user-redo": 1 } });
+    assert.equal(srv.apiSkill({ root: dir, name: "x-plan" }).models !== null, true);
+  });
+
   it("says why a skill moved: the signals that blamed it and the proposals that target it", () => {
     const dir = root();
     const skill = srv.apiSkill({ root: dir, name: "x-plan" });
@@ -1635,10 +1673,12 @@ describe("no screen is wider than the pane it is in", async () => {
     const src = path.join(ROOT, "tools", "report-app", "src", "components");
     assert.match(css, /@container \(max-width: 27\.5rem\) \{\s*\.table-wrap\.records thead \{ display: none; \}/, "under 440px the head goes and the cells carry their labels");
     assert.match(css, /\.table-wrap\.records td::before \{ content: attr\(data-label\)/, "the label comes from the cell itself");
-    // A skill's days are panels now, so the two record tables left are the day's sessions and a session's checks.
+    // A skill's days are panels now, so the record tables left are the day's sessions, a session's checks,
+    // and a skill's per-model split.
     for (const [file, labels] of [
       ["DayView.tsx", ["Session", "Host", "Tools", "Failures", "Corrected", "Loaded", "High"]],
       ["SessionView.tsx", ["Skill", "Script", "Calls", "Pass", "Refused", "Fail"]],
+      ["SkillView.tsx", ["Model", "Sessions", "Shortfall", "What"]],
     ]) {
       const source = fs.readFileSync(path.join(src, file), "utf8");
       assert.match(source, /class="table-wrap records"/, `${file} marks its table as a record`);
@@ -1679,7 +1719,7 @@ describe("a skill's screen describes one day at a time", async () => {
     assert.match(view, /held=\{heldDay\(\) === day\.date\}/, "each card knows whether it is the day on top");
     assert.match(view, /onHold=\{\(\) => setHeldDay\(day\.date\)\}/, "hovering one selects it, as a chart column does");
     assert.match(view, /onRelease=\{\(\) => setHeldDay\(null\)\}/, "and leaving it lets go");
-    assert.doesNotMatch(view, /table-wrap records/, "the day table is gone");
+    assert.equal(view.match(/table-wrap records/g)?.length ?? 0, 1, "the day table is gone; the one record table left is the per-model split");
     assert.match(view, /<h2 class="section-head">Every day —/, "with the count in the heading, where the picker used to be");
   });
 

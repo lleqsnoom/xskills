@@ -45,6 +45,7 @@ Both kinds feed the identical gates below; nothing downstream distinguishes them
 | improvement (policy `score_improvement`) | `delta >= min_delta` | revert the candidate |
 | noise | `samples >= noise_runs` | revert the candidate |
 | atomicity | `changed.length === 1` | revert the candidate |
+| evidence (agent mode) | criteria cited in `--evidence` ≥ criteria claimed met | revert the candidate; it cannot stop the run |
 | search | every path allowed ∧ none forbidden | revert the candidate |
 | cap | `iteration >= cap` | escalate |
 
@@ -61,6 +62,11 @@ The held state (`state.best`) only moves forward:
 - `score_improvement` — keep a candidate iff it passes **and** its metric beats the
   held best by at least `min_delta`. A change smaller than `min_delta` counts as
   noise and is reverted.
+- **Agent mode** — a candidate that raises coverage is kept as progress under either
+  policy, even while some criteria are unmet: its text stays in the research file, so
+  the trail must say `keep`. Coverage the `--evidence` file does not cite is not
+  coverage: such a candidate is reverted and can never stop the run. A run started
+  with `--no-evidence` skips this gate and records that it did.
 
 A reverted experiment is still recorded — full history, kept and reverted alike.
 

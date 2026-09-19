@@ -167,7 +167,9 @@ export function anthropicMessages(entries, pick) {
     const turn = pick(entry);
     if (!turn) continue;
     const parts = anthropicParts(turn.content, callNames);
-    if (parts.length) messages.push({ role: turn.role ?? "assistant", created: turn.created ?? null, parts });
+    if (parts.length) {
+      messages.push({ role: turn.role ?? "assistant", created: turn.created ?? null, ...(turn.model ? { model: turn.model } : {}), parts });
+    }
   }
   return messages;
 }

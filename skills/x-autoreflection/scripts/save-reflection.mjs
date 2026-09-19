@@ -132,9 +132,13 @@ export function renderHeader({ session = "unknown session", date = new Date() })
     "",
     "<!-- one bullet per signal you checked: - **S1 (high, kept)** — why, with file:line -->",
     "",
+    "## Quality",
+    "",
+    "<!-- one line per kept quality anchor: - **S5** — user: \"<their words>\" — skill: `skills/<x>/SKILL.md:<line>` \"<that line>\" -->",
+    "",
     "## Proposals",
     "",
-    "<!-- ### P1 — <kind>: <change>, with Signal, Target, Change and Check lines -->",
+    "<!-- ### P1 — <kind>: <change>, with Signal, Target, Change and Check lines, and Watch for a quality gap -->",
     "",
     "## Routes",
     "",
@@ -197,6 +201,6 @@ function main() {
   }
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href) {
   main();
 }
