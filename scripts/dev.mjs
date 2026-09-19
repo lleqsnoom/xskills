@@ -7,13 +7,10 @@
  * edit to a component hot-reloads the page without a restart. Vite proxies `/api` and `/history.jsonl` to
  * the report server (see `tools/report-app/vite.config.ts`), which is why one URL answers with both.
  *
- * The panel is not baked here. The server bakes it by default, and a bake is a write to the committed
- * `tools/orca-plugin/panel.html` on every restart, which turns a dev loop into a dirty worktree. Pass
- * `--panel` to bake it anyway; `npm run report` still bakes it beside the built app.
- *
  * Flags:
- *   --port <n>   Port for the report server (default 8787). Vite is told where it moved to.
- *   --panel      Bake the Orca plugin's panel too (off by default here).
+ *   --port <n>   Port to start looking from for the report server (default 8787). Vite is told where it
+ *                landed. A port already held by another process — a `npm run report` left running — is
+ *                stepped over, so a dev loop never collides with one.
  *   --help       Show this help.
  *
  * Anything else is passed through to the report server: `--days`, `--root`, `--no-refresh`.
@@ -21,6 +18,7 @@
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -36,8 +34,7 @@ const USAGE = [
   "  npm run dev [-- --port 8787 --days 14]",
   "",
   "Flags:",
-  "  --port <n>   Port for the report server (default 8787)",
-  "  --panel      Bake the Orca plugin's panel on every restart (off by default in dev)",
+  "  --port <n>   Port to start looking from for the report server (default 8787), stepping to the next free one",
   "  --no-watch   Do not restart the server when its own files change",
   "  --help       Show this help",
   "",
@@ -46,7 +43,7 @@ const USAGE = [
 ].join("\n");
 
 function parseArgs(args) {
-  const out = { port: Number(process.env.PORT) || 8787, panel: false, watch: true, server: [], help: false };
+  const out = { port: Number(process.env.PORT) || 8787, watch: true, server: [], help: false };
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--help" || arg === "-h") {
@@ -56,17 +53,32 @@ function parseArgs(args) {
       i++;
     } else if (arg.startsWith("--port=")) {
       out.port = Number(arg.slice("--port=".length)) || out.port;
-    } else if (arg === "--panel") {
-      out.panel = true;
     } else if (arg === "--no-watch") {
       out.watch = false;
     } else {
       out.server.push(arg);
     }
   }
-  if (!out.panel) out.server.push("--no-panel");
-  out.server.push("--port", String(out.port));
   return out;
+}
+
+/** Is this port free to bind on the loopback address? */
+function isFree(port) {
+  return new Promise((resolve) => {
+    const probe = net.createServer();
+    probe.unref();
+    probe.once("error", () => resolve(false));
+    probe.once("listening", () => probe.close(() => resolve(true)));
+    probe.listen(port, "127.0.0.1");
+  });
+}
+
+/** The first port at or after `start` that nothing holds, so a running report is stepped over rather than fought. */
+async function nextFreePort(start, attempts = 20) {
+  for (let port = start; port < start + attempts; port++) {
+    if (await isFree(port)) return port;
+  }
+  throw new Error(`no free port between ${start} and ${start + attempts - 1}`);
 }
 
 /** One line at a time, tagged with which process said it, so two streams stay readable. */
@@ -84,7 +96,7 @@ function relay(name, stream, sink) {
   });
 }
 
-function main() {
+async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
     process.stdout.write(USAGE);
@@ -95,7 +107,9 @@ function main() {
     return 1;
   }
 
-  const reportUrl = `http://127.0.0.1:${args.port}`;
+  const port = await nextFreePort(args.port);
+  args.server.push("--port", String(port));
+  const reportUrl = `http://127.0.0.1:${port}`;
   const children = [];
   let stopping = false;
 
@@ -127,8 +141,8 @@ function main() {
   process.stdout.write(
     [
       "",
-      `  report   ${INK.server}server${INK.reset}  ${reportUrl}/`,
-      `  report   ${INK.app}app${INK.reset}     http://127.0.0.1:5173/  (hot reload, proxies to the server)`,
+      `  report   ${INK.server}server${INK.reset}  ${reportUrl}/${port === args.port ? "" : `  (${args.port} was taken)`}`,
+      `  report   ${INK.app}app${INK.reset}     hot reload, proxies to the server — Vite picks the next free port and prints its URL`,
       `  watching the server: ${args.watch ? "yes, restarting on change" : "no (--no-watch)"}`,
       "  ctrl-c to stop",
       "",
@@ -140,5 +154,12 @@ function main() {
   return null;
 }
 
-const code = main();
-if (code !== null) process.exit(code);
+main().then(
+  (code) => {
+    if (code !== null) process.exit(code);
+  },
+  (error) => {
+    process.stderr.write(`${error?.message ?? error}\n`);
+    process.exit(1);
+  }
+);

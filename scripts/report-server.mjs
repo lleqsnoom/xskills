@@ -25,8 +25,6 @@ import { openReport, safePath } from "./report-open.mjs";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DAILY_ROOT = path.join(REPO_ROOT, ".x-skills", "daily");
 
-/** How often the server looks at the packs while it is running, to keep the panel's snapshot current. */
-const PACK_POLL_MS = 5000;
 const APP_DIST = path.join(REPO_ROOT, "tools", "report-app", "dist");
 
 const TYPES = {
@@ -57,44 +55,6 @@ export function newestPack(root = DAILY_ROOT) {
 
 export function packFile(root, date) {
   return path.join(root, date, "summary.json");
-}
-
-/**
- * Re-bake whenever the record changes under us, so the panel a reader opens next is never older than the packs.
- *
- * Polling rather than `fs.watch`: recursive watching is not available on every platform Node 18 supports, a
- * pack arrives as several files, and one stat a few seconds apart costs less than chasing events. The interval,
- * the timer and the fingerprint are injectable so a test can drive the whole thing.
- *
- * The fingerprint is injected rather than owned: the same rule serves the plugin's worker, and it lives beside
- * the baker in `report-panel.mjs`. The first tick only learns what the record looks like.
- */
-export function followPacks({
-  root = DAILY_ROOT,
-  rebake,
-  fingerprint,
-  intervalMs = PACK_POLL_MS,
-  timer = setInterval,
-  clear = clearInterval,
-} = {}) {
-  let seen = null;
-
-  const tick = async () => {
-    const current = await fingerprint(root);
-    const changed = seen !== null && current !== seen;
-    seen = current;
-    if (!changed) return false;
-    try {
-      await rebake();
-      return true;
-    } catch (error) {
-      process.stderr.write(`panel not baked: ${error?.message ?? error}\n`);
-      return false;
-    }
-  };
-
-  const handle = timer(tick, intervalMs);
-  return { tick, stop: () => clear(handle) };
 }
 
 /** One day's pack, or null. Trimmed to what a UI reads: transcript paths are machine-local noise. */
@@ -395,7 +355,7 @@ function readBody(req) {
   });
 }
 
-export function createServer({ root = DAILY_ROOT, maxDays = 14, appDist = APP_DIST, open = openReport, rebake = null } = {}) {
+export function createServer({ root = DAILY_ROOT, maxDays = 14, appDist = APP_DIST, open = openReport } = {}) {
   return http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://localhost");
     const query = url.searchParams;
@@ -415,17 +375,7 @@ export function createServer({ root = DAILY_ROOT, maxDays = 14, appDist = APP_DI
         return sendJson(res, 200, apiTodos({ root }));
       }
       if (url.pathname === "/api/refresh") {
-        const result = refresh({ root, days });
-        if (rebake) {
-          // The panel the Orca plugin shows is a snapshot of this record, so a recording re-bakes it. A bake
-          // that fails is a log line, never a failed refresh: the record is written either way.
-          try {
-            await rebake();
-          } catch (error) {
-            process.stderr.write(`panel not baked: ${error?.message ?? error}\n`);
-          }
-        }
-        return sendJson(res, 200, result);
+        return sendJson(res, 200, refresh({ root, days }));
       }
 
       // `Run`: the page says which surface it wants and where it is, and the machine decides how to oblige.
@@ -494,8 +444,6 @@ function usage() {
     "  --days <n>       How many days of history the API reads (default 14)",
     "  --root <dir>     The daily root to serve (default .x-skills/daily)",
     "  --no-refresh     Answer from disk without recording the newest day first",
-    "  --no-panel       Do not bake the Orca plugin's panel (default: bake it, and after every refresh)",
-    "  --panel-out <p>  Where the panel is baked (default tools/orca-plugin/panel.html)",
     "  --help           Show this help",
     "",
     "API:",
@@ -517,9 +465,7 @@ function usage() {
 
 function parseArgs(args) {
   const out = { _: [], unknown: [] };
-  // `--no-panel` and `--panel-out` are in the usage text and in `main`, so they are flags here too: a server
-  // that refuses its own documented flags is a server whose help page lies.
-  const known = ["port", "days", "root", "no-refresh", "no-panel", "panel-out", "help"];
+  const known = ["port", "days", "root", "no-refresh", "help"];
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (!arg.startsWith("--")) {
@@ -536,32 +482,6 @@ function parseArgs(args) {
   return out;
 }
 
-/**
- * The panel baker, when the Orca plugin is here to bake for.
- *
- * Imported late on purpose: the baker imports this module's API functions, so a static import would be a
- * cycle — and a server that cannot bake a panel is still a working server. The baker carries the staleness
- * rule too, because the plugin's worker bakes by the same one.
- */
-function loadPanelBake({ root, out, maxDays }) {
-  const target = typeof out === "string" ? path.resolve(out) : path.join(REPO_ROOT, "tools", "orca-plugin", "panel.html");
-  if (!fs.existsSync(path.dirname(target))) return null;
-  const baker = () => import("./report-panel.mjs");
-  return {
-    target,
-    rebake: async () => (await baker()).bakeIfStale({ root, out: target, maxDays }),
-    fingerprint: async () => (await baker()).recordFingerprint(root),
-  };
-}
-
-async function bakeQuietly(rebake, onDone = () => {}) {
-  try {
-    onDone(await rebake());
-  } catch (error) {
-    process.stderr.write(`panel not baked: ${error?.message ?? error}\n`);
-  }
-}
-
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
@@ -575,15 +495,13 @@ function main() {
   const root = typeof args.root === "string" ? path.resolve(args.root) : DAILY_ROOT;
   const maxDays = Number(typeof args.days === "string" ? args.days : 14) || 14;
   const port = Number(typeof args.port === "string" ? args.port : process.env.PORT ?? 8787);
-  const panel = args["no-panel"] === true ? null : loadPanelBake({ root, out: args["panel-out"], maxDays });
-  const rebake = panel ? panel.rebake : null;
 
   if (args["no-refresh"] !== true) {
     const result = refresh({ root, days: maxDays });
     process.stdout.write(result.ok ? `recorded ${result.day} (${result.inUse} skills in use over ${result.packs.length} packs)\n` : `${result.reason}\n`);
   }
 
-  const server = createServer({ root, maxDays, rebake });
+  const server = createServer({ root, maxDays });
   server.listen(port, "127.0.0.1", () => {
     const { port: actual } = server.address();
     const built = fs.existsSync(path.join(APP_DIST, "index.html"));
@@ -593,15 +511,10 @@ function main() {
         built ? "  app built — open the URL above" : "  app not built yet: npm run report:build (the API answers now)",
         `  api       http://127.0.0.1:${actual}/api/movement`,
         `  raw data  http://127.0.0.1:${actual}/history.jsonl`,
-        rebake ? "  panel     baked now, after every refresh, and when the packs change" : "  panel     not baked (--no-panel)",
         `  ctrl-c to stop`,
         "",
       ].join("\n")
     );
-    if (panel) {
-      void bakeQuietly(panel.rebake);
-      followPacks({ root, rebake: panel.rebake, fingerprint: panel.fingerprint });
-    }
   });
   return 0;
 }

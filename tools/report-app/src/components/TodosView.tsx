@@ -1,5 +1,5 @@
 import { Show, createResource, createSignal } from "solid-js";
-import { api, canWrite, type TodoItem } from "../api";
+import { api, type TodoItem } from "../api";
 import { improvementBrief } from "../brief.mjs";
 import { settled } from "../resource.mjs";
 import { taskFromTodo, type Task } from "../tasks";
@@ -65,18 +65,9 @@ export function TodosView() {
               >
                 copy the brief
               </Button>
-              <Show
-                when={canWrite()}
-                fallback={
-                  <Button disabled title="read-only in this pane — “x-skills report: Console” or the live report is where the list changes">
-                    clear
-                  </Button>
-                }
-              >
-                <Button onClick={clear} disabled={!current().length}>
-                  clear
-                </Button>
-              </Show>
+              <Button onClick={clear} disabled={!current().length}>
+                clear
+              </Button>
               <Show when={status()}>
                 <span class="text-chrome text-muted-foreground">{status()}</span>
               </Show>
@@ -88,18 +79,9 @@ export function TodosView() {
             tasks={current().map(taskFromTodo)}
             empty="Nothing on the list. Open a day and use “+ to-do” on a proposal, and it lands here — and in .x-skills/daily/todos.json."
             action={(task) => (
-              <Show
-                when={canWrite()}
-                fallback={
-                  <Button disabled title="read-only in this pane — “x-skills report: Console” or the live report is where the list changes">
-                    remove
-                  </Button>
-                }
-              >
-                <Button variant="outline" onClick={() => remove(task)} title={`drop ${task.id} from the list`}>
-                  remove
-                </Button>
-              </Show>
+              <Button variant="outline" onClick={() => remove(task)} title={`drop ${task.id} from the list`}>
+                remove
+              </Button>
             )}
           />
         </>
