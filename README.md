@@ -87,55 +87,26 @@ xskills <skill-name>
 npm run report:install          # once: the app's own dependencies
 npm run dev                     # working on the app: the server and hot reload, started together
 npm run report:build            # once, and after any change under tools/report-app
-npm run report:panel            # the Orca plugin's panel: the same app, baked with a snapshot
 npm run report                  # http://127.0.0.1:8787/ — movement per skill, per day
 npm run report:open             # start it if it is not running, then open it in an Orca tab
 npm run report:window           # the same, in a window with no browser controls (chrome --app)
 ```
 
 `npm run dev` runs two processes: the report server under `node --watch`, so an edit to it or to anything it
-imports restarts it, and Vite on <http://127.0.0.1:5173/>, which hot-reloads the page and proxies `/api` to the
-server. Edit a component and the browser updates; edit the server and it comes back on its own. Pass
-`--port <n>` to move the server (Vite is told where it went), `--panel` to bake the Orca panel on every restart,
-or `--no-watch` to leave the server alone.
+imports restarts it, and Vite, which hot-reloads the page and proxies `/api` to the server. Edit a component and
+the browser updates; edit the server and it comes back on its own. Both take the next free port, so a dev loop
+never collides with a `npm run report` left running: pass `--port <n>` to start the server's search somewhere
+other than 8787, or `--no-watch` to leave the server alone.
 
 The app is styled in Orca's own design language — its theme tokens, its Geist font, its radius and badge
-recipes — so the report reads as another pane of the same application. `Run` in its title bar opens (or
-focuses) the report in an Orca browser tab; `window` opens it in an application window instead, which is the
-only surface with no browser controls, because nothing inside a tab can hide that tab's own chrome.
+recipes — so the report reads as another pane of the same application. `npm run report:open` starts the server
+if it is not running and opens (or focuses) the report in an Orca browser tab; `npm run report:window` opens it
+in an application window instead, which is the only surface with no browser controls, because nothing inside a
+tab can hide that tab's own chrome.
 
 A digest's proposals and the to-do list are the same tasks, drawn by the same component. `rows` is the shape
 in use — one line a task with an importance badge, and the file, the check and the rest behind a disclosure.
 `cards` and `lines` are still one click away in the picker above the list (`?shape=a|b|c`).
-
-### The Orca plugin
-
-`tools/orca-plugin/` is an Orca plugin over the same server: five commands (`Open`, `Status`, `Record the
-newest day`, `Start the server here`, `Console`), a notification the first time you look after a new day has
-landed, and a **panel** that is this app itself — the report and the days it holds rendered into one file, because a panel
-cannot fetch and cannot read a file either. What is rendered in is every day the rail and the calendar can
-reach, newest first, up to a byte budget, so a day a reader can click is a day that opens. One baker
-(`scripts/report-panel.mjs`) serves both surfaces: the server re-renders the panel while it runs, and the
-plugin's worker does whenever Orca wakes it, so the panel is current with or without the server up — and it is
-read-only, because a pane has no way to write.
-
-Two of the commands open something *live*. **Open** puts the report in a browser tab that re-reads the screen it
-is showing on focus and every 30 s, with `+ to-do` writing through `POST /api/todos`. **Console** opens a
-terminal pane running `scripts/report-console.mjs`: the same record as text, keys to move and to keep or drop a
-proposal (`j`/`k`, `t`, `d`, `r`, `q`), as a client of the same API — never a second writer of `todos.json`. The
-plugin also owns the server's start: it resolves the record root from the focused worktree and starts
-`scripts/report-server.mjs` itself when the port is quiet, detached, once per activation, refusing a port that
-something else holds.
-
-**The manifest contributes no keybinding**, which is what makes that re-rendering free: Orca binds a reader's
-approval to the hash of every file in a plugin that contributes a keybinding, VM recipe or agent, so a
-re-rendered panel would be a plugin asking to be installed again. Approval therefore rests on this plugin's
-declared capabilities, and the report opens from Orca's palette: `Ctrl+J` → *x-skills report: Open*. The panel
-entry is committed as a signpost (the same document as `panel-fallback.html`), because Orca refuses to load a
-plugin whose declared files it cannot resolve; the first bake replaces it with the report. A panel
-cannot be a full-area tab and cannot fetch, so the report also opens as a live **browser tab**, which is where
-`+ to-do` works — see [`tools/orca-plugin/PANE-REQUEST.md`](tools/orca-plugin/PANE-REQUEST.md) and
-[`tools/orca-plugin/README.md`](tools/orca-plugin/README.md).
 
 ## Available Skills
 

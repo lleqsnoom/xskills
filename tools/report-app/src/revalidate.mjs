@@ -5,9 +5,6 @@
  * coming back to a tab, or leaving it open for a while, has to mean "read that screen again". This module
  * answers only *when* — what to re-read is the caller's business — which is why it holds no data, no route and
  * no backend, and why a test can drive it with a fake clock instead of sleeping.
- *
- * A plugin panel never arms this (`App.tsx` guards on the backend's kind): a snapshot has no network to
- * re-check with, so a signal there would be a request that cannot be made.
  */
 
 /** Is a check due? `gapMs` keeps a burst of focus events from becoming a burst of requests. */

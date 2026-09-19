@@ -1,5 +1,5 @@
 import { For, Show, createResource, createSignal } from "solid-js";
-import { api, canWrite, type Day, type Signal, type TodoItem } from "../api";
+import { api, type Day, type Signal, type TodoItem } from "../api";
 import { linkProps } from "../router";
 import { Bar } from "./charts";
 import { Card, CardHead, CardName } from "./Card";
@@ -312,14 +312,7 @@ export function TodoButton(props: { task: Task }) {
     }
   };
   return (
-    <Show
-      when={canWrite()}
-      fallback={
-        <Button disabled title="read-only in this pane — “x-skills report: Console” or the live report is where a proposal is kept">
-          + to-do
-        </Button>
-      }
-    >
+    <>
       <Button
         variant={added() ? "outline" : "primary"}
         onClick={add}
@@ -331,6 +324,6 @@ export function TodoButton(props: { task: Task }) {
       <Show when={error()}>
         <span class="failed text-chrome">{error()}</span>
       </Show>
-    </Show>
+    </>
   );
 }

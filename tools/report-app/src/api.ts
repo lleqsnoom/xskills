@@ -1,23 +1,9 @@
 /** The shapes `scripts/report-server.mjs` answers with, and the one place that asks for them. */
 
-import { createBackend } from "./backend.mjs";
-import { bakedReport } from "./baked.mjs";
+import { httpBackend } from "./backend.mjs";
 
-/**
- * The one backend this document is: `http` in the served app, `snapshot` in a plugin panel. Everything below
- * is written against the interface, so a third way of answering (a pane granted its own origin — see
- * `backend.mjs` and `PANE-REQUEST.md`) is a new entry there and no change here.
- */
-const backend = createBackend();
-
-/** True when this build is a baked panel: answers come from the snapshot, and nothing is written. */
-export const isSnapshot = () => backend.kind === "snapshot";
-
-/**
- * Whether this copy can change the record. A screen asks this, not "am I a snapshot": the question a write
- * control's presence hangs on is whether there is anywhere to write to.
- */
-export const canWrite = () => backend.canWrite;
+/** The one backend this app has: the local report server, over http. */
+const backend = httpBackend();
 
 export type Band = { key: "good" | "fair" | "weak" | "unknown"; label: string };
 
@@ -218,9 +204,8 @@ export type SessionDetail = { date: string; session: Session; signals: Signal[] 
 
 
 /**
- * The app's read routes and its two writes, each one a call on the backend. Nothing here knows whether that
- * backend is a server or a file: `read` rejects with a sentence worth showing, `write` refuses in a snapshot,
- * and `bundleName` says nothing at all when no build is being served.
+ * The app's read routes and its two writes, each one a call on the backend: `read` rejects with a sentence
+ * worth showing, and `bundleName` says nothing at all when no build is being served.
  */
 export const api = {
   movement: (days = 14) => backend.read<MovementPage>(`/api/movement?days=${days}`),
@@ -229,7 +214,7 @@ export const api = {
     backend.read<SessionDetail>(`/api/day/${date}/session/${encodeURIComponent(id)}`),
   skill: (name: string) => backend.read<Skill>(`/api/skill/${name}`),
   todos: () => backend.read<Todos>("/api/todos"),
-  /** Which bundle the server is serving now; null in a snapshot, which has no bundle to compare. */
+  /** Which bundle the server is serving now, or null when no build is being served. */
   version: async (): Promise<{ build: string | null }> => ({ build: await backend.bundleName() }),
   refresh: async () => {
     const result = await backend.read<{ ok: boolean; day?: string; inUse?: number; packs?: string[]; reason?: string }>(
