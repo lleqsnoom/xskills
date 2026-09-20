@@ -1,3 +1,15 @@
+## [5.32.0] - 2026-09-20
+
+* Merge pull request #69 from lleqsnoom/feat/project-preview (f26d2e9)
+* chore(deps): declare the grammars the suite needs and refresh the lockfile (ea1619a)
+* Merge pull request #68 from lleqsnoom/feat/project-preview (54105bf)
+* ci: run the search tool's tests in CI with the embedder they call (581a4ed)
+* Merge pull request #67 from lleqsnoom/feat/project-preview (5755499)
+* Merge remote-tracking branch 'origin/main' into feat/project-preview (e4af7bb)
+* refactor: rename the x-anal skill to x-analyze (49008a1)
+* chore: hand the project board over to its own Otter PM repository (131bf41)
+* feat(x-search): add a per-repository search index served over MCP (7cd6f66)
+
 ## [5.31.0] - 2026-09-19
 
 * Merge pull request #66 from lleqsnoom/lleqsnoom/feat-auto-improve (2ca43a0)
