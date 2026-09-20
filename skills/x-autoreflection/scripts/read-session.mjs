@@ -41,9 +41,35 @@ export function normalizePart(part, limit = DEFAULT_CLIP) {
   }
 }
 
+/** The model and provider a host recorded for one message; a message that names neither gets neither. */
+function modelFields(message) {
+  return {
+    ...(message?.model ? { model: String(message.model) } : {}),
+    ...(message?.provider ? { provider: String(message.provider) } : {}),
+  };
+}
+
+/**
+ * How many replies each model gave, and the one that gave most. Without it "skill X works on one model
+ * and falls short on another" cannot even be asked, and a host may switch models mid-session.
+ */
+export function sessionModels(messages) {
+  const models = messages
+    .filter((message) => message.role === "assistant" && message.model)
+    .reduce((counts, message) => ({ ...counts, [message.model]: (counts[message.model] ?? 0) + 1 }), {});
+  const [main] = Object.entries(models).sort((a, b) => b[1] - a[1])[0] ?? [null];
+  return { model: main, models };
+}
+
 export function normalizeSession(raw, { limit = DEFAULT_CLIP } = {}) {
   const meta = raw?.meta ?? {};
-  const messages = Array.isArray(raw?.messages) ? raw.messages : [];
+  const messages = (Array.isArray(raw?.messages) ? raw.messages : []).map((message, index) => ({
+    index,
+    role: message?.role ?? "?",
+    created: message?.created ?? null,
+    ...modelFields(message),
+    parts: (Array.isArray(message?.parts) ? message.parts : []).map((part) => normalizePart(part, limit)),
+  }));
   return {
     source: {
       host: meta.host ?? "crush",
@@ -52,17 +78,14 @@ export function normalizeSession(raw, { limit = DEFAULT_CLIP } = {}) {
       title: meta.title ?? null,
       created: meta.created ?? null,
       modified: meta.modified ?? null,
+      headless: meta.headless === true,
+      ...sessionModels(messages),
     },
     skills: (Array.isArray(meta.skills) ? meta.skills : []).map((skill) => ({
       name: skill?.name ?? "?",
       loadedAt: skill?.loaded_at ?? null,
     })),
-    messages: messages.map((message, index) => ({
-      index,
-      role: message?.role ?? "?",
-      created: message?.created ?? null,
-      parts: (Array.isArray(message?.parts) ? message.parts : []).map((part) => normalizePart(part, limit)),
-    })),
+    messages,
   };
 }
 
@@ -260,6 +283,6 @@ function main() {
   }
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href) {
   main();
 }

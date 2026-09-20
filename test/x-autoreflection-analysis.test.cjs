@@ -57,6 +57,51 @@ describe("x-autoreflection-analysis aggregate", async () => {
     assert.equal(report.findings[0].class, "doc-command-drift");
   });
 
+  it("gives each quality anchor its improvement class, and keeps an interrupt out of the findings", () => {
+    const scans = [
+      scan("s1", [
+        signal("user-redo", { suspect: "x-research" }),
+        signal("user-handoff", { suspect: "x-research" }),
+        signal("tool-rejected", { suspect: "x-analyze" }),
+        signal("skill-script-silent", { suspect: "x-plan" }),
+        signal("interrupt", { severity: "low", suspect: "x-analyze" }),
+      ]),
+    ];
+    const report = aggregate(scans, { hours: 24 });
+    const classOf = Object.fromEntries(report.findings.map((finding) => [finding.kind, finding.class]));
+    assert.deepEqual(classOf, {
+      "user-redo": "missing-expectation",
+      "user-handoff": "missing-expectation",
+      "tool-rejected": "ritual-cost",
+      "skill-script-silent": "silent-success",
+    });
+    assert.ok(report.findings.every((finding) => finding.change), "every quality class carries a change hint");
+  });
+
+  it("adds the retries and the reading order the anchors script computed", async () => {
+    const { withAnchors, renderMarkdown } = await import(ANALYZE);
+    const report = withAnchors(aggregate([scan("s1")], { hours: 24 }), {
+      retries: [{ earlier: "crush:s1", later: "claude:s2", hours: 0.4, overlap: 0.97, excerpt: "do a deep research" }],
+      select: [{ session: "crush:s1", reason: "cross-session-retry", owner: "x-research", model: "deepseek-v4-pro", anchors: [{ kind: "cross-session-retry", owner: "x-research", message: 2 }] }],
+      recurring: [],
+      audit: null,
+    });
+    assert.equal(report.retries.length, 1);
+    const markdown = renderMarkdown(report);
+    assert.match(markdown, /## Read first/);
+    assert.match(markdown, /crush:s1.*cross-session-retry.*x-research/);
+    assert.match(markdown, /## Asked again in a later session/);
+  });
+
+  it("names every signal kind and improvement class the code emits in gap-taxonomy.md", async () => {
+    const { CLASS_BY_KIND } = await import(ANALYZE);
+    const taxonomy = fs.readFileSync(path.join(SKILL, "..", "x-autoreflection", "references", "gap-taxonomy.md"), "utf8");
+    const kinds = [...Object.keys(CLASS_BY_KIND), "skill-unused", "expected-exit", "interrupt", "cross-session-retry"];
+    for (const name of [...kinds, ...new Set(Object.values(CLASS_BY_KIND))]) {
+      assert.ok(taxonomy.includes(`\`${name}\``), `gap-taxonomy.md does not name ${name}`);
+    }
+  });
+
   it("drops expected-exit as a non-gap", () => {
     const scans = [scan("s1", [signal("expected-exit", { severity: "low" })], { loaded: [], used: [] })];
     const report = aggregate(scans, { hours: 24 });

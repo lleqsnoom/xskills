@@ -14,7 +14,9 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { TURN_CLASSIFIER_DIR } from "../../skills/x-autoreflection/scripts/hosts/crush.mjs";
 import {
   HOSTS,
   HOUR_MS,
@@ -25,15 +27,30 @@ import {
   withinWindow,
 } from "../../skills/x-autoreflection/scripts/hosts/index.mjs";
 import { normalizeSession, parseArgs } from "../../skills/x-autoreflection/scripts/read-session.mjs";
+import { buildPrompt, parseAnswers, turnsToClassify } from "../../skills/x-autoreflection/scripts/classify-turns.mjs";
 import { scanSession, skillNamesOnDisk } from "../../skills/x-autoreflection/scripts/scan-session.mjs";
 import { timestamp } from "../../skills/x-autoreflection/scripts/save-reflection.mjs";
-import { historyLine, readHistory, scoresForSources, writeHistory } from "../../skills/x-autoreflection/scripts/metrics.mjs";
+import { auditPick, crossSessionRetries, handEditSignals, selectSessions } from "../../skills/x-autoreflection/scripts/anchors.mjs";
+import {
+  detectorPrecision,
+  historyLine,
+  labelsFromDigests,
+  readHistory,
+  readLabels,
+  validatedKinds,
+  renderVerdictLine,
+  scoresForSources,
+  writeHistory,
+  writeLabels,
+} from "../../skills/x-autoreflection/scripts/metrics.mjs";
 
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const DEFAULT_HOURS = 24;
 export const DEFAULT_PROJECT_LOOKBACK_HOURS = 72;
 export const DEFAULT_KEEP_DAYS = 14;
 export const DEFAULT_MAX_SESSIONS = 40;
+/** How many sessions one morning's reflection reads; the runbook's budget, not a target. */
+export const DAILY_CAP = 4;
 export const DAILY_ROOT = path.join(REPO_ROOT, ".x-skills", "daily");
 /** Transcripts are megabytes each, so they live in the temp dir the skill already points at, not in
  * the pack. The name avoids the `x-` prefix on purpose: a directory called `x-something` reads as a
@@ -108,35 +125,111 @@ function sessionFilePath(session, suffix) {
   return `${id}.${suffix}.json`;
 }
 
-/** Read and scan one session. The transcript is clipped exactly as the skill clips it. */
-export function scanOne({ session, adapter, ctx, skills, clip = 600 }) {
-  const transcript = normalizeSession(adapter.read(session, ctx), { limit: clip });
-  const scan = scanSession(transcript, { skillNames: skills.names, skillsSource: skills.dir });
-  return { session, transcript, scan };
+/** Read one session. The transcript is clipped exactly as the skill clips it. */
+export function readOne({ session, adapter, ctx, clip = 600 }) {
+  return normalizeSession(adapter.read(session, ctx), { limit: clip });
 }
 
-export function scanSessions({ sessions, adapters, ctx, skills, dirs, clip }) {
-  const results = [];
+function readTranscripts({ sessions, adapters, ctx, clip }) {
+  const items = [];
   const warnings = [];
   for (const session of sessions) {
     try {
       const adapter = adapters.get(session.host);
       if (!adapter) throw new Error(`no adapter for host "${session.host}"`);
-      const { transcript, scan } = scanOne({ session, adapter, ctx, skills, clip });
-      let transcriptPath = null;
-      let scanPath = null;
-      if (dirs.write) {
-        transcriptPath = path.join(dirs.transcripts, sessionFilePath(session, "transcript"));
-        scanPath = path.join(dirs.sessions, sessionFilePath(session, "signals"));
-        fs.writeFileSync(transcriptPath, `${JSON.stringify(transcript, null, 2)}\n`);
-        fs.writeFileSync(scanPath, `${JSON.stringify(scan, null, 2)}\n`);
-      }
-      results.push({ session, scan, transcriptPath, scanPath });
+      items.push({ session, transcript: readOne({ session, adapter, ctx, clip }) });
     } catch (err) {
       warnings.push({ scope: `${session.host}:${session.id}`, reason: `read failed: ${firstLine(err.message)}` });
     }
   }
-  return { results, warnings };
+  return { items, warnings };
+}
+
+/** Sessions' turns per classifier call: small enough for a fast model, few enough to cost one or two calls a day. */
+export const CLASSIFY_BATCH = 60;
+
+function classifyBatch(batch, classifier) {
+  const answers = parseAnswers(classifier(buildPrompt(batch.map((entry) => entry.item))));
+  return batch.flatMap((entry, i) => (answers.has(i + 1) ? [{ key: entry.key, turn: { message: entry.item.message, class: answers.get(i + 1) } }] : []));
+}
+
+/**
+ * Every person's turn of the window, read by the classifier in batches. A failed batch is a warning and
+ * its sessions are scanned without model-read pushback: the phrase detectors and the other anchors still
+ * run, so a quiet day cannot be manufactured by an unreachable model.
+ */
+export function classifyTurns(items, classifier) {
+  const stats = { asked: 0, answered: 0, batches: 0, failed: 0 };
+  const turns = new Map();
+  const warnings = [];
+  if (!classifier) return { turns, stats, warnings };
+  const entries = items
+    .filter(({ transcript }) => !transcript.source?.headless)
+    .flatMap(({ session, transcript }) => turnsToClassify(transcript).map((item) => ({ key: sessionKey(session), item })));
+  stats.asked = entries.length;
+  for (let start = 0; start < entries.length; start += CLASSIFY_BATCH) {
+    const batch = entries.slice(start, start + CLASSIFY_BATCH);
+    stats.batches++;
+    try {
+      for (const { key, turn } of classifyBatch(batch, classifier)) turns.set(key, [...(turns.get(key) ?? []), turn]);
+    } catch (err) {
+      stats.failed++;
+      warnings.push({ scope: "classifier", reason: `batch ${stats.batches} failed: ${firstLine(err.message)}` });
+    }
+  }
+  stats.answered = [...turns.values()].reduce((sum, list) => sum + list.length, 0);
+  return { turns, stats, warnings };
+}
+
+/**
+ * The collection's default reader of user turns: the user's own Crush default model, run from the one
+ * directory the Crush adapter never lists, with its data kept beside it.
+ */
+export function defaultClassifier(env = process.env) {
+  const cwd = path.join(env.HOME || os.homedir(), TURN_CLASSIFIER_DIR);
+  return { command: `crush run -q -D ${JSON.stringify(path.join(cwd, "data"))}`, cwd };
+}
+
+/**
+ * A classifier that feeds the prompt to a shell command and returns what it printed. The prompt goes in
+ * as a file descriptor, not through `input`: Node hands a child a socket for stdin, and `crush run`
+ * reads a socket as "No prompt provided."
+ */
+export function commandClassifier({ command, cwd = os.tmpdir(), timeout = 600_000 }) {
+  return (prompt) => {
+    fs.mkdirSync(cwd, { recursive: true });
+    const holder = fs.mkdtempSync(path.join(os.tmpdir(), "xskills-turns-"));
+    const file = path.join(holder, "prompt.txt");
+    fs.writeFileSync(file, prompt);
+    const fd = fs.openSync(file, "r");
+    try {
+      return execFileSync("sh", ["-c", command], { cwd, stdio: [fd, "pipe", "pipe"], encoding: "utf8", timeout, maxBuffer: 64 * 1024 * 1024 });
+    } finally {
+      fs.closeSync(fd);
+      fs.rmSync(holder, { recursive: true, force: true });
+    }
+  };
+}
+
+function writeSessionFiles({ session, transcript, scan, turns }, dirs) {
+  if (!dirs.write) return { transcriptPath: null, scanPath: null };
+  const transcriptPath = path.join(dirs.transcripts, sessionFilePath(session, "transcript"));
+  const scanPath = path.join(dirs.sessions, sessionFilePath(session, "signals"));
+  fs.writeFileSync(transcriptPath, `${JSON.stringify(transcript, null, 2)}\n`);
+  fs.writeFileSync(scanPath, `${JSON.stringify(scan, null, 2)}\n`);
+  if (turns.length) fs.writeFileSync(path.join(dirs.sessions, sessionFilePath(session, "turns")), `${JSON.stringify({ turns }, null, 2)}\n`);
+  return { transcriptPath, scanPath };
+}
+
+export function scanSessions({ sessions, adapters, ctx, skills, dirs, clip, classifier = null }) {
+  const read = readTranscripts({ sessions, adapters, ctx, clip });
+  const classified = classifyTurns(read.items, classifier);
+  const results = read.items.map(({ session, transcript }) => {
+    const turns = classified.turns.get(sessionKey(session)) ?? [];
+    const scan = scanSession(transcript, { skillNames: skills.names, skillsSource: skills.dir, turns });
+    return { session, scan, ...writeSessionFiles({ session, transcript, scan, turns }, dirs) };
+  });
+  return { results, warnings: [...read.warnings, ...classified.warnings], classification: classified.stats };
 }
 
 function usageRow(name) {
@@ -215,7 +308,58 @@ export function buildSignals(results) {
     .sort((a, b) => (rank[a.severity] ?? 3) - (rank[b.severity] ?? 3) || b.count - a.count);
 }
 
-export function buildSummary({ results, window, hostStatuses = [], warnings, skillUsage, dirs, generatedAt, dropped = 0, failed = 0, notes = [] }) {
+const sessionKey = (session) => `${session.host ?? "?"}:${session.uuid ?? session.id}`;
+
+function anchorEntry({ session, scan }) {
+  return {
+    headless: scan.source?.headless === true,
+    key: sessionKey(session),
+    id: session.id,
+    host: session.host ?? null,
+    model: scan.source?.model ?? null,
+    modified: session.modified ?? null,
+    project: session.project ?? null,
+    request: scan.request ?? null,
+    signals: scan.signals ?? [],
+    stats: scan.stats ?? {},
+    lastOwner: scan.lastOwner ?? null,
+    writes: scan.writes ?? [],
+  };
+}
+
+/** A session from yesterday's pack: it can be the first ask of a retry, never a session to read today. */
+function earlierEntry(saved) {
+  return { headless: saved.headless === true, key: sessionKey(saved), id: saved.id, host: saved.host ?? null, model: saved.model ?? null, modified: saved.modified ?? null, request: saved.request ?? null, signals: [], stats: {}, lastOwner: saved.lastOwner ?? null };
+}
+
+const anchorLabel = (anchor) => (anchor.message === null || anchor.message === undefined ? anchor.kind : `${anchor.kind} msg ${anchor.message}`);
+
+/**
+ * What the morning reads and labels: requests asked again (against yesterday's pack as well), the
+ * sessions ranked by their anchors under the cap, the day's audit session, and one verdict line for
+ * each of them to paste into the digest.
+ */
+export function buildAnchors({ results, previous = [], date, validated = new Set(), cap = DAILY_CAP, mtime = null }) {
+  // A headless run is an automation or a script calling a model: it neither asks again nor falls short of a person.
+  const scanned = results.map(anchorEntry).filter((entry) => !entry.headless);
+  const handedits = handEditSignals(scanned, { mtime });
+  const today = scanned.map((entry) => (handedits.has(entry.key) ? { ...entry, signals: [...entry.signals, ...handedits.get(entry.key)] } : entry));
+  const todayKeys = new Set(today.map((entry) => entry.key));
+  const earlier = previous.map(earlierEntry).filter((entry) => !entry.headless && !todayKeys.has(entry.key));
+  const retries = crossSessionRetries([...earlier, ...today]);
+  const { select, recurring } = selectSessions(today, { cap, retries, validated });
+  const audit = auditPick(today, { date, retries });
+  const idOf = new Map([...earlier, ...today].map((entry) => [entry.key, entry.id]));
+  const verdictLines = [
+    ...select.map((choice) =>
+      renderVerdictLine({ session: idOf.get(choice.session), anchor: choice.anchors[0] ? anchorLabel(choice.anchors[0]) : choice.reason, owner: choice.owner, model: choice.model })
+    ),
+    ...(audit ? [renderVerdictLine({ session: idOf.get(audit.session), owner: audit.owner, model: audit.model, audit: true })] : []),
+  ];
+  return { retries, select, recurring, audit, verdictLines };
+}
+
+export function buildSummary({ results, window, hostStatuses = [], warnings, skillUsage, dirs, generatedAt, dropped = 0, failed = 0, notes = [], previous = [], validated = new Set(), mtime = null }) {
   const sessions = results.map(({ session, scan, transcriptPath, scanPath }) => ({
     id: session.id,
     host: session.host ?? null,
@@ -223,6 +367,11 @@ export function buildSummary({ results, window, hostStatuses = [], warnings, ski
     title: session.title ?? null,
     project: session.project ?? null,
     modified: session.modified ?? null,
+    model: scan.source?.model ?? null,
+    models: scan.source?.models ?? {},
+    headless: scan.source?.headless === true,
+    request: scan.request ?? null,
+    lastOwner: scan.lastOwner ?? null,
     transcript: transcriptPath,
     scan: scanPath ? path.relative(REPO_ROOT, scanPath) : null,
     stats: scan.stats,
@@ -245,6 +394,8 @@ export function buildSummary({ results, window, hostStatuses = [], warnings, ski
     evidence: signal.evidence ?? [],
   }));
 
+  const anchors = buildAnchors({ results, previous, date: dayStamp(new Date(generatedAt)), validated, mtime });
+
   return {
     generatedAt: timestamp(generatedAt),
     window: { hours: window.hours, since: new Date(window.since).toISOString(), until: new Date(window.until).toISOString() },
@@ -266,6 +417,7 @@ export function buildSummary({ results, window, hostStatuses = [], warnings, ski
     skills: skillUsage,
     sessions,
     signals,
+    ...anchors,
     runFolders: [...new Set(results.flatMap(({ scan }) => scan.runFolders ?? []))].sort(),
     artifacts: [...new Set(results.flatMap(({ scan }) => scan.artifacts ?? []))].sort(),
     warnings,
@@ -385,10 +537,58 @@ function renderBullets(heading, rows) {
   return ["", `## ${heading}`, "", ...rows.map((row) => `- ${row}`)];
 }
 
+function renderReadToday({ select = [], audit = null, recurring = [] }) {
+  const lines = ["", "## Read today", ""];
+  if (!select.length) lines.push("No session carries an anchor or a friction signal worth a reflection.");
+  else {
+    lines.push(
+      table(
+        ["#", "Session", "Why", "Owner", "Model", "Anchors"],
+        select.map((choice, index) => [
+          index + 1,
+          `\`${choice.session}\``,
+          choice.reason,
+          choice.owner ? `\`${choice.owner}\`` : "—",
+          choice.model ?? "?",
+          choice.anchors.map((anchor) => anchorLabel(anchor)).join(", ") || "—",
+        ])
+      )
+    );
+  }
+  if (audit) lines.push("", `Audit (no anchor, labelled anyway): \`${audit.session}\`${audit.model ? ` · ${audit.model}` : ""}`);
+  for (const group of recurring) lines.push(`- Recurring for \`${group.owner}\` (${group.reason}): ${group.sessions.map((key) => `\`${key}\``).join(", ")}`);
+  return lines;
+}
+
+function renderRetries({ retries = [] }) {
+  if (!retries.length) return [];
+  return [
+    "",
+    "## Asked again in a later session",
+    "",
+    ...retries.map((retry) => `- \`${retry.earlier}\` → \`${retry.later}\` after ${retry.hours} h (${Math.round(retry.overlap * 100)}% of the request): "${retry.excerpt}"`),
+  ];
+}
+
+function renderVerdicts({ verdictLines = [] }) {
+  if (!verdictLines.length) return [];
+  return [
+    "",
+    "## Verdicts (copy into DIGEST.md)",
+    "",
+    "Tick a line, keep one of the three words, and add a note if it helps. The next collection reads the ticked lines into `labels.jsonl`.",
+    "",
+    ...verdictLines,
+  ];
+}
+
 export function renderSummaryMarkdown(summary) {
   return `${[
     ...renderHeader(summary),
     ...renderSessions(summary),
+    ...renderReadToday(summary),
+    ...renderRetries(summary),
+    ...renderVerdicts(summary),
     ...renderHosts(summary),
     ...renderUsage(summary),
     ...renderArtifacts(summary),
@@ -421,10 +621,40 @@ export function pruneDaily(root, { keepDays = DEFAULT_KEEP_DAYS, now = new Date(
   return removed;
 }
 
-export function collect({ ctx, only, adapters, skills, dirs, maxSessions: max, clip }) {
+/** The sessions of the newest earlier pack beside this one, so a retry that crosses midnight is found. */
+export function previousSessions(out) {
+  const root = path.dirname(path.resolve(out));
+  const today = path.basename(path.resolve(out));
+  if (!fs.existsSync(root)) return [];
+  const earlier = fs
+    .readdirSync(root)
+    .filter((name) => /^\d{4}-\d{2}-\d{2}$/.test(name) && name < today)
+    .sort()
+    .pop();
+  if (!earlier) return [];
+  try {
+    return JSON.parse(fs.readFileSync(path.join(root, earlier, "summary.json"), "utf8")).sessions ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** The filesystem's answer to "did anyone touch this file after the session ended", or null. */
+export function fileMtime(file, session) {
+  const abs = path.isAbsolute(file) ? file : path.resolve(session?.project ?? REPO_ROOT, file);
+  try {
+    return fs.statSync(abs).mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
+export function collect({ ctx, only, adapters, skills, dirs, maxSessions: max, clip, classifier = null }) {
   const found = discoverSessions({ hosts: [...adapters.values()], ctx, only });
   const { chosen, dropped } = capSessions(found.sessions, max);
-  const scanned = scanSessions({ sessions: chosen, adapters, ctx, skills, dirs, clip });
+  const scanned = scanSessions({ sessions: chosen, adapters, ctx, skills, dirs, clip, classifier: classifier?.classify ?? null });
+  // The reviewer's earlier verdicts decide whether model-read pushback may choose today's sessions.
+  const labels = readLabels(path.join(path.dirname(path.resolve(dirs.out)), "labels.jsonl"));
   const skillUsage = buildSkillUsage({ scans: scanned.results.map(({ scan }) => scan), skillNames: skills.names });
   const notes = [];
   if (dropped) notes.push(`${dropped} older session(s) inside the window were not scanned (--max-sessions ${max})`);
@@ -440,7 +670,12 @@ export function collect({ ctx, only, adapters, skills, dirs, maxSessions: max, c
     dropped,
     failed: scanned.warnings.length,
     notes,
+    previous: previousSessions(dirs.out),
+    validated: validatedKinds(labels),
+    mtime: fileMtime,
   });
+  summary.classifier = { command: classifier?.command ?? "off", ...scanned.classification };
+  summary.detectors = detectorPrecision(labels);
   return { summary, results: scanned.results };
 }
 
@@ -458,6 +693,8 @@ const FLAGS = [
   { flag: "clip", arg: "<n>", help: "Characters kept per transcript part (default: 600, 0 = all)" },
   { flag: "max-sessions", arg: "<n>", help: "Cap the scan (default: 40, 0 = no cap)" },
   { flag: "keep-days", arg: "<n>", help: "Days of packs to keep (default: 14, 0 = never prune)" },
+  { flag: "classify", help: "Read each user turn with the turn classifier (default: `crush run` with the Crush default model)" },
+  { flag: "classifier", arg: "<command>", help: "Shell command that reads the prompt on stdin and prints '<n> <class>' lines; implies --classify" },
   { flag: "check", help: "Probe only: write nothing; exit 1 = no x-skill, 3 = no host could be read" },
   { flag: "no-prune", help: "Skip pruning old packs" },
   { flag: "json", help: "Print summary.json instead of the human line" },
@@ -506,6 +743,8 @@ export function readOptions(argv, { now = new Date() } = {}) {
     projectLookbackHours: numberFrom(args["project-lookback-hours"], DEFAULT_PROJECT_LOOKBACK_HOURS),
     maxSessions: numberFrom(args["max-sessions"], DEFAULT_MAX_SESSIONS),
     clip: args.clip === undefined ? 600 : numberFrom(args.clip, 600),
+    classify: args.classify === true || typeof args.classifier === "string",
+    classifierCommand: typeof args.classifier === "string" ? args.classifier : null,
     // Options only one CLI can honour stay keyed by host id, so the shared context stays host-neutral.
     hostOptions: { crush: { projectsFile: args["projects-file"] || null } },
   };
@@ -591,7 +830,23 @@ export function writePages(summary, { out }) {
     summary.pages = { error: firstLine(err.message) };
     summary.warnings.push({ scope: "history", reason: `could not record the day: ${firstLine(err.message)}` });
   }
+  recordLabels(summary, root);
   fs.writeFileSync(path.join(packDir, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
+}
+
+/**
+ * The reviewer's verdicts from every digest still on disk, merged into `labels.jsonl` beside the record.
+ * They are the only ground truth a detector can be scored against, and a pack is pruned after two weeks,
+ * so the labels are copied out of the digests on every run. Like the record, a failure is a warning.
+ */
+export function recordLabels(summary, root) {
+  const file = path.join(root, "labels.jsonl");
+  try {
+    const written = writeLabels(labelsFromDigests(root), { file });
+    summary.labels = { file: path.relative(REPO_ROOT, file), labels: written.labels };
+  } catch (err) {
+    summary.warnings.push({ scope: "labels", reason: `could not read the verdicts: ${firstLine(err.message)}` });
+  }
 }
 
 function reportRun(summary, { out, json }) {
@@ -617,7 +872,9 @@ export function run(options) {
   const skills = skillNamesOnDisk(options.skillsDir);
   if (!skills.names.length) throw new Error(`no x-* skills found in ${skills.dir ?? "skills/"}`);
 
+  const classifierSpec = options.classify ? (options.classifierCommand ? { command: options.classifierCommand } : defaultClassifier(options.env)) : null;
   const { summary } = collect({
+    classifier: classifierSpec ? { command: classifierSpec.command, classify: commandClassifier(classifierSpec) } : null,
     ctx: hostContext({
       now: options.now,
       hours: options.hours,

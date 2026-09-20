@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import { realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 /**
@@ -231,6 +232,6 @@ function main() {
   console.log(JSON.stringify({ type, scope }, null, 2));
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   main();
 }

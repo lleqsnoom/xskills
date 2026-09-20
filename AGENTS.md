@@ -226,7 +226,7 @@ repository and leaves a digest for review. It never edits a skill — it propose
 
 | Piece | Path | Role |
 |-------|------|------|
-| Collector | `automation/daily-reflection/collect-sessions.mjs` | Finds every session of the last 24h across all detected CLIs, scans each for x-skill friction, writes the evidence pack |
+| Collector | `automation/daily-reflection/collect-sessions.mjs` | Finds every session of the last 24h across all detected CLIs, scans each for x-skill friction and quality anchors, ranks the sessions to read, writes the evidence pack |
 | Hosts | `skills/x-autoreflection/scripts/hosts/` | One adapter per CLI (`crush`, `codex`, `opencode`, `goose`): detect, list, read |
 | Precheck | `automation/daily-reflection/precheck.sh` | Skips the run when `skills/` is dirty or no session in the window used an x-skill |
 | Runbook | `automation/daily-reflection/runbook.md` | The agent's instructions: reflect on at most 4 sessions, then write the digest |
@@ -244,7 +244,7 @@ so an adapter is a mapping from a CLI's own output and a test can drive it by st
 | Host | Store | Evidence |
 |------|-------|----------|
 | `opencode` | `opencode db "<sql>" --format json` for the list, `opencode export <id>` for a transcript | read from a live store |
-| `claude` | `<claude root>/projects/<encoded-cwd>/<session-uuid>.jsonl` (`CLAUDE_CONFIG_DIR` moves the root) | spec only |
+| `claude` | `<claude root>/projects/<encoded-cwd>/<session-uuid>.jsonl` (`CLAUDE_CONFIG_DIR` moves the root) | read from a live store |
 | `codex` | `<codex home>/sessions/YYYY/MM/DD/rollout-*.jsonl`, named by `<codex home>/session_index.jsonl` | read from a live store |
 | `gemini` | `<gemini root>/tmp/<project-id>/chats/session-*.jsonl`, or the older single `session-*.json` | spec only |
 | `cursor` | `<cursor home>/projects/<project-slug>/agent-transcripts/**/*.jsonl` | read from a live store |
@@ -276,11 +276,67 @@ dependency: the package has none, and a store this cannot read should fail loudl
 ├── summary.md                    # usage + signals per session
 ├── summary.json                  # the same, machine-readable (the only source of numbers)
 ├── sessions/<uuid>.signals.json  # scan per session, small enough to keep
+├── sessions/<uuid>.turns.json    # the model's class for each user turn (with --classify)
 └── reflections/<session>/E00-reflection.md   # one gated reflection per chosen session
+.x-skills/daily/labels.jsonl      # every verdict the review ticked, one line per session and anchor
 ```
 
 Transcripts stay in `/tmp/xskills-reflection/<date>/` (megabytes each). Packs older than 14 days are
-pruned, and so is the transcript root.
+pruned, and so is the transcript root. `labels.jsonl` is never pruned: it is what a detector is
+measured by.
+
+### When nothing failed but the result fell short
+
+Friction signals find a command that failed. A session whose every command passed, but whose answer
+was not what the user wanted, has no friction, and the scan used to call it clean. **The user is the
+sensor**: what they did next says the reply fell short. The scanner (`reactions.mjs`) reads that as
+*quality anchors*, each blamed on the **owner**, the skill in charge at that moment (the last `Skill`
+call, an injected skill body, or a skill's script in a command, never a file the agent wrote):
+
+| Anchor | Read from | Weight |
+|--------|-----------|--------|
+| `user-handoff` | "write it as a prompt for another agent", "I'll do it myself" | high |
+| `cross-session-retry` | a later session opens with most of this one's request (≥50% 3-gram containment, ≤48 h) | an anchor on the earlier session, blamed on its last owner |
+| `tool-rejected` | the user refused a tool call or a panel | high with an owner, else medium |
+| `user-redo` | "do another round", "again, more thoroughly" | high |
+| `skill-script-silent` | a skill script exited 0 and printed nothing | high |
+| `user-pushback` | the model's class for a turn (`--classify`) | medium, unvalidated: ranks only once validated |
+| `interrupt` | the user stopped a turn | low, context only, never a finding |
+
+Retries skip automation prompts (an opening seen in three or more sessions), and yesterday's pack is
+read too, so a request re-asked after midnight still links. **Headless runs are not evidence of what a
+user expected**: a Claude session with `entrypoint: "sdk-cli"` (`claude -p`, this automation) is
+marked `headless` and left out of anchors, retries and the audit.
+
+`summary.json` → `select` is the reading order: handoff, retry, rejected step, redo, silent script,
+validated pushback, then friction. At most four, one per owning skill; the rest are listed as
+`recurring`. `audit` adds one interactive session with no anchor, chosen by the date, so a quiet
+session is read now and then and a detector that misses a whole mode can be caught.
+
+**`--classify`** sends each user turn after the opening request (four words or more) to a model with
+the end of the reply before it, in batches of 60, and reads back one of seven classes (`pushback`,
+`redo`, `handoff`, `verify-ask`, `clarify`, `neutral`, `positive`). The default is
+`crush run -q -D ~/.x-skills/turn-classifier/data` with Crush's default model, run from
+`~/.x-skills/turn-classifier`. The Crush adapter never lists that directory, so the classifier's own runs
+are never scanned. `--classifier "<command>"` swaps in any command that reads the prompt on stdin and
+prints `<n> <class>` lines. The prompt goes in as a file descriptor, because `crush run` reads a socket
+stdin as "No prompt provided." A classifier that fails is recorded in `summary.json` → `classifier`, and
+the rest of the pack is unchanged.
+
+**Verdicts are the labels.** `summary.md` carries `## Verdicts (copy into DIGEST.md)`, after the reading order,: one line per
+session in `select` and one for the audit (`- [ ] \`<session>\` · <anchor> · <owner> · <model> — good / below /
+not-a-skill-problem — note:`). The reviewer ticks a line and keeps one word. The next collection reads
+every ticked line back into `labels.jsonl`, merged by date, session and anchor. From those labels
+`detectorPrecision` measures each anchor kind. A model-read kind ranks sessions only after at least 60
+labels at precision 0.8 or better (`validatedKinds`). Until then it is a lead, never a score.
+
+The metrics count a skill as `used` only from the agent's own words, its scripts and its files, not from
+a mention (`definition: "v2"` in `history.jsonl`, so a trend across the change is visible).
+`shortfall` reports the rate of redos, handoffs, refused steps, pushback and retries per skill and per
+model, beside the composite and never inside it, so a fix that names a rate in its `Watch:` line can be checked against the next days. A skill may
+carry `evals/expectations.json`, the behaviours accepted findings said the user expects, in the user's
+words. It is grown only from accepted `missing-expectation` fixes and never required. `x-skill-lint`
+checks its shape, and the judge reads it next to `SKILL.md`.
 
 ### Reading a day
 
@@ -608,6 +664,8 @@ node automation/daily-reflection/collect-sessions.mjs            # collect the p
 node automation/daily-reflection/collect-sessions.mjs --check    # probe only; exit 1 = no x-skill, 3 = no host readable
 node automation/daily-reflection/collect-sessions.mjs --host crush,codex            # narrow the CLIs read
 node automation/daily-reflection/collect-sessions.mjs --hours 168 --out /tmp/week   # a wider window
+node automation/daily-reflection/collect-sessions.mjs --classify                    # add the model's turn classes
+node automation/daily-reflection/collect-sessions.mjs --classify --classifier "my-model --stdin"   # another model
 bash automation/daily-reflection/precheck.sh                     # what the scheduler runs first
 orca automations list                                            # confirm the schedule
 ```
@@ -778,8 +836,9 @@ Every skill that writes a `.x-skills/runs/` artifact carries the same run-folder
 
 1. Create `skills/<name>/SKILL.md` with proper YAML frontmatter.
 2. Optionally add `scripts/`, `references/`, `assets/` directories.
-3. Update the README's Available Skills table.
-4. Run `npm test` to verify the skill appears in the list.
+3. Optionally add `evals/`: `triggers.json` (labeled should/should-not-trigger queries for description tuning) and `expectations.json` (behaviours past reviews confirmed, in the user's words). Both are shape-checked by x-skill-lint; expectations are grown from accepted findings, not written up front.
+4. Update the README's Available Skills table.
+5. Run `npm test` to verify the skill appears in the list.
 
 ## Publishing
 

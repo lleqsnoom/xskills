@@ -36,6 +36,14 @@ matters. For papers/research use `x-roast --profile research` (a later `--type`)
 - **Not** for publishing: the finished `.mdx` goes to the site via
   `blog-post-authoring` (frontmatter, slug, og image, build). This skill hands it off.
 
+## Before the loop
+
+A brief that names a topic but no claim is not a claim, and the loop cannot judge
+its own output against one it never heard. If the request does not say what the
+article should convince the reader of, ask once — one `open` panel: *what must the
+reader believe when they finish it?* — and proceed with the answer as the claim.
+A brief that already carries the claim is its own confirmation; ask nothing.
+
 ## Non-negotiable rules (read first)
 
 1. **Fixed order.** `x-analyze → x-roast → x-humanize`. Never humanize before the

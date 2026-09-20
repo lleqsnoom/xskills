@@ -1,7 +1,7 @@
 ---
 name: x-research
 description: Research a topic or tune a metric — research the project and web first, propose three candidate changes, then iterate one atomic change at a time, evaluating it mechanically (a command, or agent-judged criteria coverage) and keeping only measured improvements until the target, a guard, or a hard cap stops the run; graph-driven with guards, a memory file, and a report. Use for "research X", "compile/summarise sources on Y until N criteria are covered", filling knowledge gaps, literature/topic research with coverage criteria, or optimizing a measurable value.
-version: 1.1.0
+version: 1.2.0
 author: Community
 tags: [research, experiment, optimization, metric, loop, iteration, evaluation, tuning, autonomous, literature, coverage]
 user-invocable: true
@@ -88,8 +88,24 @@ to `x-analyze` / `x-investigate`; this skill *defines* the metric when none exis
    from those numbers and exits 0 only when the stop is justified.
 5. **Keep or revert by policy.** `pass_only` keeps any candidate the evaluator
    passes; `score_improvement` keeps a candidate only when it passes **and** beats the
-   held best by at least `min_delta`. Everything else is reverted; the held state
-   only ever moves forward.
+   held best by at least `min_delta`. In agent mode, a candidate that raises coverage
+   is kept as progress even before every criterion is met — its text stays in the
+   research file, so the trail says `keep`. Everything else is reverted; the held
+   state only ever moves forward.
+6. **Coverage is cited, not typed.** In agent mode a criterion is met only when a
+   source you actually opened answers it — a fetched page, a paper you read, a
+   `file:line`, a command you ran. An abstract listing, a search snippet, or what you
+   remember is a lead, not evidence. `record` takes `--evidence <file>` and refuses to
+   count, keep or stop on coverage the file does not cite.
+7. **Depth is what was asked.** When the request says "deep", "thorough" or "multiple
+   loops", every iteration adds evidence — a new primary source read in full, a check
+   against real data, or a critique of what you wrote — never only a rewrite of prose.
+   Before the final report, have the work critiqued once (`x-roast --profile research`,
+   or a reviewer with a fresh context) and fix what holds up.
+8. **Every named input is read, or the gap is said first.** A URL or file the user
+   named that you could not open is reported at the top of your next message and asked
+   for with a panel — never worked around in silence, and never admitted in a closing
+   caveat under "complete".
 
 ## The contract (what the loop must carry)
 
@@ -123,7 +139,12 @@ to close — score **criteria coverage** instead:
 1. Define **N criteria** (sub-questions, requirements, sources). Pass them as
    `--criteria <n>` or `--criteria <file>` (one per non-empty line).
 2. Each iteration, judge each criterion **met / unmet** and record
-   `--coverage <k/n>` (k of n met): `score = k/n`, `pass = (k === n)`.
+   `--coverage <k/n> --evidence <file>` (k of n met): `score = k/n`,
+   `pass = (k === n)`. The evidence file has one line per met criterion, numbered in
+   criteria order — `C2: https://… — what it says` or `C3: path/to/file.md:42 — …` —
+   and a line without a URL or a `file:line` does not count. A run that truly has
+   nothing to cite (tuning prose by taste) may start with `--no-evidence`; the state
+   records that choice.
 3. The target defaults to `1` (every criterion); the numeric gate compares the
    coverage ratio to the target, exactly like any other metric.
 
@@ -175,8 +196,8 @@ node <skill>/scripts/evaluate.mjs --command "<evaluator>" --timeout 30000 --guar
 node <skill>/scripts/state.mjs record --dir <dir> --candidate cand.json \
   --changed src/foo.js --change "inline the icon map"
 
-# agent-judged: judge the criteria, then record coverage
-node <skill>/scripts/state.mjs record --dir <dir> --candidate --coverage 2/3 \
+# agent-judged: judge the criteria, cite a source per met criterion, then record coverage
+node <skill>/scripts/state.mjs record --dir <dir> --candidate --coverage 2/3 --evidence evidence.md \
   --changed research.md --change "add source for the third criterion"
 ```
 `record` prints `{ next, stop, phase, iteration, reason, summary }` and decides:
@@ -205,8 +226,23 @@ The audit trail is written for you as the loop runs:
 - `final_report.md` — written at stop: outcome, stop reason, best value, gain, the
   evidence commands, the history, and (on escalation) the open findings.
 
+Then tell the user what the run did, with evidence (see **Report with evidence** below).
+
 Completion: `verify` exits 0, or the run escalated with a `final_report.md` naming
-the gap.
+the gap, and the final message carries the evidence block.
+
+## Report with evidence
+
+The last message of a run says what was done in terms someone can check:
+
+- **Read:** how many sources were opened, and the load-bearing ones by URL or `file:line`.
+- **Not read:** every input the user named that could not be opened, and why.
+- **Judged by:** "agent (self-judged coverage, k/n cited)" or the command that scored it.
+- **Not done:** what the run skipped, deferred, or left thin.
+
+Never write "complete", "verified" or "deep" without the source or command behind it on
+the same screen. A short honest report beats a confident one the user has to redo — a
+redo request is exactly what the daily reflection now looks for.
 
 ## Repetition is host-owned
 

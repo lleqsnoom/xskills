@@ -83,6 +83,38 @@ export function SkillView(props: { name: string }) {
           </p>
         </Show>
 
+        <Show when={modelRows(loaded()!.models).length}>
+          <h2>Per model</h2>
+          <p class="dim">
+            A skill is a prompt, and a prompt is coupled to the model it was tuned on: a moved rate is read here
+            first as "did the model change".
+          </p>
+          <div class="table-wrap records">
+            <table>
+              <thead>
+                <tr>
+                  <th>Model</th>
+                  <th class="num">Sessions</th>
+                  <th class="num">Shortfall</th>
+                  <th>What</th>
+                </tr>
+              </thead>
+              <tbody>
+                <For each={modelRows(loaded()!.models)}>
+                  {(row) => (
+                    <tr>
+                      <td class="mono" data-label="Model">{row.model}</td>
+                      <td class="num" data-label="Sessions">{row.sessions}</td>
+                      <td class="num" data-label="Shortfall">{row.shortfall}/{row.sessions || "—"}</td>
+                      <td class="dim" data-label="What">{row.kinds}</td>
+                    </tr>
+                  )}
+                </For>
+              </tbody>
+            </table>
+          </div>
+        </Show>
+
         <Show when={loaded()!.proposals.length}>
           <div class="section-head">
             <h2>What was proposed for it — {loaded()!.proposals.length}</h2>
@@ -165,6 +197,24 @@ const CONFIDENT = 70;
 const HEALTHY = 85;
 
 type MeasuredDay = Skill["perDay"][number];
+
+/**
+ * One row per model the skill ran under, worst shortfall first. One model with no shortfall says nothing the
+ * day cards do not, so the table appears for a comparison or for a shortfall, never for a quiet single model.
+ */
+function modelRows(models: Skill["models"]) {
+  const rows = Object.entries(models ?? {}).map(([model, row]) => ({
+    model,
+    sessions: row.sessions,
+    shortfall: row.shortfall,
+    rate: row.rate,
+    kinds: Object.entries(row.kinds)
+      .map(([kind, count]) => `${kind} ×${count}`)
+      .join(", "),
+  }));
+  const worthShowing = rows.filter((row) => row.shortfall > 0);
+  return (rows.length > 1 ? rows : worthShowing).sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1));
+}
 
 /** The number on the gauge: a score, or the day's mean with a `*` when it is under the sample floor. */
 function dayScore(day: MeasuredDay): string {

@@ -1,7 +1,7 @@
 ---
 name: x-autoreflection-analysis
-description: Analyze past sessions across every CLI and write a detailed skill-health report — traverse the last 24h (or a window the user picks), aggregate friction signals per skill into ranked findings with an improvement class, and surface portfolio moves (create, merge, split, delete) as one JSON + markdown artifact that x-autoreflection-heal consumes.
-version: 1.0.0
+description: Analyze past sessions across every CLI and write a detailed skill-health report — traverse the last 24h (or a window the user picks), aggregate friction signals and quality anchors (the user asking again, handing the work off, refusing a step, a silent skill script) per owning skill into ranked findings with an improvement class, link requests asked again across sessions, rank the sessions to read first, and surface portfolio moves (create, merge, split, delete) as one JSON + markdown artifact that x-autoreflection-heal consumes.
+version: 1.1.0
 author: Community
 tags: [reflection, retrospective, self-improvement, transcript, analysis, skills, batch]
 user-invocable: true
@@ -65,8 +65,11 @@ says so — a quiet day is a result, not a failure.
 
 ### 3. Read the report
 
-Open the markdown. It has four parts: **Skills in use** (per-skill load/use/signal counts), **Findings**
-(ranked, recurrence first), **Portfolio** (structural moves), and **Notes** (how to read the numbers).
+Open the markdown. It opens with **Read first** — the sessions ranked by their quality anchors, one per
+owning skill, plus one quiet session to audit — and **Asked again in a later session** — requests the
+user re-asked, earlier session first, since that is the one that fell short. Then **Skills in use**
+(per-skill load/use/signal counts), **Findings** (ranked, recurrence first), **Portfolio** (structural
+moves), and **Notes** (how to read the numbers).
 
 ### 4. Gate it
 
@@ -98,6 +101,10 @@ One object, two files. The JSON is the truth the heal skill consumes; the markdo
       "evidence": [ { "session": "s1", "message": 12, "excerpt": "…" } ]
     }
   ],
+  "retries": [ { "earlier": "crush:9bb1…", "later": "claude:5fe2…", "hours": 0.4, "overlap": 0.97, "excerpt": "…" } ],
+  "select": [ { "session": "crush:9bb1…", "reason": "user-handoff", "owner": "x-plan", "model": "deepseek-v4-pro", "anchors": [] } ],
+  "recurring": [ { "owner": "x-analyze", "sessions": ["…", "…"], "reason": "tool-rejected" } ],
+  "audit": { "session": "crush:327d…", "model": "deepseek-v4-flash", "owner": null },
   "portfolio": [
     { "id": "PF1", "action": "delete", "skills": ["x-triage"], "reason": "loaded but never used in 3 sessions", "evidence": [] }
   ],
@@ -114,6 +121,16 @@ actions — `create`, `merge`, `split`, `delete` — are decided by a human, nev
 - **Findings** group signals by `(kind, primary suspect)`. Recurrence counts *distinct sessions*, so
   the same gap in three sessions is one defect, not three. Ranked recurrence first, then severity,
   then count. Each carries an improvement `class` from `gap-taxonomy.md`'s map and a `change` hint.
+- **Quality anchors are findings too.** `user-redo` and `user-handoff` map to `missing-expectation`,
+  `tool-rejected` to `ritual-cost`, `skill-script-silent` to `silent-success`. Their suspect is the
+  **owner** — the skill in charge at that moment — so the same shortfall in three sessions of one skill
+  reads as one defect of that skill. An `interrupt` is not a finding: it only says the user stopped a
+  turn. Model-read `user-pushback` is a finding marked by its summary as unvalidated.
+- **Retries, reading order and audit** come from the sibling `anchors.mjs`: a later session that opens
+  with most of an earlier one's request (≥50%, within 48 h, automation prompts excluded) makes the
+  earlier session a `cross-session-retry`; sessions are ranked handoff > retry > rejected step > redo >
+  silent script > friction, one per owning skill; and one interactive session with no anchor is drawn
+  as the audit. Headless runs (`claude -p`, the daily automation) are left out of all three.
 - **Portfolio** is mechanical where it can be: `delete` from `skill-unused` in ≥2 sessions, `create`
   from a recurring failure that names no skill. `merge` and `split` are judgement calls — no scan
   signal can tell that a skill mixes two jobs, only that it was used a lot — so the heal skill records
@@ -136,6 +153,14 @@ paragraph.
 4. **One artifact, two files.** Never edit the markdown by hand; `analyze.mjs` renders both from one object.
 5. **Portfolio is proposed, not decided.** The report suggests `create`/`merge`/`split`/`delete`; only
    the user approves them.
+6. **A shortfall outranks friction.** Read the `Read first` sessions before any friction-only one: a
+   user who asked again or gave up is the evidence the skill fell short, even when every command passed.
+   Model-read pushback never ranks a session until the review's verdicts validate it.
+7. **A regression is a model change until proven otherwise.** Skills are prompts, and prompts are
+   coupled to the model they were tuned on. When a skill's shortfall rate moves against its own
+   history, first check whether the model mix under that skill moved with it (`summary.json` carries
+   `model` per session): say "regressed under deepseek-v4-pro only" or "regressed under the same
+   model" in the finding, so the fix is not aimed at a skill when the model changed under it.
 
 ## Anti-patterns
 
@@ -144,6 +169,8 @@ paragraph.
 - Treating a `high` signal as a proven defect — it is a lead the heal skill must open a file to confirm.
 - Comparing skills by raw signal count — a skill that ran 174 times and one that ran 6 are not comparable.
 - Asking the window in prose, or guessing it when the user implied a different span.
+- Reading only the sessions with the most failed commands and calling a quiet window "no problems".
+- Comparing two models across different tasks: compare them within one skill, above the sample floor.
 
 ## Files
 

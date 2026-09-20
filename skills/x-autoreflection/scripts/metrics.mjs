@@ -13,6 +13,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
  * denominator it never had.
  */
 
+const DAILY_ROOT = path.join(".x-skills", "daily");
+
 /** The published weights. A pack names the version it was scored with, so old packs still render. */
 export const WEIGHTS_V1 = {
   conformance: 0.3,
@@ -21,6 +23,13 @@ export const WEIGHTS_V1 = {
   rework: 0.15,
   protocol: 0.15,
 };
+
+/**
+ * Which counting rules produced a number. `v2`: a skill counts as used only in the session's own words,
+ * scripts and files — never because a directory listing or an injected skill body named it — so
+ * `trigger` and `unused` from before and after the change are not the same measurement.
+ */
+export const METRICS_DEFINITION = "v2";
 
 /** Below this many loaded sessions a skill has no score, only a sample size. */
 export const SAMPLE_FLOOR = 5;
@@ -214,14 +223,198 @@ export function readProposals(digestPath) {
   return { proposals: blocks.map(proposalFromBlock).filter(Boolean), source: digestPath };
 }
 
+/** The three verdicts a reviewer can give an anchor, in the words the digest offers them. */
+export const VERDICTS = ["good", "below", "not-a-skill-problem"];
+const VERDICT_SEPARATOR = " — ";
+const VERDICT_LINE_RE = /^- \[([ xX])\] (audit )?`([^`]+)` · (.+)$/;
+
+/**
+ * One line of the digest's `## Verdicts` section. The reviewer ticks it and keeps one of the three words
+ * (or bolds it); the next collection reads the ticked lines back into `labels.jsonl`, which is how a
+ * detector's precision gets measured against the only judgement that counts.
+ */
+export function renderVerdictLine({ session, anchor = null, owner = null, model = null, audit = false }) {
+  const head = [`${audit ? "audit " : ""}\`${session}\``, anchor ?? "no anchor", owner ?? "no owner", model ?? "model unknown"].join(" · ");
+  return `- [ ] ${head}${VERDICT_SEPARATOR}${VERDICTS.join(" / ")}${VERDICT_SEPARATOR}note:`;
+}
+
+/** The verdict a ticked line settles on: a bolded choice wins, else the only one of the three left. */
+export function verdictIn(segment) {
+  const bold = VERDICTS.filter((word) => segment.includes(`**${word}**`));
+  if (bold.length === 1) return bold[0];
+  const kept = VERDICTS.filter((word) => new RegExp(`(^|[^a-z-])${word}([^a-z-]|$)`).test(segment));
+  return kept.length === 1 ? kept[0] : null;
+}
+
+const orNull = (value, placeholder) => (value && value !== placeholder ? value : null);
+
+/** A ticked verdict line as a label; `verdict` is null when the reviewer ticked without choosing. */
+export function parseVerdictLine(line) {
+  const match = String(line).match(VERDICT_LINE_RE);
+  if (!match || match[1] === " ") return null;
+  const [head, segment = "", ...rest] = match[4].split(VERDICT_SEPARATOR);
+  const [anchor, owner, model] = head.split(" · ").map((field) => field.trim());
+  return {
+    session: match[3],
+    anchor: orNull(anchor, "no anchor"),
+    owner: orNull(owner, "no owner"),
+    model: orNull(model, "model unknown"),
+    audit: Boolean(match[2]),
+    verdict: verdictIn(segment),
+    note: rest.join(VERDICT_SEPARATOR).replace(/^note:\s*/, "").trim(),
+  };
+}
+
+function sectionLines(text, heading) {
+  const lines = text.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim() === `## ${heading}`);
+  if (start < 0) return [];
+  const end = lines.findIndex((line, index) => index > start && /^## /.test(line));
+  return lines.slice(start + 1, end < 0 ? undefined : end);
+}
+
+/** The ticked lines of one digest's `## Verdicts`, split into the decided and the undecided. */
+export function readVerdicts(digestPath) {
+  if (!digestPath || !fs.existsSync(digestPath)) return { verdicts: [], undecided: [] };
+  const parsed = sectionLines(fs.readFileSync(digestPath, "utf8"), "Verdicts").map(parseVerdictLine).filter(Boolean);
+  return { verdicts: parsed.filter((entry) => entry.verdict), undecided: parsed.filter((entry) => !entry.verdict) };
+}
+
+/** Every decided verdict in the digests still on disk, oldest day first. */
+export function labelsFromDigests(root = DAILY_ROOT) {
+  if (!fs.existsSync(root)) return [];
+  return fs
+    .readdirSync(root)
+    .filter((name) => /^\d{4}-\d{2}-\d{2}$/.test(name))
+    .sort()
+    .flatMap((date) => readVerdicts(path.join(root, date, "DIGEST.md")).verdicts.map((verdict) => ({ date, ...verdict })));
+}
+
+export const LABELS_FILE = path.join(DAILY_ROOT, "labels.jsonl");
+
+const labelKey = (label) => [label.date, label.session, label.anchor ?? "", label.audit ? "audit" : ""].join("|");
+
+export function readLabels(file = LABELS_FILE) {
+  if (!file || !fs.existsSync(file)) return [];
+  return fs
+    .readFileSync(file, "utf8")
+    .split("\n")
+    .filter((line) => line.trim())
+    .flatMap((line) => {
+      try {
+        return [JSON.parse(line)];
+      } catch {
+        return [];
+      }
+    });
+}
+
+/**
+ * Merge freshly read verdicts into the label record. Packs are pruned after two weeks and their digests
+ * with them, so the record keeps what it already holds; re-reading a day replaces that day's lines.
+ */
+export function writeLabels(labels, { file = LABELS_FILE } = {}) {
+  const merged = new Map([...readLabels(file), ...labels].map((label) => [labelKey(label), label]));
+  const rows = [...merged.values()].sort((a, b) => a.date.localeCompare(b.date) || String(a.session).localeCompare(String(b.session)));
+  fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
+  fs.writeFileSync(file, rows.length ? `${rows.map((row) => JSON.stringify(row)).join("\n")}\n` : "");
+  return { file, labels: rows.length };
+}
+
+/** Labels a detector needs before its precision means anything: below 60 the interval is too wide. */
+export const VALIDATION_MIN_LABELS = 60;
+/** Share of a detector's labelled anchors the reviewer must call `below` before it may choose sessions. */
+export const VALIDATION_MIN_PRECISION = 0.8;
+
+const anchorKind = (label) => String(label.anchor ?? "").split(" ")[0];
+
+/**
+ * Each anchor kind's precision against the reviewer's verdicts: the share of its labelled anchors that
+ * fell short because of the skill. `not-a-skill-problem` counts against it — the detector found a bad
+ * session, but not one a skill edit can fix. Audit lines score no detector: they measure what all missed.
+ */
+export function detectorPrecision(labels, { min = VALIDATION_MIN_LABELS, bar = VALIDATION_MIN_PRECISION } = {}) {
+  const counts = labels
+    .filter((label) => !label.audit && label.anchor)
+    .reduce((acc, label) => {
+      const kind = anchorKind(label);
+      const row = acc[kind] ?? { labelled: 0, below: 0 };
+      return { ...acc, [kind]: { labelled: row.labelled + 1, below: row.below + (label.verdict === "below" ? 1 : 0) } };
+    }, {});
+  return Object.fromEntries(
+    Object.entries(counts).map(([kind, row]) => {
+      const precision = Math.round((row.below / row.labelled) * 1000) / 1000;
+      return [kind, { ...row, precision, validated: row.labelled >= min && precision >= bar }];
+    })
+  );
+}
+
+export function validatedKinds(labels, options) {
+  return new Set(
+    Object.entries(detectorPrecision(labels, options))
+      .filter(([, row]) => row.validated)
+      .map(([kind]) => kind)
+  );
+}
+
+/** The anchors that say a session fell short of what the user wanted, without anything failing. */
+export const SHORTFALL_KINDS = new Set(["user-redo", "user-handoff", "tool-rejected", "user-pushback", "cross-session-retry"]);
+
+const bump = (counts, key) => ({ ...counts, [key]: (counts[key] ?? 0) + 1 });
+
+/**
+ * Per skill and per model: the sessions the skill was loaded or used in, and how many of them carry a
+ * shortfall anchor it owns. Reported beside the composite, never inside it: a number heal could optimise
+ * is a number that stops meaning anything, and within one skill it is the only fair model comparison.
+ */
+export function shortfallRates(summaries = []) {
+  const sessions = unionSessions(summaries);
+  const modelOf = new Map(sessions.map((session) => [String(session.id), session.model ?? "unknown"]));
+  const byKey = new Map(sessions.map((session) => [`${session.host ?? "?"}:${session.uuid ?? session.id}`, session]));
+  const retried = summaries
+    .flatMap((summary) => summary?.retries ?? [])
+    .map((retry) => byKey.get(retry.earlier))
+    .filter((session) => session?.lastOwner)
+    .map((session) => ({ skill: session.lastOwner, session: String(session.id), kind: "cross-session-retry" }));
+  const owned = [
+    ...summaries
+      .flatMap((summary) => summary?.signals ?? [])
+      .filter((signal) => SHORTFALL_KINDS.has(signal.kind))
+      .flatMap((signal) => (signal.suspects ?? []).map((skill) => ({ skill, session: String(signal.session), kind: signal.kind }))),
+    ...retried,
+  ];
+  const table = {};
+  for (const session of sessions) {
+    const model = session.model ?? "unknown";
+    for (const skill of new Set([...(session.skills?.loaded ?? []), ...(session.skills?.used ?? [])])) {
+      const row = table[skill]?.[model] ?? { sessions: 0, shortfall: 0, rate: 0, kinds: {} };
+      const mine = owned.filter((entry) => entry.skill === skill && entry.session === String(session.id));
+      const next = {
+        sessions: row.sessions + 1,
+        shortfall: row.shortfall + (mine.length ? 1 : 0),
+        kinds: mine.reduce((kinds, entry) => bump(kinds, entry.kind), row.kinds),
+      };
+      table[skill] = { ...(table[skill] ?? {}), [model]: { ...next, rate: Math.round((next.shortfall / next.sessions) * 1000) / 1000 } };
+    }
+  }
+  // A shortfall owned by a skill no session listed still belongs to its model's row.
+  for (const entry of owned) {
+    const model = modelOf.get(entry.session) ?? "unknown";
+    if (!table[entry.skill]?.[model]) table[entry.skill] = { ...(table[entry.skill] ?? {}), [model]: { sessions: 0, shortfall: 1, rate: null, kinds: { [entry.kind]: 1 } } };
+  }
+  return table;
+}
+
 export function buildScores(summaryOrSummaries, { floor = SAMPLE_FLOOR, weights = WEIGHTS_V1, version = "v1" } = {}) {
   const summaries = Array.isArray(summaryOrSummaries) ? summaryOrSummaries : [summaryOrSummaries];
   const sessions = unionSessions(summaries);
   return {
     weights: version,
+    definition: METRICS_DEFINITION,
     floor,
     sessions: sessions.length,
     skills: sortRows(scoreSkills({ sessions, floor, weights })),
+    shortfall: shortfallRates(summaries),
   };
 }
 
@@ -326,7 +519,6 @@ function parseArgs(args) {
   return out;
 }
 
-const DAILY_ROOT = path.join(".x-skills", "daily");
 
 /**
  * The collection this script belongs to. Resolved from the script, not the cwd, because the same file
@@ -404,6 +596,7 @@ export function historyLine(scores, date) {
   return {
     date,
     weights: scores.weights,
+    definition: scores.definition ?? null,
     floor: scores.floor,
     sessions: scores.sessions ?? null,
     skills: scores.skills.map((row) => ({
@@ -480,6 +673,6 @@ function main() {
   }
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href) {
   main();
 }

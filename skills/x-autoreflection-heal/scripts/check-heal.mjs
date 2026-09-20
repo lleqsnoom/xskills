@@ -2,7 +2,25 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { SCHEMA, AUTO_CLASSES } from "./heal.mjs";
+import { SCHEMA, AUTO_CLASSES, QUALITY_CLASSES, measuresOf } from "./heal.mjs";
+
+const skillOf = (target) => String(target ?? "").match(/^skills\/(x-[a-z0-9-]+)\/(SKILL\.md|references\/)/)?.[1] ?? null;
+
+/**
+ * Plan-level: a detector or gate is never edited in the same plan as a skill it measures. The shared
+ * detectors measure every skill; a skill's own `check-*` measures that skill.
+ */
+function separation(items) {
+  const measured = items.map((item) => ({ item, skill: skillOf(item.target) })).filter((entry) => entry.skill);
+  return items.flatMap((item) => {
+    const scope = measuresOf(item.target);
+    if (!scope) return [];
+    const clash = measured.find((entry) => entry.item !== item && (scope === "*" || scope === entry.skill));
+    return clash
+      ? [{ rule: "measure-and-measured", item: item.id ?? "?", detail: `${item.target} measures ${clash.item.target}; land the measure on its own first` }]
+      : [];
+  });
+}
 
 /** The plan's shape: every item names its target and, for an `auto` item, a find and a check. */
 export function lintHeal(plan) {
@@ -21,6 +39,15 @@ export function lintHeal(plan) {
     const id = item.id ?? "?";
     if (!item.id) violations.push({ rule: "item-id", detail: "an item has no id" });
     if (!item.target) violations.push({ rule: "item-target", item: id, detail: "no target file" });
+    if (QUALITY_CLASSES.has(item.class) && !String(item.watch ?? "").trim()) {
+      violations.push({ rule: "item-watch", item: id, detail: "a quality fix names the rate it should move: skill, model, anchor, window" });
+    }
+    if (item.target && item.check && String(item.check).includes(item.target)) {
+      violations.push({ rule: "check-edits-itself", item: id, detail: `${item.target} is edited by the item and run by its own check` });
+    }
+    if (item.auto === true && measuresOf(item.target)) {
+      violations.push({ rule: "auto-measure", item: id, detail: `${item.target} is a detector or a check; it is never edited unattended` });
+    }
     if (item.auto === true) {
       if (!item.find) violations.push({ rule: "item-find", item: id, detail: "an auto item has no find" });
       if (!item.check) violations.push({ rule: "item-check", item: id, detail: "an auto item has no check" });
@@ -30,6 +57,7 @@ export function lintHeal(plan) {
     }
   }
 
+  violations.push(...separation(value.items ?? []));
   return { violations, items: (value.items ?? []).length };
 }
 
@@ -97,6 +125,6 @@ function main() {
   }
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href) {
   main();
 }

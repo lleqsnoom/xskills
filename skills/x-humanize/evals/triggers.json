@@ -1,0 +1,21 @@
+{
+  "skill": "x-humanize",
+  "queries": [
+    { "query": "humanize this blog post", "should_trigger": true },
+    { "query": "make this commit message easier to read", "should_trigger": true },
+    { "query": "simplify this documentation to plain language", "should_trigger": true },
+    { "query": "rewrite the PR description so a non-native speaker gets it", "should_trigger": true },
+    { "query": "this essay is too dense, bring it to a B2 reading level", "should_trigger": true },
+    { "query": "cut the noise from this announcement", "should_trigger": true },
+    { "query": "make these user-facing error messages friendlier and simpler", "should_trigger": true },
+    { "query": "rewrite this at a lower reading level without losing meaning", "should_trigger": true },
+    { "query": "write an essay about simplicity", "should_trigger": false },
+    { "query": "roast this article", "should_trigger": false },
+    { "query": "translate this page to German", "should_trigger": false },
+    { "query": "clean up the comments in this file", "should_trigger": false },
+    { "query": "summarize this PDF for me", "should_trigger": false },
+    { "query": "make this function simpler", "should_trigger": false },
+    { "query": "shorten the variable names in this module", "should_trigger": false },
+    { "query": "review the humanize skill's script", "should_trigger": false }
+  ]
+}

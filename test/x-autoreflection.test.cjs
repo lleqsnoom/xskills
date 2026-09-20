@@ -113,6 +113,34 @@ describe("x-autoreflection read-session", async () => {
     assert.equal(session.messages[1].parts[1].name, "bash");
   });
 
+  it("keeps each message's model and provider, and names the session's main model", () => {
+    const session = mod.normalizeSession(
+      transcript([
+        { role: "user", parts: [text("go")] },
+        { role: "assistant", model: "deepseek-v4-pro", provider: "Deepseek", parts: [text("a")] },
+        { role: "assistant", model: "deepseek-v4-pro", provider: "Deepseek", parts: [text("b")] },
+        { role: "assistant", model: "deepseek-v4.1-flash", provider: "hyper-B", parts: [text("title")] },
+      ])
+    );
+    assert.equal(session.messages[1].model, "deepseek-v4-pro");
+    assert.equal(session.messages[1].provider, "Deepseek");
+    assert.equal("model" in session.messages[0], false, "a message that names no model gets none");
+    assert.equal(session.source.model, "deepseek-v4-pro");
+    assert.deepEqual(session.source.models, { "deepseek-v4-pro": 2, "deepseek-v4.1-flash": 1 });
+  });
+
+  it("carries a host's headless flag, so an automation run is not read as a person", () => {
+    const raw = transcript([{ role: "user", parts: [text("classify")] }]);
+    assert.equal(mod.normalizeSession({ ...raw, meta: { ...raw.meta, headless: true } }).source.headless, true);
+    assert.equal(mod.normalizeSession(raw).source.headless, false);
+  });
+
+  it("reports no model when no message names one", () => {
+    const session = mod.normalizeSession(transcript([{ role: "assistant", parts: [text("a")] }]));
+    assert.equal(session.source.model, null);
+    assert.deepEqual(session.source.models, {});
+  });
+
   it("isNormalized tells an export apart from a raw host dump", () => {
     assert.equal(mod.isNormalized(mod.normalizeSession(transcript([]))), true);
     assert.equal(mod.isNormalized(transcript([])), false);
@@ -264,6 +292,245 @@ describe("x-autoreflection scan-session", async () => {
     assert.match(prose.evidence[0].excerpt, /Want me to continue\?/);
   });
 
+  it("does not count a skill as used because a listing or an injected skill body names it", () => {
+    const session = read.normalizeSession(
+      transcript(
+        [
+          { role: "user", parts: [text("improve the reflection")] },
+          { role: "assistant", parts: [text("looking around"), call("c1", "bash", { command: "ls skills/" })] },
+          { role: "tool", parts: [result("c1", "bash", "x-analyze\nx-plan\nx-review\n<cwd>/repo</cwd>")] },
+          { role: "user", parts: [text("Base directory for this skill: /home/u/.claude/skills/x-analyze\n\n# X-Anal\nroute to x-fix or x-plan")] },
+          { role: "assistant", parts: [text("using x-analyze now"), call("c2", "bash", { command: "node skills/x-analyze/scripts/scenario.mjs start" })] },
+        ],
+        [{ name: "x-analyze", loaded_at: "t0" }, { name: "x-review", loaded_at: "t0" }]
+      )
+    );
+    const scan = mod.scanSession(session, { skillNames: [] });
+    assert.deepEqual(scan.skills.used, ["x-analyze"]);
+    assert.deepEqual(scan.skills.unused, ["x-review"], "a directory listing is not use");
+    assert.deepEqual(scan.skills.mentioned, ["x-analyze", "x-fix", "x-plan", "x-review"]);
+  });
+
+  it("hears a redo request and a handoff, and a skill script that exits 0 and prints nothing", () => {
+    const session = read.normalizeSession(
+      transcript(
+        [
+          { role: "user", parts: [text("I am not happy, do a deep research with online sources in multiple loops")] },
+          { role: "assistant", model: "deepseek-v4-pro", parts: [text("loading"), call("c1", "view", { file_path: "/home/u/.claude/skills/x-research/SKILL.md" })] },
+          { role: "tool", parts: [result("c1", "view", "# X-Research")] },
+          { role: "assistant", model: "deepseek-v4-pro", parts: [call("c2", "bash", { command: "node /home/u/.claude/skills/x-research/scripts/state.mjs start --slug a" })] },
+          { role: "tool", parts: [result("c2", "bash", "\n<cwd>/repo</cwd>")] },
+          { role: "assistant", model: "deepseek-v4-pro", parts: [call("c3", "bash", { command: "node /home/u/.claude/skills/x-research/scripts/state.mjs start --slug b" })] },
+          { role: "tool", parts: [result("c3", "bash", "no output")] },
+          { role: "assistant", model: "deepseek-v4-pro", parts: [text("Done. Deep research complete.")] },
+          { role: "user", parts: [text("Do another full round for that analysis, read internet sources, again check the article")] },
+          { role: "assistant", model: "deepseek-v4-pro", parts: [text("Round two done.")] },
+          { role: "user", parts: [text("make it as LLM prompt so i can pass it to another agent")] },
+        ],
+        [{ name: "x-research", loaded_at: "t0" }]
+      )
+    );
+    const scan = mod.scanSession(session, { skillNames: [] });
+    const byKind = Object.fromEntries(scan.signals.map((signal) => [signal.kind, signal]));
+    assert.deepEqual(byKind["user-redo"].suspects, ["x-research"], "owned by the skill active before the turn");
+    assert.equal(byKind["user-redo"].severity, "high");
+    assert.equal(byKind["user-redo"].evidence[0].message, 8);
+    assert.deepEqual(byKind["user-handoff"].suspects, ["x-research"]);
+    assert.equal(byKind["user-handoff"].evidence[0].message, 10);
+    assert.equal(byKind["skill-script-silent"].count, 2, "the same silent script is one signal");
+    assert.deepEqual(byKind["skill-script-silent"].suspects, ["x-research"]);
+    assert.equal(byKind["user-correction"], undefined, "none of these starts with a correction word");
+    assert.deepEqual(scan.request, { message: 0, created: null, text: "I am not happy, do a deep research with online sources in multiple loops" });
+    assert.equal(scan.source.model, "deepseek-v4-pro");
+  });
+
+  it("hears a rejected tool call and an interrupt, and blames the skill that asked", () => {
+    const session = read.normalizeSession(
+      transcript([
+        { role: "user", parts: [text("do an analysis of the source file, the prompt is attached")] },
+        { role: "assistant", parts: [call("c1", "Skill", { skill: "x-analyze" })] },
+        { role: "user", parts: [result("c1", "Skill", "Launching skill: x-analyze")] },
+        { role: "user", parts: [text("Base directory for this skill: /home/u/.claude/skills/x-analyze\n\n# X-Anal")] },
+        { role: "assistant", parts: [call("c2", "AskUserQuestion", { questions: [] })] },
+        { role: "user", parts: [result("c2", "AskUserQuestion", "The user doesn't want to proceed with this tool use. The tool use was rejected.")] },
+        { role: "user", parts: [text("[Request interrupted by user for tool use]")] },
+      ])
+    );
+    const scan = mod.scanSession(session, { skillNames: [] });
+    const rejected = scan.signals.find((signal) => signal.kind === "tool-rejected");
+    assert.equal(rejected.severity, "high");
+    assert.deepEqual(rejected.suspects, ["x-analyze"]);
+    assert.equal(rejected.evidence[0].message, 5);
+    const interrupt = scan.signals.find((signal) => signal.kind === "interrupt");
+    assert.equal(interrupt.severity, "low", "an interrupt says the user stopped the agent, not why");
+    assert.equal(scan.stats.rejections, 1);
+    assert.equal(scan.stats.interrupts, 1);
+  });
+
+  it("does not hand ownership to a skill a written document merely mentions", () => {
+    const session = read.normalizeSession(
+      transcript([
+        { role: "user", parts: [text("write the plan for the reflection skills please, in markdown")] },
+        { role: "assistant", parts: [call("c1", "view", { file_path: "/home/u/.claude/skills/x-plan/SKILL.md" })] },
+        { role: "tool", parts: [result("c1", "view", "# X-Plan")] },
+        { role: "assistant", parts: [call("c2", "write", { file_path: "/repo/E01-plan.md", content: "edit skills/x-autoreflection/scripts/scan-session.mjs" })] },
+        { role: "tool", parts: [result("c2", "write", "written")] },
+        { role: "user", parts: [text("make it as LLM prompt so i can pass it to another agent")] },
+      ])
+    );
+    const scan = mod.scanSession(session, { skillNames: [] });
+    assert.deepEqual(scan.signals.find((signal) => signal.kind === "user-handoff").suspects, ["x-plan"]);
+  });
+
+  it("does not count a rejection that a tool output only quotes", () => {
+    const session = read.normalizeSession(
+      transcript([
+        { role: "user", parts: [text("show me what that session did before the interrupt please")] },
+        { role: "assistant", parts: [call("c1", "bash", { command: "node inspect.mjs" })] },
+        { role: "user", parts: [result("c1", "bash", "#47 RESULT \"The user doesn't want to proceed with this tool use.\"")] },
+      ])
+    );
+    const scan = mod.scanSession(session, { skillNames: [] });
+    assert.equal(scan.signals.some((signal) => signal.kind === "tool-rejected"), false);
+  });
+
+  it("adds the model-read pushback as its own unvalidated kind, without counting a phrase-caught turn twice", () => {
+    const session = read.normalizeSession(
+      transcript(
+        [
+          { role: "user", parts: [text("build the dashboard with four variants of the same data please")] },
+          { role: "assistant", parts: [text("Four variants are ready."), call("c1", "bash", { command: "node skills/x-ui/scripts/audit.mjs" })] },
+          { role: "tool", parts: [result("c1", "bash", "ok")] },
+          { role: "assistant", parts: [text("Done.")] },
+          { role: "user", parts: [text("you just removed the original bio, i did not ask for it")] },
+          { role: "assistant", parts: [text("Restored.")] },
+          { role: "user", parts: [text("still too long, do it again from scratch")] },
+        ],
+        [{ name: "x-ui", loaded_at: "t0" }]
+      )
+    );
+    const turns = [
+      { message: 4, class: "pushback" },
+      { message: 6, class: "redo" },
+    ];
+    const scan = mod.scanSession(session, { skillNames: [], turns });
+    const pushback = scan.signals.find((signal) => signal.kind === "user-pushback");
+    assert.equal(pushback.severity, "medium", "model-read and unvalidated");
+    assert.deepEqual(pushback.evidence.map((entry) => entry.message), [4], "msg 6 is already a user-redo");
+    assert.match(pushback.evidence[0].excerpt, /^\[pushback\]/);
+    assert.deepEqual(pushback.suspects, ["x-ui"]);
+    assert.equal(scan.stats.pushback, 1);
+    assert.ok(scan.signals.some((signal) => signal.kind === "user-redo"));
+  });
+
+  it("reads the turns file from the command line", async () => {
+    await withTmpDir("autoref-turns", async (dir) => {
+      const raw = path.join(dir, "raw.json");
+      const turnsFile = path.join(dir, "turns.json");
+      fs.writeFileSync(
+        raw,
+        JSON.stringify(
+          transcript([
+            { role: "user", parts: [text("write the report for the skills with every detail please")] },
+            { role: "assistant", parts: [text("Report written.")] },
+            { role: "user", parts: [text("that is TOO long, ten seconds to scan is the max")] },
+          ])
+        )
+      );
+      fs.writeFileSync(turnsFile, JSON.stringify({ turns: [{ message: 2, class: "pushback" }] }));
+      const res = await run(SCAN, ["--file", raw, "--turns", turnsFile], { cwd: dir });
+      assert.equal(res.code, 0, res.stderr);
+      assert.ok(JSON.parse(res.stdout).signals.some((signal) => signal.kind === "user-pushback"));
+    });
+  });
+
+  it("marks a session that ends on the agent's answer as abandoned, and not one waiting on the user", () => {
+    const abandoned = read.normalizeSession(
+      transcript(
+        [
+          { role: "user", parts: [text("research the report app data flow and write up what you find")] },
+          { role: "assistant", parts: [text("reading the server"), call("c1", "view", { file_path: "/repo/scripts/report-server.mjs" })] },
+          { role: "tool", parts: [result("c1", "view", "server")] },
+          { role: "assistant", parts: [text("reading the app"), call("c2", "view", { file_path: "/repo/tools/report-app/src/App.tsx" })] },
+          { role: "tool", parts: [result("c2", "view", "app")] },
+          { role: "assistant", parts: [text("The server reads the packs, the app fetches /api/day. Nothing caches across days.")] },
+        ],
+        [{ name: "x-analyze", loaded_at: "t0" }]
+      )
+    );
+    const scan = mod.scanSession(abandoned, { skillNames: [] });
+    const abandon = scan.signals.find((signal) => signal.kind === "user-abandon");
+    assert.ok(abandon, "a substantial request answered and never replied to");
+    assert.equal(abandon.severity, "low", "a weak implicit signal; the composite decides");
+    assert.deepEqual(abandon.suspects, ["x-analyze"]);
+    assert.equal(abandon.evidence[0].message, 5);
+
+    const waiting = read.normalizeSession(
+      transcript([
+        { role: "user", parts: [text("research the report app data flow and write up what you find")] },
+        { role: "assistant", parts: [text("reading"), call("c1", "view", { file_path: "/repo/scripts/report-server.mjs" })] },
+        { role: "tool", parts: [result("c1", "view", "server")] },
+        { role: "assistant", parts: [text("I found two flows.\n\nWhich one should I trace first?")] },
+      ])
+    );
+    assert.equal(
+      mod.scanSession(waiting, { skillNames: [] }).signals.some((signal) => signal.kind === "user-abandon"),
+      false,
+      "an answer that ends on a question waits on the user"
+    );
+
+    const trivial = read.normalizeSession(
+      transcript([
+        { role: "user", parts: [text("hi there")] },
+        { role: "assistant", parts: [text("Hello! What are we working on today?")] },
+      ])
+    );
+    assert.equal(
+      mod.scanSession(trivial, { skillNames: [] }).signals.some((signal) => signal.kind === "user-abandon"),
+      false,
+      "no substantial request, no abandonment"
+    );
+
+    const userLast = read.normalizeSession(
+      transcript([
+        { role: "user", parts: [text("research the report app data flow and write up what you find")] },
+        { role: "assistant", parts: [text("reading"), call("c1", "view", { file_path: "/repo/scripts/report-server.mjs" })] },
+        { role: "tool", parts: [result("c1", "view", "server")] },
+        { role: "user", parts: [text("also check the panel while you are at it please")] },
+      ])
+    );
+    assert.equal(
+      mod.scanSession(userLast, { skillNames: [] }).signals.some((signal) => signal.kind === "user-abandon"),
+      false,
+      "the user speaking last is work in progress, not abandonment"
+    );
+  });
+
+  it("counts a Crush turn the user canceled as an interrupt", () => {
+    const session = read.normalizeSession(
+      transcript([
+        { role: "user", parts: [text("go")] },
+        { role: "assistant", parts: [text("working"), { type: "finish", reason: "canceled" }] },
+      ])
+    );
+    const scan = mod.scanSession(session, { skillNames: [] });
+    assert.equal(scan.signals.find((signal) => signal.kind === "interrupt").evidence[0].message, 1);
+  });
+
+  it("does not call a script silent when its output was sent to a file", () => {
+    const session = read.normalizeSession(
+      transcript([
+        { role: "user", parts: [text("go")] },
+        { role: "assistant", parts: [call("c1", "bash", { command: "node skills/x-roast/scripts/score.mjs --profile a > out/E00-critique.json" })] },
+        { role: "tool", parts: [result("c1", "bash", "no output")] },
+        { role: "assistant", parts: [call("c2", "bash", { command: "node skills/x-plan/scripts/scenario.mjs record --dir r >/dev/null || echo FAILED" })] },
+        { role: "tool", parts: [result("c2", "bash", "")] },
+      ])
+    );
+    const scan = mod.scanSession(session, { skillNames: [] });
+    assert.equal(scan.signals.some((signal) => signal.kind === "skill-script-silent"), false);
+  });
+
   it("does not call a question in prose when a panel was rendered", () => {
     const session = read.normalizeSession(
       transcript([
@@ -311,8 +578,28 @@ describe("x-autoreflection scan-session", async () => {
     });
   });
 
-  it("collects the run folders and artifacts the session touched", () => {
+  it("collects the files the session wrote, so hand-edits can be attributed later", () => {
     const session = read.normalizeSession(
+      transcript([
+        { role: "user", parts: [text("rename the setting in the config and the docs please")] },
+        { role: "assistant", parts: [call("c1", "edit", { file_path: "/repo/config.json" })] },
+        { role: "tool", parts: [result("c1", "edit", "ok")] },
+        { role: "assistant", parts: [call("c2", "write", { file_path: "/repo/docs/config.md" })] },
+        { role: "tool", parts: [result("c2", "write", "ok")] },
+        { role: "assistant", parts: [call("c3", "view", { file_path: "/repo/src/app.ts" })] },
+        { role: "tool", parts: [result("c3", "view", "code")] },
+        { role: "assistant", parts: [call("c4", "edit", { file_path: "/repo/config.json" })] },
+        { role: "tool", parts: [result("c4", "edit", "ok")] },
+      ])
+    );
+    const scan = mod.scanSession(session, { skillNames: [] });
+    assert.deepEqual(scan.writes, [
+      { path: "/repo/config.json", message: 1 },
+      { path: "/repo/docs/config.md", message: 3 },
+    ], "write tools only, each path once, at its first write");
+  });
+
+  it("collects the run folders and artifacts the session touched", () => {    const session = read.normalizeSession(
       transcript([
         { role: "user", parts: [text("go")] },
         {
@@ -442,6 +729,93 @@ describe("x-autoreflection check-reflection", async () => {
       ...(overrides.extra ?? []),
     ].join("\n");
   }
+
+  const REPO = path.join(__dirname, "..");
+  const QUALITY_SCAN = {
+    source: { host: "crush", id: "908228ee", title: "research" },
+    stats: { messages: 140, toolCalls: 76 },
+    signals: [{ id: "S2", severity: "high", kind: "user-redo" }],
+  };
+  const QUALITY_TRANSCRIPT = {
+    messages: [{ index: 119, role: "user", parts: [{ type: "text", text: "Do another full round for that analysis - read internet sources, again check the article" }] }],
+  };
+
+  function qualityReflection({ quote = "read internet sources, again check the article", ref = "`skills/x-research/SKILL.md:1` \"name: x-research\"", watch = true, line = true } = {}) {
+    return [
+      "# Reflection — research",
+      "",
+      "**Session:** 908228ee · 2026-09-18 18:04 → 18:24",
+      "",
+      "## Signals",
+      "",
+      "```json",
+      '{"signals":[{"id":"S2","severity":"high","kind":"user-redo"}]}',
+      "```",
+      "",
+      "## Gaps",
+      "",
+      "- **S2 (high, kept)** — the user asked for the research again; the loop read abstracts only.",
+      "",
+      "## Quality",
+      "",
+      ...(line ? [`- **S2** — user: "${quote}" — skill: ${ref}`] : []),
+      "",
+      "## Proposals",
+      "",
+      "### P1 — depth-floor: every loop adds a source read in full",
+      "**Signal:** S2",
+      "**Target:** `skills/x-research/SKILL.md:1`",
+      "**Change:** add the depth rule.",
+      "**Check:** `node --test test/x-research.test.cjs` exits 0.",
+      ...(watch ? ["**Watch:** x-research user-redo per session on deepseek-v4-pro, next 14 days"] : []),
+      "",
+      "## Routes",
+      "",
+      "- P1 → direct edit",
+      "",
+    ].join("\n");
+  }
+
+  it("passes a quality gap whose quote is in the transcript and whose skill line is where it says", () => {
+    const result = mod.lintReflection(qualityReflection(), QUALITY_SCAN, { transcript: QUALITY_TRANSCRIPT, root: REPO });
+    assert.deepEqual(result.violations, []);
+  });
+
+  it("wants a Quality line for every kept quality anchor", () => {
+    const rules = mod.lintReflection(qualityReflection({ line: false }), QUALITY_SCAN, { transcript: QUALITY_TRANSCRIPT, root: REPO }).violations.map((v) => v.rule);
+    assert.ok(rules.includes("quality-unanchored"), rules.join(", "));
+  });
+
+  it("refuses a quote the transcript does not contain", () => {
+    const rules = mod.lintReflection(qualityReflection({ quote: "this is too shallow" }), QUALITY_SCAN, { transcript: QUALITY_TRANSCRIPT, root: REPO }).violations.map((v) => v.rule);
+    assert.ok(rules.includes("quality-quote"), rules.join(", "));
+  });
+
+  it("refuses a skill line that is not where the reflection says", () => {
+    const missing = mod.lintReflection(qualityReflection({ ref: "`skills/x-research/NOPE.md:3` \"x\"" }), QUALITY_SCAN, { transcript: QUALITY_TRANSCRIPT, root: REPO });
+    assert.ok(missing.violations.some((v) => v.rule === "quality-skill-line"));
+    const wrong = mod.lintReflection(qualityReflection({ ref: "`skills/x-research/SKILL.md:1` \"never written there\"" }), QUALITY_SCAN, { transcript: QUALITY_TRANSCRIPT, root: REPO });
+    assert.ok(wrong.violations.some((v) => v.rule === "quality-skill-line"));
+  });
+
+  it("asks a quality proposal what number it expects to move", () => {
+    const rules = mod.lintReflection(qualityReflection({ watch: false }), QUALITY_SCAN, { transcript: QUALITY_TRANSCRIPT, root: REPO }).violations.map((v) => v.rule);
+    assert.ok(rules.includes("quality-watch"), rules.join(", "));
+  });
+
+  it("checks quotes against the transcript given on the command line", async () => {
+    await withTmpDir("autoref-quality", async (dir) => {
+      const file = path.join(dir, "E00-reflection.md");
+      const scan = path.join(dir, "signals.json");
+      const transcriptFile = path.join(dir, "session.json");
+      fs.writeFileSync(file, qualityReflection({ quote: "this is too shallow" }));
+      fs.writeFileSync(scan, JSON.stringify(QUALITY_SCAN));
+      fs.writeFileSync(transcriptFile, JSON.stringify(QUALITY_TRANSCRIPT));
+      const res = await run(CHECK, ["--file", file, "--scan", scan, "--transcript", transcriptFile], { cwd: REPO });
+      assert.equal(res.code, 1);
+      assert.ok(JSON.parse(res.stdout).violations.some((v) => v.rule === "quality-quote"));
+    });
+  });
 
   it("passes a filled reflection against its scan", () => {
     const result = mod.lintReflection(filled(), SCAN_JSON);
