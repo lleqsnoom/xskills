@@ -77,7 +77,7 @@ function parseArgs(args) {
 
 function usage() {
   return [
-    "x-autoreflection-analysis check-analysis — fail while the report is unshaped.",
+    "x-autoreflection check-analysis — fail while the report is unshaped.",
     "",
     "Usage:",
     "  node check-analysis.mjs --file <report.json>",

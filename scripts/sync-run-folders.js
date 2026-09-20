@@ -31,8 +31,8 @@ const TARGETS = [
   "skills/x-debug/scripts/analyze.js",
   "skills/x-review/scripts/save-plan.js",
   "skills/x-autoreflection/scripts/save-reflection.mjs",
-  "skills/x-autoreflection-analysis/scripts/analyze.mjs",
-  "skills/x-autoreflection-heal/scripts/heal.mjs",
+  "skills/x-autoreflection/scripts/analyze.mjs",
+  "skills/x-autoreflection/scripts/heal.mjs",
 ];
 
 const START = "// #region run-folder";

@@ -39,6 +39,10 @@ export function lintHeal(plan) {
     const id = item.id ?? "?";
     if (!item.id) violations.push({ rule: "item-id", detail: "an item has no id" });
     if (!item.target) violations.push({ rule: "item-target", item: id, detail: "no target file" });
+    // The panel shows three lines per proposal, and the user picks from them: the issue it answers,
+    // the edit, and the rate that should move. A proposal missing one is not a choice, it is a guess.
+    if (!String(item.issue ?? "").trim()) violations.push({ rule: "item-issue", item: id, detail: "a proposal names the issue it answers" });
+    if (!String(item.improvement ?? "").trim()) violations.push({ rule: "item-improvement", item: id, detail: "a proposal names the rate it should move" });
     if (QUALITY_CLASSES.has(item.class) && !String(item.watch ?? "").trim()) {
       violations.push({ rule: "item-watch", item: id, detail: "a quality fix names the rate it should move: skill, model, anchor, window" });
     }
@@ -93,7 +97,7 @@ function parseArgs(args) {
 
 function usage() {
   return [
-    "x-autoreflection-heal check-heal — fail while the plan is unshaped or an auto item is uncheckable.",
+    "x-autoreflection check-heal — fail while the plan is unshaped or an auto item is uncheckable.",
     "",
     "Usage:",
     "  node check-heal.mjs --file <plan.json>",
