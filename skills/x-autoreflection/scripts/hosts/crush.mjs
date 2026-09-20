@@ -2,11 +2,13 @@
 /**
  * Crush — sessions are scoped to the directory the CLI ran in, so the store is a project list, not a
  * session list. `projects.json` names every directory it has run in; each one has to be asked
- * separately, and the same session can appear under two projects after a move.
+ * separately, and the same session can appear under two projects after a move. Each project is also
+ * asked for the child sessions its own `session list` never reports.
  */
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { HOUR_MS, firstLine } from "./shared.mjs";
 
 const DEFAULT_PROJECT_LOOKBACK_HOURS = 72;
@@ -20,6 +22,63 @@ export const TURN_CLASSIFIER_DIR = path.join(".x-skills", "turn-classifier");
 
 export function isTurnClassifierDir(dir) {
   return path.normalize(String(dir ?? "")).endsWith(path.sep + TURN_CLASSIFIER_DIR);
+}
+
+/** The store a project keeps for itself, beside the directory Crush ran in: transcripts live here. */
+export function projectStore(projectPath) {
+  return path.join(projectPath, ".crush", "crush.db");
+}
+
+/**
+ * A child session's timestamps are Unix seconds in a column the schema itself calls milliseconds, so a
+ * value large enough to be milliseconds is read as one rather than dropped as ancient history.
+ */
+function isoStamp(seconds) {
+  const value = Number(seconds);
+  if (!Number.isFinite(value)) return null;
+  return new Date(value > 1e11 ? value : value * 1000).toISOString();
+}
+
+/** `node:sqlite` is built into Node, so this stays a zero-dependency skill. */
+function openStore(file) {
+  const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+  return new DatabaseSync(file, { readOnly: true });
+}
+
+/**
+ * The sessions behind `agent` calls and worker runs. `crush session list` cannot report them: its own
+ * query is `WHERE parent_session_id is NULL`, and no flag or command lifts that. Yet they are close to
+ * half the transcripts on a machine that delegates, and a sub-agent is exactly where a handed-off skill
+ * does its work. They stay readable through `crush session show`, so their ids are read from the
+ * project's own store. A store that is absent, or a Node too old for `node:sqlite`, costs the children
+ * and nothing else: the CLI's own answer still stands, and the warning says what was missed.
+ */
+export function childSessions(projectPath, { dbFile = projectStore(projectPath), open = openStore } = {}) {
+  if (!fs.existsSync(dbFile)) return { sessions: [], warning: null };
+  let store = null;
+  try {
+    const rows = (store = open(dbFile))
+      .prepare("SELECT id, title, created_at, updated_at FROM sessions WHERE parent_session_id IS NOT NULL ORDER BY updated_at DESC")
+      .all();
+    return {
+      sessions: rows.map((row) => ({
+        id: String(row.id),
+        uuid: String(row.id),
+        title: row.title === null || row.title === undefined ? null : String(row.title),
+        created: isoStamp(row.created_at),
+        modified: isoStamp(row.updated_at),
+        project: projectPath,
+        child: true,
+      })),
+      warning: null,
+    };
+  } catch (err) {
+    return { sessions: [], warning: { scope: projectPath, reason: `child sessions unreadable: ${firstLine(err.message)}` } };
+  } finally {
+    try {
+      store?.close();
+    } catch {}
+  }
 }
 
 export function crushDataDir(env = process.env) {
@@ -68,7 +127,7 @@ function fileFor(ctx) {
 export const crush = {
   id: "crush",
   label: "Crush",
-  store: "`crush session list|show --json`, one call per project in <crush data dir>/projects.json",
+  store: "`crush session list|show --json` per project in <crush data dir>/projects.json, plus the child sessions only each project's own `.crush/crush.db` records",
   file: projectsFile,
 
   detect(ctx) {
@@ -80,20 +139,26 @@ export const crush = {
     const warnings = [];
     const sessions = [];
     for (const project of recentProjects(readProjects(fileFor(ctx)), { hours: ctx.projectLookbackHours, now: ctx.now })) {
-      let listed;
       try {
-        listed = JSON.parse(run("crush", ["session", "list", "--json"], { cwd: project.path }));
+        const listed = JSON.parse(run("crush", ["session", "list", "--json"], { cwd: project.path }));
+        for (const session of Array.isArray(listed) ? listed : []) sessions.push({ ...session, project: project.path });
       } catch (err) {
+        // One project failing to list is not the next project's problem: a store that cannot be listed
+        // can still hand over its children.
         warnings.push({ scope: project.path, reason: `crush session list failed: ${firstLine(err.message)}` });
-        continue;
       }
-      for (const session of Array.isArray(listed) ? listed : []) sessions.push({ ...session, project: project.path });
+      const children = childSessions(project.path);
+      if (children.warning) warnings.push(children.warning);
+      sessions.push(...children.sessions);
     }
     return { sessions, warnings };
   },
 
   read(session, { run }) {
     const raw = JSON.parse(run("crush", ["session", "show", String(session.id), "--json"], { cwd: session.project }));
-    return { ...raw, meta: { ...raw.meta, host: "crush" } };
+    // A child session's "user" turns are a sub-agent prompt, not a person typing, so it is marked
+    // headless: turn classification leaves it alone, and the scan still reads what it did.
+    const child = session.child ? { headless: true } : {};
+    return { ...raw, meta: { ...raw.meta, host: "crush", ...child } };
   },
 };
