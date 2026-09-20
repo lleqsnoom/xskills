@@ -38,6 +38,12 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
       - run: npm ci || npm install --no-audit --no-fund
+      # Grammar packages are the tool's business to install, and this repository keeps
+      # them as devDependencies because the suite exercises the tree-sitter path. They
+      # have to be here, or the chunker tests fall back to windows and fail.
+      - name: Install the repository's dev dependencies
+        working-directory: ${{ github.workspace }}
+        run: npm ci || npm install --no-audit --no-fund
       - name: Start the embedder the tests call
         uses: ./.github/actions/ollama
       # The tests live with the repository's own, not inside this package: `npm test`
