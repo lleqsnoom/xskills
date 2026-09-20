@@ -1,0 +1,30 @@
+{
+  "name": "@lleqsnoom/x-search",
+  "version": "0.1.0",
+  "description": "Local semantic search over a repository's artifacts and source code, served to agent CLIs as an MCP server.",
+  "type": "module",
+  "bin": {
+    "x-search": "./src/cli.mjs"
+  },
+  "engines": {
+    "node": ">=22.5"
+  },
+  "files": [
+    "src/",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.cjs"
+  },
+  "dependencies": {
+    "web-tree-sitter": "^0.26.10"
+  },
+  "optionalDependencies": {
+    "sqlite-vec": "^0.1.9"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "private": false
+}
