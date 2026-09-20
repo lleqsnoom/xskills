@@ -62,9 +62,9 @@ describe("x-autoreflection-analysis aggregate", async () => {
       scan("s1", [
         signal("user-redo", { suspect: "x-research" }),
         signal("user-handoff", { suspect: "x-research" }),
-        signal("tool-rejected", { suspect: "x-anal" }),
+        signal("tool-rejected", { suspect: "x-analyze" }),
         signal("skill-script-silent", { suspect: "x-plan" }),
-        signal("interrupt", { severity: "low", suspect: "x-anal" }),
+        signal("interrupt", { severity: "low", suspect: "x-analyze" }),
       ]),
     ];
     const report = aggregate(scans, { hours: 24 });

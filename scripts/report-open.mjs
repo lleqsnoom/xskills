@@ -72,7 +72,7 @@ export function parseTabs(stdout) {
 
 /**
  * Open the report in an Orca tab, or focus the one that already has it. The origin is what is matched, so a
- * reader parked on `/skill/x-anal` gets their own tab back rather than a second one at the root.
+ * reader parked on `/skill/x-analyze` gets their own tab back rather than a second one at the root.
  *
  * Every call runs from the repository root: Orca resolves *which worktree* a tab belongs to from the working
  * directory, so a tab asked for from anywhere else would land in the wrong worktree of this same repo.

@@ -298,17 +298,17 @@ describe("x-autoreflection scan-session", async () => {
         [
           { role: "user", parts: [text("improve the reflection")] },
           { role: "assistant", parts: [text("looking around"), call("c1", "bash", { command: "ls skills/" })] },
-          { role: "tool", parts: [result("c1", "bash", "x-anal\nx-plan\nx-review\n<cwd>/repo</cwd>")] },
-          { role: "user", parts: [text("Base directory for this skill: /home/u/.claude/skills/x-anal\n\n# X-Anal\nroute to x-fix or x-plan")] },
-          { role: "assistant", parts: [text("using x-anal now"), call("c2", "bash", { command: "node skills/x-anal/scripts/scenario.mjs start" })] },
+          { role: "tool", parts: [result("c1", "bash", "x-analyze\nx-plan\nx-review\n<cwd>/repo</cwd>")] },
+          { role: "user", parts: [text("Base directory for this skill: /home/u/.claude/skills/x-analyze\n\n# X-Anal\nroute to x-fix or x-plan")] },
+          { role: "assistant", parts: [text("using x-analyze now"), call("c2", "bash", { command: "node skills/x-analyze/scripts/scenario.mjs start" })] },
         ],
-        [{ name: "x-anal", loaded_at: "t0" }, { name: "x-review", loaded_at: "t0" }]
+        [{ name: "x-analyze", loaded_at: "t0" }, { name: "x-review", loaded_at: "t0" }]
       )
     );
     const scan = mod.scanSession(session, { skillNames: [] });
-    assert.deepEqual(scan.skills.used, ["x-anal"]);
+    assert.deepEqual(scan.skills.used, ["x-analyze"]);
     assert.deepEqual(scan.skills.unused, ["x-review"], "a directory listing is not use");
-    assert.deepEqual(scan.skills.mentioned, ["x-anal", "x-fix", "x-plan", "x-review"]);
+    assert.deepEqual(scan.skills.mentioned, ["x-analyze", "x-fix", "x-plan", "x-review"]);
   });
 
   it("hears a redo request and a handoff, and a skill script that exits 0 and prints nothing", () => {
@@ -348,9 +348,9 @@ describe("x-autoreflection scan-session", async () => {
     const session = read.normalizeSession(
       transcript([
         { role: "user", parts: [text("do an analysis of the source file, the prompt is attached")] },
-        { role: "assistant", parts: [call("c1", "Skill", { skill: "x-anal" })] },
-        { role: "user", parts: [result("c1", "Skill", "Launching skill: x-anal")] },
-        { role: "user", parts: [text("Base directory for this skill: /home/u/.claude/skills/x-anal\n\n# X-Anal")] },
+        { role: "assistant", parts: [call("c1", "Skill", { skill: "x-analyze" })] },
+        { role: "user", parts: [result("c1", "Skill", "Launching skill: x-analyze")] },
+        { role: "user", parts: [text("Base directory for this skill: /home/u/.claude/skills/x-analyze\n\n# X-Anal")] },
         { role: "assistant", parts: [call("c2", "AskUserQuestion", { questions: [] })] },
         { role: "user", parts: [result("c2", "AskUserQuestion", "The user doesn't want to proceed with this tool use. The tool use was rejected.")] },
         { role: "user", parts: [text("[Request interrupted by user for tool use]")] },
@@ -359,7 +359,7 @@ describe("x-autoreflection scan-session", async () => {
     const scan = mod.scanSession(session, { skillNames: [] });
     const rejected = scan.signals.find((signal) => signal.kind === "tool-rejected");
     assert.equal(rejected.severity, "high");
-    assert.deepEqual(rejected.suspects, ["x-anal"]);
+    assert.deepEqual(rejected.suspects, ["x-analyze"]);
     assert.equal(rejected.evidence[0].message, 5);
     const interrupt = scan.signals.find((signal) => signal.kind === "interrupt");
     assert.equal(interrupt.severity, "low", "an interrupt says the user stopped the agent, not why");
@@ -455,14 +455,14 @@ describe("x-autoreflection scan-session", async () => {
           { role: "tool", parts: [result("c2", "view", "app")] },
           { role: "assistant", parts: [text("The server reads the packs, the app fetches /api/day. Nothing caches across days.")] },
         ],
-        [{ name: "x-anal", loaded_at: "t0" }]
+        [{ name: "x-analyze", loaded_at: "t0" }]
       )
     );
     const scan = mod.scanSession(abandoned, { skillNames: [] });
     const abandon = scan.signals.find((signal) => signal.kind === "user-abandon");
     assert.ok(abandon, "a substantial request answered and never replied to");
     assert.equal(abandon.severity, "low", "a weak implicit signal; the composite decides");
-    assert.deepEqual(abandon.suspects, ["x-anal"]);
+    assert.deepEqual(abandon.suspects, ["x-analyze"]);
     assert.equal(abandon.evidence[0].message, 5);
 
     const waiting = read.normalizeSession(

@@ -64,7 +64,7 @@ describe("x-autoreflection anchors — which sessions a reflection reads", async
   it("puts a handoff before a retry, a retry before a rejection, and friction last", () => {
     const sessions = [
       entry("friction", { signals: [{ kind: "tool-failure", severity: "high", suspects: ["x-fix"], count: 1, evidence: [] }] }),
-      entry("rejected", { signals: [anchorSignal("tool-rejected", "x-anal")] }),
+      entry("rejected", { signals: [anchorSignal("tool-rejected", "x-analyze")] }),
       entry("handoff", { signals: [anchorSignal("user-handoff", "x-research")] }),
       entry("retried", { lastOwner: "x-plan" }),
     ];

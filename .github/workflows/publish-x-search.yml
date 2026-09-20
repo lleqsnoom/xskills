@@ -1,0 +1,44 @@
+name: publish x-search
+
+# The search tool is its own package: it releases on its own commits, and the root
+# package (files: bin/ lib/ skills/ docs/) never carries it.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "tools/x-search/**"
+      - ".github/workflows/publish-x-search.yml"
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/x-search
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm ci || npm install --no-audit --no-fund
+      - run: npm test
+      - name: publish when the version is new
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          local_version=$(node -p "require('./package.json').version")
+          published=$(npm view "$(node -p "require('./package.json').name")" version 2>/dev/null || echo none)
+          if [ "$local_version" = "$published" ]; then
+            echo "version $local_version is already published"
+            exit 0
+          fi
+          npm publish --provenance --access public

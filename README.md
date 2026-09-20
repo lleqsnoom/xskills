@@ -79,20 +79,20 @@ xskills <skill-name>
 
 - **Node.js 18 or newer** — the skills use only Node built-ins, so there is nothing to install.
 - **Git** — needed by `x-rollback` and `x-parallel`.
-- **A compatible CLI** — see [Supported CLIs](#supported-clis). A few skills need extra tooling: `x-browser` drives a real Chrome/Chromium through a `chrome-devtools` MCP client.
+- **A compatible CLI** — see [Supported CLIs](#supported-clis). A few skills need extra tooling: `x-browser` drives a real Chrome/Chromium through a `chrome-devtools` MCP client, and `x-search` uses the `x-search` MCP server, which this repository ships (`tools/x-search`) and installs with `x-search install`.
 
 ## Reading the daily report
 
 ```bash
 npm run report:install          # once: the app's own dependencies
-npm run dev                     # working on the app: the server and hot reload, started together
+npm run report:dev              # working on the app: the server and hot reload, started together
 npm run report:build            # once, and after any change under tools/report-app
 npm run report                  # http://127.0.0.1:8787/ — movement per skill, per day
 npm run report:open             # start it if it is not running, then open it in an Orca tab
 npm run report:window           # the same, in a window with no browser controls (chrome --app)
 ```
 
-`npm run dev` runs two processes: the report server under `node --watch`, so an edit to it or to anything it
+`npm run report:dev` runs two processes: the report server under `node --watch`, so an edit to it or to anything it
 imports restarts it, and Vite, which hot-reloads the page and proxies `/api` to the server. Edit a component and
 the browser updates; edit the server and it comes back on its own. Both take the next free port, so a dev loop
 never collides with a `npm run report` left running: pass `--port <n>` to start the server's search somewhere
@@ -108,13 +108,55 @@ A digest's proposals and the to-do list are the same tasks, drawn by the same co
 in use — one line a task with an importance badge, and the file, the check and the rest behind a disclosure.
 `cards` and `lines` are still one click away in the picker above the list (`?shape=a|b|c`).
 
+## Reading a project's run tree
+
+Every skill writes its work into the repository it runs in, under `.x-skills/` — runs, plans, epics, tasks,
+reviews, analyses. A board over those trees lived in this repository and is now its own product: **Otter PM**
+([lleqsnoom/otter-pm](https://github.com/lleqsnoom/otter-pm)) reads one or more of those trees and shows what is in
+progress, what is waiting, and what is done, with each artifact readable and editable in place.
+
+```bash
+git clone https://github.com/lleqsnoom/otter-pm
+cd otter-pm && npm install
+npm run dev                                # http://127.0.0.1:4321/ — hot reload, first free port from 4321
+npm run serve                              # build if needed, then serve on the first free port at or after 4321
+npm run serve -- --port 8080 --root /code/app --root /code/api
+```
+
+Roots come from `--root` flags, `otter-pm.config.json`, `$OTTER_PM_ROOTS`, discovery, or the current directory; a
+root is either a `.x-skills` directory or a repository that has one. A project can be made from the app itself — a
+folder in Documents, a license, and a GitHub repository, private or public — which is the one write that reaches
+outside the trees being read. Adding a project by hand is one line in the config, adding a category is one entry in
+`src/server/categories.mjs`, and removing either is deleting that line. Artifacts are coloured by their own dialect
+— a guessed one is marked as a guess — and can be edited in the app, which writes the artifact itself; the only
+things kept outside a repository are the lane a card was filed into and the items a reader archived. See that
+repository's `README.md` for what is recognised and how it is built.
+
+## Searching with x-search
+
+`tools/x-search/` is the other side of the skills: it indexes the artifacts and the source of every
+repository the Orca IDE knows about, and serves the result to your CLI as an MCP server, so an agent
+can ask "where is this" instead of grepping. Embeddings come from a local Ollama daemon, and the
+index lives at `<repo>/.x-skills/.index/index.db` — one file per repository, nothing else written.
+
+```bash
+npx -y @lleqsnoom/x-search install --cli crush,claude,codex,opencode   # wire the CLIs
+npx -y @lleqsnoom/x-search index --all                                 # build the stores
+npx -y @lleqsnoom/x-search watch                                       # keep them current
+```
+
+Then `search` answers both "where is `resolveRunDir`" (keyword) and "where does a run get written"
+(meaning), and a hit carries the file, the line range and the symbol. See
+[`tools/x-search/README.md`](tools/x-search/README.md) for the tools, the engines and the measured
+numbers.
+
 ## Available Skills
 
 Run `npx xskills list` to see all available skills.
 
 | Skill | Description |
 |-------|-------------|
-| `x-anal` | Interactive analysis skill — research the project and web first, ask via panels (single / multi / open / confirm) until the user is sure, then produce a thesis with cited evidence and a mechanical check, propose three solutions with trade-offs, and route to fix or task creation; graph-driven with guards and a markdown memory. |
+| `x-analyze` | Interactive analysis skill — research the project and web first, ask via panels (single / multi / open / confirm) until the user is sure, then produce a thesis with cited evidence and a mechanical check, propose three solutions with trade-offs, and route to fix or task creation; graph-driven with guards and a markdown memory. |
 | `x-api-draft` | Draft API design from requirements — clarify scope, analyze endpoints and data models, produce a human-reviewable API design in markdown |
 | `x-api-swagger` | Convert an API design draft to OpenAPI YAML — generate a valid spec from markdown drafts with endpoints, schemas, and auth definitions |
 | `x-autoreflection` | Reflect on a session and improve the skills it used — read the transcript of this or an earlier session, mechanically extract friction signals (failed commands, repeated calls, user corrections, loaded-but-unused skills, questions asked in prose), check each against the real skill files, and turn the survivors into evidence-backed proposals with a target file and a check, then route them to a fix, a spec, or tasks. |
@@ -126,7 +168,7 @@ Run `npx xskills list` to see all available skills.
 | `x-debug` | Evidence-based debugging — reproduce, hypothesize, fix root cause, verify |
 | `x-decompose` | Decompose approved epic into layer-based tasks — each task is an independent, testable increment that builds on the previous; outputs `<run folder>/E02-tasks/` for handoff to x-implement |
 | `x-epic` | Convert approved spec into a layer-based epic — each layer is a coherent, testable increment from prototype to polished product; outputs `<run folder>/E01-epic.md` for handoff to x-decompose |
-| `x-essay` | Write an article end-to-end on a fixed loop — x-anal thesis, x-roast critique, x-humanize rewrite — repeating until it scores strong and reads clean. Use when asked to write or draft an article, blog post, or essay that must defend a claim. |
+| `x-essay` | Write an article end-to-end on a fixed loop — x-analyze thesis, x-roast critique, x-humanize rewrite — repeating until it scores strong and reads clean. Use when asked to write or draft an article, blog post, or essay that must defend a claim. |
 | `x-fix` | Resolve issues from fix plans — read, edit, verify, mark complete |
 | `x-humanize` | Simplify text, an article, a commit or PR to a B2 reading level — measure sentence length and complexity, cut noise, rewrite, then verify no meaning was lost. Use when asked to humanize, simplify, make easy to read, or plain-language a piece of prose. |
 | `x-implement` | Implement or fix with TDD — parallelize independent tasks with x-parallel, apply x-ui for frontend work, red-green-refactor per task, verify with x-review + x-fix, gate on plan completion |
@@ -140,6 +182,7 @@ Run `npx xskills list` to see all available skills.
 | `x-review` | Review code against engineering principles — small functions, SOLID, KISS, DRY — with automated AST-based complexity analysis across 30+ languages including Python, C, C++, Java, JavaScript, TypeScript, Go, Rust, Ruby, PHP, Swift, Kotlin, and more |
 | `x-roast` | Roast any non-code artifact — articles, analyses, specs, epics, tasks, research, or another skill — where the reviewer fact-checks the claims, attacks the reasoning, proposes better angles, and scores it on a weighted, anchored rubric computed by a script. Use for "roast this", "poke holes in", "review this spec/skill/analysis", or any request for a reproducible number and reason. For source code use x-review instead. |
 | `x-rollback` | Automated git revert with multi-step confirmation — identifies target commits, analyzes impact, requires approval, creates properly formatted revert commits via x-commit integration |
+| `x-search` | Search every indexed repository by meaning or exact identifier through the `x-search` MCP server — use before grepping for a symbol, when the file that owns a behaviour is unknown, or when the question spans repositories. |
 | `x-skill-lint` | Validate this repo’s own skills — frontmatter parses and `name` matches the folder, every referenced `scripts/*` and `references/*` exists, no stray template tokens, optional `evals/expectations.json` and `evals/triggers.json` are well-formed, and the README skills table lists every skill |
 | `x-test-gen` | Generate test stubs from implementation — analyzes source code and creates scaffolded tests with happy path, error cases, and edge case placeholders |
 | `x-triage` | Structured intake conversation — ask targeted panels (single / multi / open / confirm) to classify a bug’s platform, type, and evidence before touching any tools. Outputs `<run folder>/E<nn>-triage.md`. |

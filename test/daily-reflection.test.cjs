@@ -586,9 +586,9 @@ describe("spec-built file hosts", () => {
       const project = path.join(dir, "projects", "-home-nobody-work");
       const file = jsonl(path.join(project, "22222222-2222-3333-4444-555555555555.jsonl"), [
         { type: "user", timestamp: "2026-01-02T10:00:01.000Z", sessionId: "22222222-2222-3333-4444-555555555555", cwd: "/home/nobody/work", message: { role: "user", content: "analyse it" } },
-        { type: "assistant", timestamp: "2026-01-02T10:00:02.000Z", message: { role: "assistant", model: "claude-opus-5", content: [{ type: "tool_use", id: "toolu_1", name: "Skill", input: { skill: "x-anal" } }] } },
-        { type: "user", timestamp: "2026-01-02T10:00:03.000Z", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_1", content: "Launching skill: x-anal" }] } },
-        { type: "user", timestamp: "2026-01-02T10:00:04.000Z", message: { role: "user", content: [{ type: "text", text: "Base directory for this skill: /home/nobody/.claude/skills/x-anal\n\n# X-Anal" }] } },
+        { type: "assistant", timestamp: "2026-01-02T10:00:02.000Z", message: { role: "assistant", model: "claude-opus-5", content: [{ type: "tool_use", id: "toolu_1", name: "Skill", input: { skill: "x-analyze" } }] } },
+        { type: "user", timestamp: "2026-01-02T10:00:03.000Z", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_1", content: "Launching skill: x-analyze" }] } },
+        { type: "user", timestamp: "2026-01-02T10:00:04.000Z", message: { role: "user", content: [{ type: "text", text: "Base directory for this skill: /home/nobody/.claude/skills/x-analyze\n\n# X-Anal" }] } },
         { type: "user", timestamp: "2026-01-02T10:00:05.000Z", message: { role: "user", content: [{ type: "text", text: "Base directory for this skill: /home/nobody/.claude/skills/x-plan\n\n# X-Plan" }] } },
         { type: "assistant", timestamp: "2026-01-02T10:00:06.000Z", message: { role: "assistant", model: "claude-opus-5", content: [{ type: "text", text: "done" }] } },
       ]);
@@ -597,7 +597,7 @@ describe("spec-built file hosts", () => {
       const [listed] = claude.list(ctx).sessions;
       const raw = claude.read({ ...listed, file }, ctx);
       assert.deepEqual(raw.meta.skills, [
-        { name: "x-anal", loaded_at: "2026-01-02T10:00:02.000Z" },
+        { name: "x-analyze", loaded_at: "2026-01-02T10:00:02.000Z" },
         { name: "x-plan", loaded_at: "2026-01-02T10:00:05.000Z" },
       ]);
       assert.equal(raw.meta.headless, false, "an interactive session");

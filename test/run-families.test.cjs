@@ -11,7 +11,7 @@ const SKILLS = path.join(__dirname, "..", "skills");
 
 const STEPS = [
   { name: "plan", script: ["x-plan", "scripts", "save-spec.js"], args: ["--topic", "fam"] },
-  { name: "analysis", script: ["x-anal", "scripts", "scenario.mjs"], args: ["start", "--slug", "fam"] },
+  { name: "analysis", script: ["x-analyze", "scripts", "scenario.mjs"], args: ["start", "--slug", "fam"] },
   {
     name: "research",
     script: ["x-research", "scripts", "state.mjs"],
@@ -106,7 +106,7 @@ describe("text families — one run folder", () => {
 
 describe("text families — run selection flags", () => {
   const FAMILIES = [
-    ["x-anal", ["x-anal", "scripts", "scenario.mjs"], (slug) => ["start", "--slug", slug]],
+    ["x-analyze", ["x-analyze", "scripts", "scenario.mjs"], (slug) => ["start", "--slug", slug]],
     ["x-roast", ["x-roast", "scripts", "save-report.mjs"], (slug) => ["--slug", slug]],
     ["x-humanize", ["x-humanize", "scripts", "save-report.mjs"], (slug) => ["--slug", slug]],
     ["x-review", ["x-review", "scripts", "save-plan.js"], (slug) => ["--slug", slug]],

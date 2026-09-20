@@ -16,7 +16,7 @@ All artifacts live in one folder per run, relative to CWD:
 
 ### Choosing a run
 
-A slug reuses its existing run, so returning to a topic months later joins the original folder unless you say otherwise. Two flags control that, and **every skill that starts a run honours both** — the pipeline (`x-plan`, `x-epic`, `x-decompose`, `x-implement`) and the standalone families (`x-anal`, `x-research`, `x-roast`, `x-humanize`, `x-essay`, `x-api-draft`, `x-api-swagger`, `x-debug`, `x-review`, `x-autoreflection`):
+A slug reuses its existing run, so returning to a topic months later joins the original folder unless you say otherwise. Two flags control that, and **every skill that starts a run honours both** — the pipeline (`x-plan`, `x-epic`, `x-decompose`, `x-implement`) and the standalone families (`x-analyze`, `x-research`, `x-roast`, `x-humanize`, `x-essay`, `x-api-draft`, `x-api-swagger`, `x-debug`, `x-review`, `x-autoreflection`):
 
 | Flag | Effect |
 |------|--------|

@@ -103,7 +103,7 @@ One object, two files. The JSON is the truth the heal skill consumes; the markdo
   ],
   "retries": [ { "earlier": "crush:9bb1…", "later": "claude:5fe2…", "hours": 0.4, "overlap": 0.97, "excerpt": "…" } ],
   "select": [ { "session": "crush:9bb1…", "reason": "user-handoff", "owner": "x-plan", "model": "deepseek-v4-pro", "anchors": [] } ],
-  "recurring": [ { "owner": "x-anal", "sessions": ["…", "…"], "reason": "tool-rejected" } ],
+  "recurring": [ { "owner": "x-analyze", "sessions": ["…", "…"], "reason": "tool-rejected" } ],
   "audit": { "session": "crush:327d…", "model": "deepseek-v4-flash", "owner": null },
   "portfolio": [
     { "id": "PF1", "action": "delete", "skills": ["x-triage"], "reason": "loaded but never used in 3 sessions", "evidence": [] }

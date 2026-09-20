@@ -63,6 +63,6 @@ Name the mode in the gap, so the same mode across sessions is visible as one def
   sources, again check the article", then asked for the work as a prompt "so i can pass it to another
   agent". Modes: shallow, overclaim, surface compliance. Fixed in x-research by cited coverage, a depth
   rule and a report with evidence.
-- **A confirmation nobody needed.** A user handed an 87-line written prompt to x-anal; its first step
+- **A confirmation nobody needed.** A user handed an 87-line written prompt to x-analyze; its first step
   asked "Is this restatement of what you want correct?" as a panel. The user refused the panel and ended
-  the session. Mode: ritual over outcome. Fixed in x-anal: a written brief is its own confirmation.
+  the session. Mode: ritual over outcome. Fixed in x-analyze: a written brief is its own confirmation.

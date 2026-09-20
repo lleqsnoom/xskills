@@ -101,7 +101,7 @@ export function improvementBrief(items, { generatedAt = null, savedAt = null } =
   lines.push(
     "| Step | Skill |",
     "|---|---|",
-    "| Understand the weakness | `x-anal` (a thesis with cited evidence), `x-investigate` (root cause, hypotheses eliminated in order), `x-triage` (a bug's platform and evidence before any tool runs) |",
+    "| Understand the weakness | `x-analyze` (a thesis with cited evidence), `x-investigate` (root cause, hypotheses eliminated in order), `x-triage` (a bug's platform and evidence before any tool runs) |",
     "| Get something that fails | `x-reproduce`: the smallest script or case that exits 1 while the bug is present |",
     "| Plan it when it is bigger than one edit | `x-plan` (a spec), `x-epic` (the outcome as layers), `x-decompose` (tasks an agent can hold) |",
     "| Change it | `x-fix` (work a fix plan, verify, mark it done), `x-implement` (TDD, one layer at a time, parallel tasks via `x-parallel`) |",
@@ -117,7 +117,7 @@ export function improvementBrief(items, { generatedAt = null, savedAt = null } =
     "1. **Read the task and its evidence.** Open the target file and the day's pack. Read the signal's excerpt " +
       "and the session around it. What the session shows is the fact; the summary is a summary.",
     "2. **State the cause in one sentence, as a rule.** \"X happens because Y\" is workable; \"X is bad\" is not. " +
-      "`x-anal` is the skill for this, and `x-investigate` when the cause is not visible yet.",
+      "`x-analyze` is the skill for this, and `x-investigate` when the cause is not visible yet.",
     "3. **Reproduce it.** Before the edit, have something that fails: a test, a scenario, or the analyzer run by " +
       "hand. `x-reproduce` writes the smallest one. A change with no failing case in front of it is a guess.",
     "4. **Make the smallest change that removes the cause.** One thing, with its test in the same change. Use " +
