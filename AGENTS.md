@@ -6,6 +6,11 @@
 
 The package has **zero dependencies** — it uses only Node.js built-ins (`fs/promises`, `path`, `os`, `child_process`).
 
+One local app lives under `tools/` and is not part of the published package: the **report app** over the daily
+reflection packs (`tools/report-app`, `npm run report`). A second app used to live here, the project board over a
+repository's `.x-skills` tree; it is now its own product, **Otter PM**, in its own repository
+(<https://github.com/lleqsnoom/otter-pm>). Nothing in this package imports it, and its scripts are gone from here.
+
 ---
 
 ## Commands
@@ -22,9 +27,14 @@ The package has **zero dependencies** — it uses only Node.js built-ins (`fs/pr
 | `node bin/install.js install-all --global --force` | Refreshes every installed skill, replacing existing copies |
 | `node bin/install.js <name>` | Shortcut: installs the named skill |
 | `node bin/install.js help` | Shows usage info |
-| `npm run dev` | Works on the report app: the server under `node --watch` plus Vite with hot reload; both step to the next free port — `-- --port 8080` starts the search there |
+| `npm run report:dev` | Works on the report app: the server under `node --watch` plus Vite with hot reload; both step to the next free port — `-- --port 8080` starts the search there |
 | `npm run report` | Serves the daily metrics on <http://127.0.0.1:8787> — `-- --port 8080 --days 14` |
 | `npm run report:open` | Starts the report if it is not answering, then opens it in an Orca browser tab — `-- --window` for a window with no browser controls |
+| `npm --prefix tools/x-search test` | Runs the search tool's own tests (`node --test test/*.test.cjs` from the root runs them too) |
+| `node tools/x-search/src/cli.mjs index --all` | Builds every store; `--root <path>` for one, `--prune` to forget repositories that moved |
+| `node tools/x-search/src/cli.mjs watch` | Keeps every known repository warm (2 s debounce) |
+| `node tools/x-search/src/cli.mjs mcp` | The stdio MCP server: `search`, `projects`, `stats` |
+| `node tools/x-search/src/cli.mjs install --cli crush,claude,codex,opencode` | Wires the CLI configs, with backups; `--remove` takes the entry back out |
 
 ---
 
@@ -40,6 +50,9 @@ xskills/
 ├── scripts/                  # Repo tooling: sync-run-folders.js, dev.mjs, report-server.mjs, report-open.mjs (not published)
 ├── tools/report-app/         # The report app: Solid + Tailwind, controls in src/ui/, styled in Orca's design language
 │                             # (dist/, dist-panel/ and node_modules/ are gitignored)
+├── tools/x-search/           # The semantic search tool: index, watcher and the stdio MCP server
+│                             # its own package (@lleqsnoom/x-search), own release workflow
+│                             # (node_modules/ is gitignored)
 └── skills/                   # Skill packages (published as part of the npm package)
     ├── x-commit/             # Conventional commit message helper
     │   ├── SKILL.md          # Required: YAML frontmatter + instructions
@@ -69,13 +82,13 @@ xskills/
     │   ├── SKILL.md
     │   ├── scripts/
     │   └── references/
-    ├── x-essay/              # Author an article on a fixed loop: x-anal → x-roast → x-humanize, bounded by score gate + cap
+    ├── x-essay/              # Author an article on a fixed loop: x-analyze → x-roast → x-humanize, bounded by score gate + cap
     │   ├── SKILL.md
     │   ├── scripts/
     │   └── references/
     ├── x-fix/                # Resolve code review issues from fix plan files
     │   └── SKILL.md
-    ├── x-anal/               # Interactive analysis — understand problem, produce thesis with evidence, propose solution
+    ├── x-analyze/               # Interactive analysis — understand problem, produce thesis with evidence, propose solution
     │   └── SKILL.md
     ├── x-investigate/        # Hypothesis-driven root cause analysis — ranked hypotheses, git history, platform tools
     │   ├── SKILL.md
@@ -105,7 +118,9 @@ xskills/
 
 ## Skill Access Patterns
 
-Skills are plain markdown files, not MCP servers. Using the wrong access method causes `mcp '<skill>' not available` errors. **xskills ships no MCP server** — a skill is read as a file with the `view`/`read` tool.
+Skills are plain markdown files, not MCP servers. Using the wrong access method causes `mcp '<skill>' not available` errors. **No skill is itself an MCP server** — a skill is read as a file with the `view`/`read` tool.
+
+This repository does ship **one** MCP server, `x-search` (`tools/x-search`), which any CLI can be wired to with `x-search install`. It is a tool the skills call, not a way to read a skill: `mcp '<skill>' not available` is still the error for every `x-*` name.
 
 ### How to read a skill's instructions (SKILL.md)
 
@@ -115,7 +130,7 @@ Skills are plain markdown files, not MCP servers. Using the wrong access method 
 | **Source repo** (published package) | `<project>/skills/<name>/SKILL.md` | `view` tool with file path | `view skills/x-plan/SKILL.md` |
 | **Builtin** (`jq`, `omarchy`) | Internal to Crush runtime | `crush://skills/<name>/SKILL.md` | `view crush://skills/jq/SKILL.md` |
 
-**Never use `Read Mcp Resource` with a skill name as the server.** There is no MCP server named `x-implement`, `x-commit`, etc. Some skills drive *external* MCP servers that the client may have configured (for example `x-browser` attaches to a `chrome-devtools` MCP) — those belong to the environment, not to xskills.
+**Never use `Read Mcp Resource` with a skill name as the server.** There is no MCP server named `x-implement`, `x-commit`, etc. `x-search` is the only MCP server this project owns; `x-browser` attaches to a `chrome-devtools` MCP that belongs to the environment, not to xskills.
 
 ### When task directories don't exist yet
 
@@ -200,7 +215,7 @@ Independent of the planning pipeline, debugging uses a multi-skill scientific me
 
 - **x-triage** — Structured intake: asks targeted questions about platform, symptoms, and evidence before any tools run
 - **x-reproduce** — Creates minimal platform-aware reproducible test cases (browser console, Node standalone, ADB logcat steps)
-- **x-anal** — Interactive analysis: confirms user intent, clarifies ambiguities with suggestions, produces thesis with evidence and solution proposition, routes to fix or task creation
+- **x-analyze** — Interactive analysis: confirms user intent, clarifies ambiguities with suggestions, produces thesis with evidence and solution proposition, routes to fix or task creation
 - **x-investigate** — Hypothesis-driven root cause analysis using git bisect/blame, Chrome DevTools, debuggers, or engine profilers depending on platform
 - **x-autoreflection** — Session retrospective: exports the transcript of this or an earlier session, scans it mechanically for friction (failed commands, repeats, user corrections, prose questions, unused skills), verifies each signal against the real skill files, and writes evidence-backed improvement proposals to `<run folder>/E<nn>-reflection.md`
 
@@ -275,7 +290,7 @@ database behind it, whose storage is those JSON files.
 
 ```bash
 npm run report:install              # once: the app's own dependencies
-npm run dev                         # work on the app: server (restarting on change) + Vite hot reload
+npm run report:dev                  # work on the app: server (restarting on change) + Vite hot reload
 npm run report:build                # once, and after any change under tools/report-app
 npm run report                      # http://127.0.0.1:8787/
 npm run report -- --days 30 --port 8080
@@ -601,6 +616,23 @@ Sessions are scoped per project directory and per CLI, so discovery walks every 
 what it finds by host and uuid — the same uuid under two CLIs is two sessions. Crush's own walk is
 per project in `projects.json` (newest first, `--project-lookback-hours`, default 72).
 
+## Otter PM (its own repository)
+
+The project board over a repository's `.x-skills` tree used to live here, at `tools/project-preview`, and it is now
+its own product in its own repository: **Otter PM**, <https://github.com/lleqsnoom/otter-pm>. Its package is
+`@lleqsnoom/otter-pm`; `npm run dev`, `npm run serve` and `npm test` are commands *there*; and its documentation —
+what it recognises, how a lane is decided, how a project is made — moved with it.
+
+Nothing in this package reads the app: the npm tarball never carried `tools/`, no skill calls it, and no build step
+here needs it. What stays in this repository is the other half of the relationship — the `.x-skills` trees the app
+draws — and Otter PM reads them from the Orca IDE's own project list, so a repository added to the IDE is one the
+board shows.
+
+```bash
+git clone https://github.com/lleqsnoom/otter-pm
+cd otter-pm && npm install && npm run dev   # http://127.0.0.1:4321/
+```
+
 ## Release Workflow
 
 Releases are fully automated via [semantic-release](https://github.com/semantic-release/semantic-release) triggered on every push to `main`.
@@ -691,7 +723,7 @@ A skill must **never** ask the user a question in prose or bury one in a discuss
 | `open` | open form only (free text) | none |
 | `confirm` | yes/no | none |
 
-The skills that ask questions (`x-anal`, `x-plan`, `x-research`, `x-autoreflection`) ship the canonical rules in `references/questions.md` and enforce them with `scripts/check-questions.mjs`. Skills without that file (`x-triage`, `x-api-draft`, `x-api-swagger`, `x-browser`, `x-implement`, `x-investigate`) define the four shapes inline at first use.
+The skills that ask questions (`x-analyze`, `x-plan`, `x-research`, `x-autoreflection`) ship the canonical rules in `references/questions.md` and enforce them with `scripts/check-questions.mjs`. Skills without that file (`x-triage`, `x-api-draft`, `x-api-swagger`, `x-browser`, `x-implement`, `x-investigate`) define the four shapes inline at first use.
 
 **Known limits.** The Agent Skills specification (agentskills.io/specification) defines no question or interaction primitive, so there is no portable panel: a host may have no structured question tool, in which case the skill prints the four shapes as a numbered prompt. And `check-questions.mjs` validates only the authored questions file — nothing verifies that a session actually rendered a panel. The rule is a contract on the skill, not a runtime guarantee.
 
