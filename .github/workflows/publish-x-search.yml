@@ -2,21 +2,30 @@ name: publish x-search
 
 # The search tool is its own package: it releases on its own commits, and the root
 # package (files: bin/ lib/ skills/ docs/) never carries it.
+#
+# Its tests need both halves of the tool's runtime — the sqlite-vec binary this
+# package installs, and an Ollama embedder — so the job installs the embedder rather
+# than letting the suite fail on a machine that has neither. It publishes with OIDC
+# trusted publishing, the same way the root package does; a token would need a secret
+# this repository does not keep.
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
       - "tools/x-search/**"
+      - "test/x-search*.test.cjs"
+      - ".github/actions/ollama/**"
       - ".github/workflows/publish-x-search.yml"
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
+  id-token: write # to publish with provenance, no token
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: tools/x-search
@@ -29,10 +38,14 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
       - run: npm ci || npm install --no-audit --no-fund
-      - run: npm test
+      - name: Start the embedder the tests call
+        uses: ./.github/actions/ollama
+      # The tests live with the repository's own, not inside this package: `npm test`
+      # here matched an empty directory and passed with nothing to verify.
+      - name: Run the search tool's tests
+        working-directory: ${{ github.workspace }}
+        run: node --test test/x-search*.test.cjs
       - name: publish when the version is new
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           local_version=$(node -p "require('./package.json').version")

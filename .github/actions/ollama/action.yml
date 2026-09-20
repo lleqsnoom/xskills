@@ -1,0 +1,27 @@
+name: Start the local embedder
+description: Install Ollama, start it, and pull nomic-embed-text — what the x-search tests call for embeddings.
+
+runs:
+  using: composite
+  steps:
+    - name: Install Ollama
+      shell: bash
+      run: curl -fsSL https://ollama.com/install.sh | sh
+
+    - name: Start it and pull the model
+      shell: bash
+      run: |
+        set -euo pipefail
+        nohup ollama serve > /tmp/ollama.log 2>&1 &
+        for _ in $(seq 1 60); do
+          if curl -fsS http://127.0.0.1:11434/api/tags > /dev/null; then
+            echo "the embedder is answering"
+            ollama pull nomic-embed-text
+            ollama list
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "::error::ollama did not answer on 127.0.0.1:11434 within 60s"
+        tail -40 /tmp/ollama.log
+        exit 1
