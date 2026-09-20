@@ -1,3 +1,9 @@
+## [5.33.0] - 2026-09-20
+
+* Merge pull request #70 from lleqsnoom/feat/merge-autoreflection-skills (350c9db)
+* feat: fold analysis and heal into x-autoreflection (172c5c6)
+* fix: include the Crush sub-agent sessions the CLI hides (fed58c0)
+
 ## [5.32.0] - 2026-09-20
 
 * Merge pull request #69 from lleqsnoom/feat/project-preview (f26d2e9)
