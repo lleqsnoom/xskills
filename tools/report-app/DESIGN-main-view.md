@@ -65,7 +65,7 @@ when   what was wrong             done      mechanism   before → after       v
 ─────  ─────────────────────────  ────────  ──────────  ───────────────────  ────────────
 09-12  dangling path in x-epic    shipped   lint rule   x-decompose 62 → 78  held
 09-14  panel rule missing         shipped   prose only  x-review   85 → 84   flat
-09-16  scenario report path       shipped   test        x-anal     79 → 79   waiting (2/3 days)
+09-16  scenario report path       shipped   test        x-analyze     79 → 79   waiting (2/3 days)
 09-08  prose question in x-fix    not kept      —            —            —
 ```
 
@@ -107,7 +107,7 @@ so under the table, and print the window size rather than a confidence claim.
 x-review      ███████████████████▉  85.2   floor 85.2 since 09-16 (n=7)   0 regressions
 x-fix         ████████████████▊····  73.3   floor 78.1 since 09-14 (n=6)   3 days below
 x-commit      ███████████████████▌  83.5   floor 81.0 since 09-15 (n=6)   held
-x-anal        ███████████████████··  79.1   floor 79.7 since 09-16 (n=3)   within noise
+x-analyze        ███████████████████··  79.1   floor 79.7 since 09-16 (n=3)   within noise
 ```
 
 The filled part is the record; the notch is the floor; a row below its floor is the only loud row,
@@ -144,7 +144,7 @@ the `n` rule above, plus a "floors raised on thin evidence" line the panel shows
 
 ```
 ┌ Now ───────────────────────────────────────────┐  ┌ Doing ──────────┐  ┌ Waiting on the scan ─┐
-│ x-decompose · doc-command-drift                │  │ P1  x-anal      │  │ P3  x-review         │
+│ x-decompose · doc-command-drift                │  │ P1  x-analyze      │  │ P3  x-review         │
 │ S2 and S24 (both high) · seen in 3 sessions    │  │ since 09-17     │  │ shipped 09-16        │
 │ skills/x-decompose/SKILL.md:12                 │  │ check: node …   │  │ 2 of 3 days measured │
 │ change: state the order inline …               │  └─────────────────┘  └──────────────────────┘
@@ -441,7 +441,7 @@ doc-command-drift · skills/x-plan/SKILL.md    1d   last seen 09-17 · fix lande
   auto: the class and file appear again in 09-17's pack        [ held ] [ came back ] [ reformulate ]
 missing-check · test/x-autoreflection.test.cjs  1d  fix landed 09-16, nothing since
   what to do: confirm the test exists and covers the case      [ held ] [ came back ] [ reformulate ]
-script-hardening · skills/x-anal/scripts/scenario.mjs  1d  interval fell to 1.3 after 2 lapses
+script-hardening · skills/x-analyze/scripts/scenario.mjs  1d  interval fell to 1.3 after 2 lapses
   this one keeps failing its check: the finding, not the fix, needs rewriting
 ```
 

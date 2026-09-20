@@ -1,6 +1,6 @@
 ---
 name: x-essay
-description: Write an article end-to-end on a fixed loop — x-anal thesis, x-roast critique, x-humanize rewrite — repeating until it scores strong and reads clean. Use when asked to write or draft an article, blog post, or essay that must defend a claim.
+description: Write an article end-to-end on a fixed loop — x-analyze thesis, x-roast critique, x-humanize rewrite — repeating until it scores strong and reads clean. Use when asked to write or draft an article, blog post, or essay that must defend a claim.
 version: 1.0.0
 author: Community
 tags: [writing, article, essay, blog, editorial, loop, pipeline, drafting, prose]
@@ -13,7 +13,7 @@ Turn a claim into a finished article by running the three existing xskills in a
 **fixed order and a bounded loop**, instead of doing it by hand:
 
 ```
-CLAIM → x-anal (thesis + evidence) → DRAFT
+CLAIM → x-analyze (thesis + evidence) → DRAFT
    ↻  x-roast → REVISE (fix findings) → x-humanize → verify → final-check
       stop when roast total ≥ min-score AND humanize exit = 0 AND coverage ≥ coverage-gate
       else loop; after `cap` iterations, escalate instead of looping forever
@@ -38,7 +38,7 @@ matters. For papers/research use `x-roast --profile research` (a later `--type`)
 
 ## Non-negotiable rules (read first)
 
-1. **Fixed order.** `x-anal → x-roast → x-humanize`. Never humanize before the
+1. **Fixed order.** `x-analyze → x-roast → x-humanize`. Never humanize before the
    roast has passed — humanizing a sentence a roast just corrected can quietly
    restore the wrong claim.
 2. **Humanize is last, then re-checked.** After a passing humanize, run a
@@ -62,8 +62,8 @@ a numeric summary. Defaults: score gate **75** ("strong" band), coverage gate
 **1.0** (all facts/markers survive), cap **3**. Completion: `state.json` exists
 with `phase:"draft"` and `gates` recorded.
 
-### 2. Analyse — run `x-anal`
-Pose the claim; use `x-anal` to produce `<run folder>/E<nn>-analysis.md`
+### 2. Analyse — run `x-analyze`
+Pose the claim; use `x-analyze` to produce `<run folder>/E<nn>-analysis.md`
 (thesis, evidence, confidence, options). Completion: you have a one-sentence
 central claim and the load-bearing evidence for it.
 

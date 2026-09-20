@@ -7,7 +7,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const SCENARIO = path.join(__dirname, "..", "skills", "x-anal", "scripts", "scenario.mjs");
+const SCENARIO = path.join(__dirname, "..", "skills", "x-analyze", "scripts", "scenario.mjs");
 
 function run(args, cwd) {
   return new Promise((resolve, reject) => {
@@ -22,7 +22,7 @@ function run(args, cwd) {
 }
 
 function tmp() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "x-anal-scenario-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "x-analyze-scenario-"));
 }
 
 function readJson(file) {
@@ -43,10 +43,10 @@ function evidence(cwd, dir) {
   return record(cwd, dir, ["--event", "evidence", "--data", "thread count grows", "--target", "src/pool.js:42"]);
 }
 
-describe("x-anal scenario — pure", async () => {
+describe("x-analyze scenario — pure", async () => {
   const m = await import(SCENARIO);
 
-  const pureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "x-anal-pure-"));
+  const pureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "x-analyze-pure-"));
   const state = (slug) => m.createState({ slug, root: path.join(pureRoot, ".x-skills", "runs") });
 
   after(() => fs.rmSync(pureRoot, { recursive: true, force: true }));
@@ -95,7 +95,7 @@ describe("x-anal scenario — pure", async () => {
   });
 });
 
-describe("x-anal scenario — CLI", () => {
+describe("x-analyze scenario — CLI", () => {
   let cwd;
   beforeEach(() => {
     cwd = tmp();
@@ -194,8 +194,8 @@ describe("x-anal scenario — CLI", () => {
   });
 });
 
-describe("x-anal scenario — the SKILL.md agrees with the script", () => {
-  const SKILL_MD = path.join(__dirname, "..", "skills", "x-anal", "SKILL.md");
+describe("x-analyze scenario — the SKILL.md agrees with the script", () => {
+  const SKILL_MD = path.join(__dirname, "..", "skills", "x-analyze", "SKILL.md");
 
   const kindsInSource = () => {
     const source = fs.readFileSync(SCENARIO, "utf8");

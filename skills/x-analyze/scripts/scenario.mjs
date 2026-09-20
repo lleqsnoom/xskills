@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-export const SKILL = "x-anal";
+export const SKILL = "x-analyze";
 export const REPORT_ROOT = ".x-skills/runs";
 export const START_NODE = "intake";
 export const STOPS = ["fix", "tasks", "plan", "investigate", "defer", "abandon"];
@@ -310,7 +310,7 @@ function parseArgs(args) {
 
 function usage() {
   return [
-    "x-anal scenario — graph-driven diagnostic state machine.",
+    "x-analyze scenario — graph-driven diagnostic state machine.",
     "",
     "Usage:",
     "  node scenario.mjs start --slug <s> [--goal <text>] [--root <dir>]",

@@ -374,7 +374,7 @@ describe("report:open — the surfaces the report can be read in", async () => {
     const calls = [];
     const exec = (command, args) => {
       calls.push(args.join(" "));
-      if (args[1] === "list") return tabList([{ pageId: "page_1", url: "http://127.0.0.1:8787/skill/x-anal", title: "x-skills" }]);
+      if (args[1] === "list") return tabList([{ pageId: "page_1", url: "http://127.0.0.1:8787/skill/x-analyze", title: "x-skills" }]);
       return { code: 0, stdout: "{}", stderr: "" };
     };
     const result = open.openInOrca({ url: "http://127.0.0.1:8787/day/2026-09-17", exec });
@@ -465,7 +465,7 @@ describe("report:open — the surfaces the report can be read in", async () => {
   });
 
   it("keeps a page path a path — a body cannot point the opener at another origin", () => {
-    assert.equal(open.safePath("/skill/x-anal?shape=a"), "/skill/x-anal?shape=a");
+    assert.equal(open.safePath("/skill/x-analyze?shape=a"), "/skill/x-analyze?shape=a");
     assert.equal(open.safePath("//evil.example/x"), "/");
     assert.equal(open.safePath("http://evil.example/"), "/");
     assert.equal(open.safePath("/a:b"), "/");
@@ -1347,11 +1347,11 @@ describe("the to-do list can be handed over as a brief", async () => {
     {
       id: "P1",
       day: null,
-      skill: "x-anal",
+      skill: "x-analyze",
       change: "resolve the report path against the run dir",
       reason: null,
-      expected: "`node --test test/x-anal-scenario.test.cjs` exits 0",
-      target: "skills/x-anal/scripts/scenario.mjs:154",
+      expected: "`node --test test/x-analyze-scenario.test.cjs` exits 0",
+      target: "skills/x-analyze/scripts/scenario.mjs:154",
       route: null,
       signal: "S21 (high, kept)",
       note: "the reader's own words",
@@ -1380,7 +1380,7 @@ describe("the to-do list can be handed over as a brief", async () => {
   it("carries the loop, and the skill that owns each step", () => {
     assert.match(text, /## The loop, once per task/);
     for (let step = 1; step <= 10; step++) assert.match(text, new RegExp(`^${step}\\. \\*\\*`, "m"), `step ${step} is written down`);
-    for (const skill of ["x-anal", "x-investigate", "x-reproduce", "x-plan", "x-decompose", "x-fix", "x-implement", "x-review", "x-roast", "x-skill-lint", "x-rollback", "x-commit", "x-autoreflection"]) {
+    for (const skill of ["x-analyze", "x-investigate", "x-reproduce", "x-plan", "x-decompose", "x-fix", "x-implement", "x-review", "x-roast", "x-skill-lint", "x-rollback", "x-commit", "x-autoreflection"]) {
       assert.ok(text.includes(`\`${skill}\``), `${skill} is named`);
     }
     // The commands it tells the reader to run are the ones this repository has.
@@ -1400,7 +1400,7 @@ describe("the to-do list can be handed over as a brief", async () => {
   });
 
   it("says where to look when an item predates the days it records", () => {
-    assert.match(text, /^### 2\. x-anal \(P1\)$/m, "no day in the heading, because the item carries none");
+    assert.match(text, /^### 2\. x-analyze \(P1\)$/m, "no day in the heading, because the item carries none");
     assert.match(text, /this item carries no day/);
     assert.match(text, /grep -l 109444fc8722edf6|The signal names no session/, "the session is named when the signal names one");
     assert.match(text, /The signal names no session, so ask the reader/, "and the reader is asked when it does not");

@@ -21,7 +21,7 @@ const TARGETS = [
   "skills/x-epic/scripts/shared.js",
   "skills/x-decompose/scripts/shared.js",
   "skills/x-implement/scripts/shared.js",
-  "skills/x-anal/scripts/scenario.mjs",
+  "skills/x-analyze/scripts/scenario.mjs",
   "skills/x-research/scripts/state.mjs",
   "skills/x-roast/scripts/save-report.mjs",
   "skills/x-humanize/scripts/save-report.mjs",

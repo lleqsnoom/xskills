@@ -1,5 +1,5 @@
 ---
-name: x-anal
+name: x-analyze
 description: Interactive analysis skill — research the project and web first, ask short plain questions until the user is sure, then produce a thesis with cited evidence and a mechanical check, propose three solutions with trade-offs, and route to fix or task creation; graph-driven with guards and a markdown memory.
 version: 1.0.0
 author: Community

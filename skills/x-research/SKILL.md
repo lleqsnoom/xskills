@@ -71,7 +71,7 @@ Each run directory holds:
 evaluator, **propose a criteria-coverage metric + target and continue** — do not
 stop. Ask **at most once** with a panel if something is genuinely ambiguous, then proceed with
 the proposal. Only a *pure* open-ended question with **no definable metric** belongs
-to `x-anal` / `x-investigate`; this skill *defines* the metric when none exists.
+to `x-analyze` / `x-investigate`; this skill *defines* the metric when none exists.
 
 ## Non-negotiable rules (read first)
 
@@ -238,7 +238,7 @@ host, its permission and approval gates still apply on every iteration.
 |-------|------|
 | Target met, change should ship | `x-commit` (and `x-review` for the held diff) |
 | Escalated (cap hit, target unmet) | `x-investigate` (root cause) or `x-plan` (a different approach) |
-| The metric itself is unclear or contested | `x-anal` |
+| The metric itself is unclear or contested | `x-analyze` |
 | You want the result reviewed before believing it | `x-roast --profile research` |
 
 ## Files
