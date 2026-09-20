@@ -68,7 +68,7 @@ Look at *why* the step failed or fell short, then pick the smallest durable fix:
 | A skill script exited 0 and said nothing | `silent-success` | print a result line; compare real paths in the main guard |
 
 Prefer `missing-check` when a mechanism exists. A doc line can drift again; a test cannot. The six
-quality classes (`rule-not-applied` to `silent-success`) are judgement calls: `x-autoreflection-heal`
+quality classes (`rule-not-applied` to `silent-success`) are judgement calls: `x-autoreflection`'s heal stage
 never applies them automatically.
 
 ## What is not a gap

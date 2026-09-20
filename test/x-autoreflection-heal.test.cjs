@@ -7,7 +7,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const SKILL = path.join(__dirname, "..", "skills", "x-autoreflection-heal");
+const SKILL = path.join(__dirname, "..", "skills", "x-autoreflection");
 const HEAL = path.join(SKILL, "scripts", "heal.mjs");
 const CHECK = path.join(SKILL, "scripts", "check-heal.mjs");
 
@@ -25,10 +25,10 @@ function analysis(findings = []) {
 }
 
 function finding(id, over = {}) {
-  return { id, kind: "tool-failure", class: "doc-command-drift", skill: "x-epic", change: "fix it", evidence: [], ...over };
+  return { id, kind: "tool-failure", class: "doc-command-drift", skill: "x-epic", summary: "the documented flag does not match the script", severity: "high", recurrence: 2, count: 3, change: "fix it", evidence: [], ...over };
 }
 
-describe("x-autoreflection-heal mint", async () => {
+describe("x-autoreflection heal mint", async () => {
   const { mintPlan, SCHEMA } = await import(HEAL);
 
   it("mints one item per finding, with edit fields empty", () => {
@@ -42,7 +42,7 @@ describe("x-autoreflection-heal mint", async () => {
   });
 });
 
-describe("x-autoreflection-heal apply", async () => {
+describe("x-autoreflection heal apply", async () => {
   const { countOccurrences, applyItem, applyHeal } = await import(HEAL);
 
   it("counts literal occurrences", () => {
@@ -123,14 +123,14 @@ describe("x-autoreflection-heal apply", async () => {
   });
 });
 
-describe("x-autoreflection-heal check-heal", async () => {
+describe("x-autoreflection check-heal", async () => {
   const { lintHeal } = await import(CHECK);
 
   it("accepts a well-shaped auto plan", () => {
     const plan = {
       schema: "x-autoreflection-heal/1",
       analysis: "E00-analysis.json",
-      items: [{ id: "F1", skill: "x-epic", class: "doc-command-drift", target: "skills/x-epic/SKILL.md", find: "--topic", replace: "--slug", check: "node lint", auto: true }],
+      items: [{ id: "F1", skill: "x-epic", class: "doc-command-drift", issue: "tool-failure in 2 sessions", improvement: "tool-failure signals on x-epic: 3 across 2 sessions → none in the next 14 days", target: "skills/x-epic/SKILL.md", find: "--topic", replace: "--slug", check: "node lint", auto: true }],
     };
     assert.deepEqual(lintHeal(plan).violations, []);
   });
@@ -152,7 +152,7 @@ describe("x-autoreflection-heal check-heal", async () => {
   });
 });
 
-describe("x-autoreflection-heal — quality fixes and the separation of powers", async () => {
+describe("x-autoreflection heal — quality fixes and the separation of powers", async () => {
   const { QUALITY_CLASSES, mintPlan, applyItem } = await import(HEAL);
   const { lintHeal } = await import(CHECK);
   const plan = (items) => ({ schema: "x-autoreflection-heal/1", analysis: "E00-analysis.json", generatedAt: "t", items });

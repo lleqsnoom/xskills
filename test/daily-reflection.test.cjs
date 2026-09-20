@@ -256,6 +256,104 @@ describe("crush host adapter", () => {
     assert.equal(raw.meta.host, "crush");
     assert.deepEqual(ctx.run.calls[0], { key: "crush session show aaaa1111 --json", cwd: "/p" });
   });
+
+  it("marks a child session headless, so a sub-agent prompt is never read as a person's turn", () => {
+    const crush = hosts.hostById("crush");
+    const ctx = ctxFor({
+      run: stubRun({
+        "crush session show aaaa1111 --json @/p": JSON.stringify({ meta: { id: "aaaa1111" }, messages: [] }),
+        "crush session show child111 --json @/p": JSON.stringify({ meta: { id: "child111" }, messages: [] }),
+      }),
+    });
+    assert.equal(crush.read({ id: "aaaa1111", project: "/p" }, ctx).meta.headless, undefined);
+    assert.equal(crush.read({ id: "child111", project: "/p", child: true }, ctx).meta.headless, true);
+  });
+});
+
+/** Children live in a project's own SQLite store, so these need the built-in driver too. */
+const crushStoreOnly = hasSqlite ? describe : describe.skip;
+crushStoreOnly("crush child sessions", () => {
+  /** A store shaped like Crush's own: Unix-second stamps, and a parent_session_id that marks a child. */
+  function crushStore(dir, rows) {
+    const file = path.join(dir, ".crush", "crush.db");
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const { DatabaseSync } = require("node:sqlite");
+    const db = new DatabaseSync(file);
+    db.exec("create table sessions (id text primary key, parent_session_id text, title text, created_at integer, updated_at integer)");
+    const insert = db.prepare("insert into sessions (id, parent_session_id, title, created_at, updated_at) values (?, ?, ?, ?, ?)");
+    for (const row of rows) insert.run(row.id, row.parent ?? null, row.title ?? null, row.created, row.updated);
+    db.close();
+    return file;
+  }
+
+  const seconds = (iso) => Math.floor(Date.parse(iso) / 1000);
+
+  async function projectFixture(dir, rows) {
+    const project = path.join(dir, "project");
+    await fsp.mkdir(project);
+    crushStore(project, rows);
+    const projectsFile = path.join(dir, "projects.json");
+    fs.writeFileSync(projectsFile, JSON.stringify({ projects: [{ path: project, last_accessed: "2026-01-02T11:00:00Z" }] }));
+    return project;
+  }
+
+  it("lists the child sessions the CLI cannot report, beside the ones it can", async () => {
+    await withTmpDir("crush-children", async (dir) => {
+      const project = await projectFixture(dir, [
+        { id: "parent-1", title: "Top level", created: seconds("2026-01-02T09:00:00Z"), updated: seconds("2026-01-02T09:10:00Z") },
+        { id: "parent-1$$call_a", parent: "parent-1", title: "Delegated", created: seconds("2026-01-02T09:05:00Z"), updated: seconds("2026-01-02T09:06:00Z") },
+        { id: "parent-1$$call_b", parent: "parent-1", title: null, created: seconds("2026-01-02T09:07:00Z"), updated: seconds("2026-01-02T09:08:00Z") },
+        { id: "parent-1$$call_old", parent: "parent-1", title: "Yesterday", created: seconds("2026-01-02T06:55:00Z"), updated: seconds("2026-01-02T07:00:00Z") },
+      ]);
+      const ctx = ctxFor({
+        hostOptions: { crush: { projectsFile: path.join(dir, "projects.json") } },
+        run: stubRun({
+          [`crush session list --json @${project}`]: JSON.stringify([
+            session({ id: "parent-1", uuid: "parent-1", modified: "2026-01-02T09:10:00Z" }),
+          ]),
+        }),
+      });
+
+      const { sessions, warnings } = hosts.hostById("crush").list(ctx);
+      assert.deepEqual(warnings, []);
+      assert.deepEqual(
+        sessions.map((s) => [s.id, s.child === true, s.modified]),
+        [
+          ["parent-1", false, "2026-01-02T09:10:00Z"],
+          ["parent-1$$call_b", true, "2026-01-02T09:08:00.000Z"],
+          ["parent-1$$call_a", true, "2026-01-02T09:06:00.000Z"],
+          ["parent-1$$call_old", true, "2026-01-02T07:00:00.000Z"],
+        ]
+      );
+      assert.equal(sessions[1].project, project, "a child is readable in the project it belongs to");
+      assert.equal(sessions[1].uuid, "parent-1$$call_b", "the id `show` accepts is also the dedup key");
+      // The window judges a child like any other session, so yesterday's delegated run is dropped.
+      assert.deepEqual(
+        hosts.withinWindow(sessions, { hours: 2, now: new Date("2026-01-02T10:00:00Z") }).map((s) => s.id),
+        ["parent-1", "parent-1$$call_b", "parent-1$$call_a"]
+      );
+    });
+  });
+
+  it("costs the children and not the session list when a project's store cannot be read", async () => {
+    await withTmpDir("crush-children-broken", async (dir) => {
+      const project = path.join(dir, "project");
+      await fsp.mkdir(path.join(project, ".crush"), { recursive: true });
+      fs.writeFileSync(path.join(project, ".crush", "crush.db"), "not a database");
+      const projectsFile = path.join(dir, "projects.json");
+      fs.writeFileSync(projectsFile, JSON.stringify({ projects: [{ path: project, last_accessed: "2026-01-02T11:00:00Z" }] }));
+      const ctx = ctxFor({
+        hostOptions: { crush: { projectsFile } },
+        run: stubRun({ [`crush session list --json @${project}`]: JSON.stringify([session({ uuid: "listed" })]) }),
+      });
+
+      const { sessions, warnings } = hosts.hostById("crush").list(ctx);
+      assert.deepEqual(sessions.map((s) => s.uuid), ["listed"]);
+      assert.equal(warnings.length, 1);
+      assert.match(warnings[0].reason, /^child sessions unreadable: /);
+      assert.equal(warnings[0].scope, project);
+    });
+  });
 });
 
 describe("codex host adapter", () => {

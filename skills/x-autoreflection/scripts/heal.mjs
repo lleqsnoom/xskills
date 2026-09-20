@@ -5,13 +5,13 @@ import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
 /**
- * x-autoreflection-heal — turn the analysis report into approved edits and apply them.
+ * x-autoreflection heal — turn the window's analysis report into approved edits and apply them.
  *
- * The plan carries, per finding, the exact `find`/`replace`, the target file and a check command.
- * The agent opens each target to write those fields, marks the mechanical ones `auto: true`, and
- * proposes them as a multi-select panel. On approval, `heal.mjs --apply <ids>` applies each one,
- * runs its check, reverts on failure, and appends the ledger. A human always picks the fixes; the
- * script only does what was picked, and only the `auto` classes.
+ * The plan carries, per finding, the issue it answers, the rate the fix should move, the exact
+ * `find`/`replace`, the target file and a check command. The agent opens each target to write those
+ * fields, marks the mechanical ones `auto: true`, and proposes them as a multi-select panel. On
+ * approval, `heal.mjs --apply <ids>` applies each one, runs its check, reverts on failure, and appends
+ * the ledger. A human always picks the fixes; the script only does what was picked, and only `auto`.
  */
 
 export const SCHEMA = "x-autoreflection-heal/1";
@@ -27,10 +27,8 @@ export const QUALITY_CLASSES = new Set(["rule-not-applied", "missing-expectation
 
 /** The files that find the gaps and grade the reflections: they measure every skill. */
 const SHARED_MEASURES = [
-  /^skills\/x-autoreflection\/scripts\/(scan-session|reactions|anchors|classify-turns|check-reflection)\.mjs$/,
+  /^skills\/x-autoreflection\/scripts\/(scan-session|reactions|anchors|classify-turns|check-reflection|analyze|check-analysis|heal|check-heal)\.mjs$/,
   /^skills\/x-autoreflection\/references\/(gap-taxonomy|quality-judge)\.md$/,
-  /^skills\/x-autoreflection-analysis\/scripts\/(analyze|check-analysis)\.mjs$/,
-  /^skills\/x-autoreflection-heal\/scripts\/(heal|check-heal)\.mjs$/,
   /^skills\/x-skill-lint\/scripts\/lint\.mjs$/,
 ];
 const OWN_CHECK_RE = /^skills\/(x-[a-z0-9-]+)\/scripts\/(check|validate)-[A-Za-z0-9._-]+\.(mjs|js|cjs)$/;
@@ -54,6 +52,7 @@ function pad2(value) {
 function timestamp(date = new Date()) {
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
+
 
 // #region run-folder
 // Two digits, not more: a wider counter would sort E100 before E99.
@@ -139,21 +138,45 @@ function nextE(runDir) {
 }
 // #endregion run-folder
 
-/** A plan skeleton: one item per finding, the edit fields left for the agent to fill after reading. */
+/**
+ * The rate a fix should move, in the words the next report can be read against. Every proposal names
+ * one: a change nobody can score is a change nobody can tell worked, and the panel's third line.
+ */
+export function improvementFor(finding) {
+  const where = finding.skill ? ` on ${finding.skill}` : "";
+  const span = (finding.recurrence ?? 0) > 1 ? `${finding.count} across ${finding.recurrence} sessions` : `${finding.count} in one session`;
+  return `${finding.kind} signals${where}: ${span} → none in the next 14 days`;
+}
+
+/**
+ * A plan skeleton: one item per finding, carrying the issue and the rate it should move, with the edit
+ * fields left for the agent to fill after reading the target. The skill's own usage scores ride along,
+ * so the panel can show what the numbers were before the fix.
+ */
 export function mintPlan(analysis, { analysisPath = null, date = new Date() } = {}) {
-  const items = (analysis.findings ?? []).map((finding) => ({
-    id: finding.id,
-    skill: finding.skill ?? null,
-    class: finding.class ?? null,
-    target: finding.skill ? `skills/${finding.skill}/SKILL.md` : "",
-    find: "",
-    replace: "",
-    check: "",
-    auto: false,
-    ...(QUALITY_CLASSES.has(finding.class) ? { watch: "" } : {}),
-    change: finding.change ?? "",
-    evidence: finding.evidence ?? [],
-  }));
+  const scores = new Map((analysis.skills ?? []).map((row) => [row.name, row]));
+  const items = (analysis.findings ?? []).map((finding) => {
+    const row = scores.get(finding.skill) ?? null;
+    return {
+      id: finding.id,
+      skill: finding.skill ?? null,
+      class: finding.class ?? null,
+      issue: finding.summary ?? "",
+      severity: finding.severity ?? null,
+      recurrence: finding.recurrence ?? 0,
+      count: finding.count ?? 0,
+      scores: row ? { sessions: row.sessions ?? 0, loaded: row.loaded ?? 0, used: row.used ?? 0, unused: row.unused ?? 0, high: row.high ?? 0, medium: row.medium ?? 0, low: row.low ?? 0 } : null,
+      improvement: improvementFor(finding),
+      target: finding.skill ? `skills/${finding.skill}/SKILL.md` : "",
+      find: "",
+      replace: "",
+      check: "",
+      auto: false,
+      ...(QUALITY_CLASSES.has(finding.class) ? { watch: "" } : {}),
+      change: finding.change ?? "",
+      evidence: finding.evidence ?? [],
+    };
+  });
   return {
     schema: SCHEMA,
     analysis: analysisPath,
@@ -237,11 +260,13 @@ export function renderResults(plan, results) {
 
 function usage() {
   return [
-    "x-autoreflection-heal heal — mint a plan from an analysis report, then apply approved edits.",
+    "x-autoreflection heal — mint a plan from an analysis report, then apply approved edits.",
     "",
     "Usage:",
     "  node heal.mjs --mint <analysis.json> --out <plan.json>",
     "  node heal.mjs --plan <plan.json> --apply F1,F3 [--dry-run] [--cwd <dir>]",
+    "",
+    "`improve.mjs` mints the plan for you; this script is the mint-and-apply half of that flow.",
     "",
     "Flags:",
     "  --mint <file>   Create a plan skeleton from the analysis report",

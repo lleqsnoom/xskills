@@ -7,7 +7,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const SKILL = path.join(__dirname, "..", "skills", "x-autoreflection-analysis");
+const SKILL = path.join(__dirname, "..", "skills", "x-autoreflection");
 const ANALYZE = path.join(SKILL, "scripts", "analyze.mjs");
 const CHECK = path.join(SKILL, "scripts", "check-analysis.mjs");
 
@@ -41,7 +41,7 @@ function signal(kind, { severity = "high", suspect = null, summary = "x", count 
   };
 }
 
-describe("x-autoreflection-analysis aggregate", async () => {
+describe("x-autoreflection analyze aggregate", async () => {
   const { aggregate } = await import(ANALYZE);
 
   it("groups the same gap across sessions into one finding with recurrence", () => {
@@ -95,7 +95,7 @@ describe("x-autoreflection-analysis aggregate", async () => {
 
   it("names every signal kind and improvement class the code emits in gap-taxonomy.md", async () => {
     const { CLASS_BY_KIND } = await import(ANALYZE);
-    const taxonomy = fs.readFileSync(path.join(SKILL, "..", "x-autoreflection", "references", "gap-taxonomy.md"), "utf8");
+    const taxonomy = fs.readFileSync(path.join(SKILL, "references", "gap-taxonomy.md"), "utf8");
     const kinds = [...Object.keys(CLASS_BY_KIND), "skill-unused", "expected-exit", "interrupt", "cross-session-retry"];
     for (const name of [...kinds, ...new Set(Object.values(CLASS_BY_KIND))]) {
       assert.ok(taxonomy.includes(`\`${name}\``), `gap-taxonomy.md does not name ${name}`);
@@ -171,7 +171,7 @@ describe("x-autoreflection-analysis aggregate", async () => {
   });
 });
 
-describe("x-autoreflection-analysis report writing", async () => {
+describe("x-autoreflection analyze report writing", async () => {
   const { aggregate, renderMarkdown, writeReport } = await import(ANALYZE);
 
   it("writes one JSON and one markdown from the same object", async () => {
@@ -196,7 +196,7 @@ describe("x-autoreflection-analysis report writing", async () => {
   });
 });
 
-describe("x-autoreflection-analysis check-analysis", async () => {
+describe("x-autoreflection check-analysis", async () => {
   const { aggregate } = await import(ANALYZE);
   const { lintAnalysis } = await import(CHECK);
 

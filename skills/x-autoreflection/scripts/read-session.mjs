@@ -99,7 +99,7 @@ function crush(args, cwd) {
   return execFileSync("crush", args, options);
 }
 
-function hostContext({ hours = 24, now = new Date(), env = process.env, run = null, hostOptions = {} } = {}) {
+export function hostContext({ hours = 24, now = new Date(), env = process.env, run = null, hostOptions = {} } = {}) {
   return { hours, now, projectLookbackHours: hours, env, run: run ?? defaultRun(env), hostOptions };
 }
 
@@ -231,7 +231,7 @@ export function parseArgs(args, { booleans = ["help"], known = null } = {}) {
 }
 
 /** `--host` as a set of ids, or null for "every detected host". Throws on an id no adapter claims. */
-function selectedHosts(value) {
+export function selectedHosts(value) {
   const only = value ? new Set(String(value).split(",").map((id) => id.trim()).filter(Boolean)) : null;
   for (const id of only ?? []) {
     if (!hostById(id)) throw new Error(`Unknown host "${id}"; known hosts: ${HOSTS.map((host) => host.id).join(", ")}`);

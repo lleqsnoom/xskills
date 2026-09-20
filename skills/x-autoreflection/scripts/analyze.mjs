@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
-import { fileURLToPath, pathToFileURL } from "node:url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import { pathToFileURL } from "node:url";
+import { anchorsForScans } from "./anchors.mjs";
+import { hostById } from "./hosts/index.mjs";
+import { hostContext, listHostSessions, normalizeSession, selectedHosts } from "./read-session.mjs";
+import { scanSession, skillNamesOnDisk } from "./scan-session.mjs";
 
 /**
- * x-autoreflection-analysis — traverse past sessions across every CLI and write the skill-health
- * report: one JSON (the source of truth the heal skill consumes) and one markdown (the human read),
+ * x-autoreflection analyze — traverse past sessions across every CLI and write the skill-health
+ * report: one JSON (the source of truth the heal stage consumes) and one markdown (the human read),
  * rendered from the same object so they cannot drift.
  *
- * Traversal shells out to the sibling `x-autoreflection` scripts (read-session, scan-session): those
- * own the host adapters, and the lint forbids importing them. The path is resolved relative to this
- * file, so the two skills must be installed side by side — which they always are, as one package.
+ * Traversal reads the siblings directly — `read-session.mjs` owns the adapters and `scan-session.mjs`
+ * the signals — so one pass lists the sessions and each is read once. Shelling out to those scripts
+ * per session re-listed every project for every session, which turned a 60-session window into hours.
  */
 
 export const SCHEMA = "x-autoreflection-analysis/1";
@@ -231,6 +231,7 @@ function timestamp(date = new Date()) {
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
+
 // #region run-folder
 // Two digits, not more: a wider counter would sort E100 before E99.
 const RUNS_ROOT = ".x-skills/runs";
@@ -414,59 +415,35 @@ export function writeReport(report, runDir) {
   return { jsonPath, mdPath };
 }
 
-/** Resolve the sibling skill's script dir, or throw a clear error when it is not installed. */
-export function siblingScripts(root = path.resolve(__dirname, "..", "..")) {
-  const dir = path.join(root, "x-autoreflection", "scripts");
-  if (!fs.existsSync(path.join(dir, "read-session.mjs"))) {
-    throw new Error(`x-autoreflection is not installed beside x-autoreflection-analysis (expected ${dir}/read-session.mjs)`);
-  }
-  return dir;
-}
-
-function runNode(script, args) {
-  return execFileSync("node", [script, ...args], { encoding: "utf8", maxBuffer: 512 * 1024 * 1024 });
-}
-
 /**
- * Retries, reading order and audit from the sibling `anchors.mjs`. A missing or failing sibling leaves
- * the report without them and says so, rather than failing the whole analysis.
+ * Retries, reading order and audit, computed in-process. A failure leaves the report without them and
+ * says so, rather than failing the whole analysis: the scans are still the evidence.
  */
-export function anchorsFor(scans, { scripts, date = timestamp(new Date()).slice(0, 10) }) {
-  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "xskills-anchors-"));
+export function anchorsFor(scans, { date = timestamp(new Date()).slice(0, 10) } = {}) {
   try {
-    const input = path.join(workDir, "scans.json");
-    fs.writeFileSync(input, JSON.stringify(scans));
-    return JSON.parse(runNode(path.join(scripts, "anchors.mjs"), ["--input", input, "--date", date]));
+    return anchorsForScans(scans, { date });
   } catch (err) {
     return { retries: [], select: [], recurring: [], audit: null, error: err.message.slice(0, 160) };
-  } finally {
-    fs.rmSync(workDir, { recursive: true, force: true });
   }
 }
 
-/** Enumerate the window's sessions by shelling to the sibling reader. */
-export function listWindow({ hours, host, scripts }) {
-  const args = ["--list", "--hours", String(hours)];
-  if (host) args.push("--host", host);
-  const { sessions, hosts } = JSON.parse(runNode(path.join(scripts, "read-session.mjs"), args));
-  return { sessions, hosts };
+/** Enumerate the window's sessions from every detected host, in one pass. */
+export function listWindow({ hours, host, env = process.env, run = null, now = new Date() } = {}) {
+  const ctx = hostContext({ hours, env, run, now });
+  return listHostSessions({ only: selectedHosts(host), ctx });
 }
 
-/** Scan one session into a signals file, returning the parsed scan. */
-export function scanOne({ host, id, skillsDir, scripts, workDir, out, hours = 24 }) {
-  const transcript = path.join(workDir, "session.json");
-  // `--hours` sets the project lookback, not the session window: `--session` reads any id, but the
-  // crush adapter only lists projects touched within the lookback, so a 72h window must look back 72h.
-  runNode(path.join(scripts, "read-session.mjs"), ["--session", String(id), "--host", host, "--hours", String(hours), "--out", transcript]);
-  const args = ["--input", transcript, "--out", out];
-  if (skillsDir) args.push("--skills-dir", skillsDir);
-  runNode(path.join(scripts, "scan-session.mjs"), args);
-  return JSON.parse(fs.readFileSync(out, "utf8"));
+/** Read one session and scan it, returning the scan (the signals the report aggregates). */
+export function scanOne({ session, skills, ctx, clip = 600 }) {
+  const adapter = hostById(session.host);
+  if (!adapter) throw new Error(`no adapter for host "${session.host}"`);
+  const transcript = normalizeSession(adapter.read(session, ctx), { limit: clip });
+  return scanSession(transcript, { skillNames: skills.names, skillsSource: skills.dir });
 }
 
 function usage() {
   return [
-    "x-autoreflection-analysis analyze — traverse past sessions and write the skill-health report.",
+    "x-autoreflection analyze — traverse past sessions and write the skill-health report.",
     "",
     "Usage:",
     "  node analyze.mjs [--hours 24] [--host crush,codex] [--scans <dir>] [--out <run-dir>]",
@@ -477,7 +454,7 @@ function usage() {
     "  --scans <dir>    Skip traversal and aggregate the *-signals.json files already in <dir>",
     "  --max <n>        Cap on sessions scanned (default: 60)",
     "  --skills-dir <d> Folder holding skill directories (default: skills/, then .agents/skills/)",
-    "  --slug <s>       Run-folder slug (default: autoreflection-analysis)",
+    "  --slug <s>       Run-folder slug (default: autoreflection)",
     "  --out <dir>      Write the report here instead of the run folder",
     "  --new-run        Mint a fresh run instead of joining the existing one",
     "  --help           Show this help",
@@ -507,31 +484,25 @@ function main() {
         scans.push(JSON.parse(fs.readFileSync(path.join(dir, name), "utf8")));
       }
     } else {
-      const scripts = siblingScripts();
-      const listed = listWindow({ hours, host: args.host || null, scripts });
+      const ctx = hostContext({ hours });
+      const listed = listWindow({ hours, host: args.host || null });
       hosts = listed.hosts;
-      const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "xskills-analysis-"));
+      const skills = skillNamesOnDisk(typeof args["skills-dir"] === "string" ? args["skills-dir"] : null);
       const warnings = [];
       let failed = 0;
-      try {
-        for (const session of listed.sessions.slice(0, max)) {
-          const safe = String(session.id).replace(/[^A-Za-z0-9._-]/g, "_");
-          const out = path.join(workDir, `${session.host}--${safe}.signals.json`);
-          try {
-            scans.push(scanOne({ host: session.host, id: session.id, skillsDir: args["skills-dir"] || null, scripts, workDir, out, hours }));
-          } catch (err) {
-            failed++;
-            if (warnings.length < 20) warnings.push({ session: `${session.host}:${session.id}`, reason: err.message.slice(0, 120) });
-          }
+      for (const session of listed.sessions.slice(0, max)) {
+        try {
+          scans.push(scanOne({ session, skills, ctx }));
+        } catch (err) {
+          failed++;
+          if (warnings.length < 20) warnings.push({ session: `${session.host}:${session.id}`, reason: err.message.slice(0, 120) });
         }
-      } finally {
-        fs.rmSync(workDir, { recursive: true, force: true });
       }
       reportWarnings = warnings;
       reportFailed = failed;
     }
 
-    const anchors = anchorsFor(scans, { scripts: siblingScripts() });
+    const anchors = anchorsFor(scans);
     const report = withAnchors(aggregate(scans, { hours }), anchors);
     if (anchors.error) report.notes.push(`retries and reading order unavailable: ${anchors.error}`);
     if (hosts.length) {
@@ -545,7 +516,7 @@ function main() {
 
     const runDir = args.out
       ? path.resolve(args.out)
-      : resolveRunDir(args.slug || "autoreflection-analysis", { fresh: args["new-run"] === true });
+      : resolveRunDir(args.slug || "autoreflection", { fresh: args["new-run"] === true });
     const { jsonPath, mdPath } = writeReport(report, runDir);
     process.stdout.write(`${JSON.stringify({ json: jsonPath, md: mdPath, sessions: report.stats.sessions, findings: report.stats.findings, portfolio: report.stats.portfolio })}\n`);
   } catch (err) {
