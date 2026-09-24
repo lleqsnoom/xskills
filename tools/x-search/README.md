@@ -84,7 +84,8 @@ chunks want `vec0`. `x-search status` says which engine a store uses.
 
 ## Requirements
 
-- Node >= 22.5 (`node:sqlite`).
+- Node 22.13+ or 23.4+ — `node:sqlite`, which the store is built on, sits behind
+  `--experimental-sqlite` on earlier versions (22.5 through 22.12, and 23.0 through 23.3).
 - Ollama with an embedding model — `nomic-embed-text` by default; `X_SEARCH_EMBED_MODEL` and
   `OLLAMA_URL` override it. Indexing needs the daemon; searching in `keyword` mode does not.
 - `git` on `PATH` for the store guard.

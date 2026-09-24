@@ -37,20 +37,23 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-      - run: npm ci || npm install --no-audit --no-fund
+      # `npm ci` with no `|| npm install` behind it: a lockfile that has drifted from its manifest is
+      # a failure worth reading, and the silent re-resolve the fallback did hid exactly one.
+      - run: npm ci --no-audit --no-fund
       # Grammar packages are the tool's business to install, and this repository keeps
       # them as devDependencies because the suite exercises the tree-sitter path. They
       # have to be here, or the chunker tests fall back to windows and fail.
       - name: Install the repository's dev dependencies
         working-directory: ${{ github.workspace }}
-        run: npm ci || npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Start the embedder the tests call
         uses: ./.github/actions/ollama
-      # The tests live with the repository's own, not inside this package: `npm test`
-      # here matched an empty directory and passed with nothing to verify.
-      - name: Run the search tool's tests
+      # The repository's own gate. The tests live with the repository's, so this package's `npm test`
+      # matched an empty directory and passed with nothing to verify; the root command runs the same
+      # suite the release does, after provisioning what it needs.
+      - name: Run the tests
         working-directory: ${{ github.workspace }}
-        run: node --test test/x-search*.test.cjs
+        run: npm test
       - name: publish when the version is new
         run: |
           set -euo pipefail

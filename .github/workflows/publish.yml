@@ -33,12 +33,13 @@ jobs:
       - name: Install dependencies
         run: npm ci --registry=https://registry.npmjs.org/
 
-      # The suite covers `tools/x-search` too, and that tool needs its own dependencies
-      # (the sqlite-vec binary among them) and an embedder. Without both, 23 of its tests
-      # fail on a runner that has neither — a red gate on an unrelated release, which is
-      # exactly what happened to v5.32.0.
+      # The suite covers `tools/x-search` too, and that tool needs its own dependencies (the sqlite-vec
+      # binary among them) and an embedder. `npm test` provisions both now, so a runner with neither is
+      # no longer a red gate on an unrelated release — which is what happened to v5.32.0. This step stays
+      # because `npm ci` is the stricter check: a lockfile that has drifted from its manifest fails here
+      # instead of being re-resolved in silence by the install the provisioning would run.
       - name: Install the search tool's own dependencies
-        run: npm --prefix tools/x-search ci || npm --prefix tools/x-search install --no-audit --no-fund
+        run: npm --prefix tools/x-search ci --no-audit --no-fund
 
       - name: Start the embedder the tests call
         uses: ./.github/actions/ollama

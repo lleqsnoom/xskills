@@ -10,7 +10,9 @@
     "access": "public"
   },
   "scripts": {
+    "pretest": "node scripts/x-search-test-env.mjs",
     "test": "node --test test/*.test.cjs",
+    "test:setup": "node scripts/x-search-test-env.mjs",
     "sync:run-folders": "node scripts/sync-run-folders.js",
     "check:run-folders": "node scripts/sync-run-folders.js --check",
     "report": "node scripts/report-server.mjs",

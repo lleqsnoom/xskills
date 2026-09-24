@@ -287,10 +287,11 @@ Step-by-step instructions for the agent...
 
 ## Development
 
-This repo is a Node package with zero runtime dependencies. Tests use the built-in `node:test` runner, so there is nothing to install before running them:
+This repo is a Node package with zero runtime dependencies. Tests use the built-in `node:test` runner, and `npm test` provisions what they need before it starts — the search tool's dependencies and a local Ollama embedder — so a fresh clone needs nothing installed by hand. The x-search tests need Node 22.13+ or 23.4+ (`node:sqlite`); the rest of the suite runs on Node 18+.
 
 ```bash
 npm test                                     # run the full suite
+npm run test:setup                           # just the provisioning, without the tests
 node bin/install.js list                     # list every skill the package ships
 node skills/x-skill-lint/scripts/lint.mjs    # check the skills themselves
 ```
