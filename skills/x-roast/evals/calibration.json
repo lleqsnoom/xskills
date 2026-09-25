@@ -1,0 +1,86 @@
+{
+  "skill": "x-roast",
+  "note": "Frozen artifacts to calibrate a roast against. Pick a case of your profile (score.mjs --cases --profile <p>), read its artifact, score it blind, then run score.mjs --calibrate <case>. The reference scores live in calibration-answers.json: do not open it before scoring, or the calibration measures nothing.",
+  "cases": [
+    {
+      "name": "drop-jest",
+      "artifact": "evals/calibration/drop-jest.md",
+      "profile": "article"
+    },
+    {
+      "name": "retry-budget",
+      "artifact": "evals/calibration/retry-budget.md",
+      "profile": "article"
+    },
+    {
+      "name": "add-retry",
+      "artifact": "evals/calibration/add-retry.md",
+      "profile": "task"
+    },
+    {
+      "name": "fix-login",
+      "artifact": "evals/calibration/fix-login.md",
+      "profile": "task"
+    },
+    {
+      "name": "pr-summary",
+      "artifact": "evals/calibration/pr-summary.md",
+      "profile": "skill"
+    },
+    {
+      "name": "changelog-entry",
+      "artifact": "evals/calibration/changelog-entry.md",
+      "profile": "skill"
+    },
+    {
+      "name": "slow-builds",
+      "artifact": "evals/calibration/slow-builds.md",
+      "profile": "analysis"
+    },
+    {
+      "name": "flaky-checkout",
+      "artifact": "evals/calibration/flaky-checkout.md",
+      "profile": "analysis"
+    },
+    {
+      "name": "wasm-2026",
+      "artifact": "evals/calibration/wasm-2026.md",
+      "profile": "research"
+    },
+    {
+      "name": "sqlite-wal",
+      "artifact": "evals/calibration/sqlite-wal.md",
+      "profile": "research"
+    },
+    {
+      "name": "search-epic-components",
+      "artifact": "evals/calibration/search-epic-components.md",
+      "profile": "epic"
+    },
+    {
+      "name": "search-epic-layers",
+      "artifact": "evals/calibration/search-epic-layers.md",
+      "profile": "epic"
+    },
+    {
+      "name": "rate-limit-vague",
+      "artifact": "evals/calibration/rate-limit-vague.md",
+      "profile": "spec"
+    },
+    {
+      "name": "rate-limit-precise",
+      "artifact": "evals/calibration/rate-limit-precise.md",
+      "profile": "spec"
+    },
+    {
+      "name": "office-move",
+      "artifact": "evals/calibration/office-move.md",
+      "profile": "generic"
+    },
+    {
+      "name": "incident-summary",
+      "artifact": "evals/calibration/incident-summary.md",
+      "profile": "generic"
+    }
+  ]
+}

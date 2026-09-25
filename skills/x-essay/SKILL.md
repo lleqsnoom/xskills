@@ -82,7 +82,10 @@ claim first, evidence per section, counterargument handled, references listed.
 Completion: a complete draft file, not an outline.
 
 ### 4. Roast — run `x-roast`, then record
-Run `x-roast` on the draft (profile `article`). Save its score JSON, then:
+Run `x-roast` on the draft (profile `article`). You wrote the draft, so your own roast is
+`Reviewer: self`. When the host can reach a model from another family, hand it the draft and
+x-roast's `references/rubric.md` for an `independent` roast instead, at least for the final
+iteration. Save its score JSON, then:
 ```bash
 node <skill>/scripts/state.mjs record --dir <dir> --roast <score.json>
 ```

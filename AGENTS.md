@@ -17,7 +17,8 @@ repository's `.x-skills` tree; it is now its own product, **Otter PM**, in its o
 
 | Command | Description |
 |---------|-------------|
-| `npm test` | Runs all tests (install, version-bump, etc.) |
+| `npm test` | Runs all tests (install, version-bump, etc.); its `pretest` installs what the x-search suite needs — the tool's dependencies and a local embedder — so a fresh clone passes without setup |
+| `npm run test:setup` | The `pretest` alone: installs missing dependencies and starts/pulls with Ollama, or exits 1 naming the one thing it cannot install (Ollama itself) |
 | `npm run check:run-folders` | Fails if the run-folder helpers have drifted between skills |
 | `npm run sync:run-folders` | Rewrites the run-folder helpers in every skill from the one canonical block |
 | `npm run release -- --dry-run` | Dry-run semantic-release locally to preview bump type |
@@ -30,7 +31,7 @@ repository's `.x-skills` tree; it is now its own product, **Otter PM**, in its o
 | `npm run report:dev` | Works on the report app: the server under `node --watch` plus Vite with hot reload; both step to the next free port — `-- --port 8080` starts the search there |
 | `npm run report` | Serves the daily metrics on <http://127.0.0.1:8787> — `-- --port 8080 --days 14` |
 | `npm run report:open` | Starts the report if it is not answering, then opens it in an Orca browser tab — `-- --window` for a window with no browser controls |
-| `npm --prefix tools/x-search test` | Runs the search tool's own tests (`node --test test/*.test.cjs` from the root runs them too) |
+| `npm --prefix tools/x-search test` | The repository's x-search tests, from the tool's own directory: its `pretest` provisions the same way, so it never passes over an empty directory |
 | `node tools/x-search/src/cli.mjs index --all` | Builds every store; `--root <path>` for one, `--prune` to forget repositories that moved |
 | `node tools/x-search/src/cli.mjs watch` | Keeps every known repository warm (2 s debounce) |
 | `node tools/x-search/src/cli.mjs mcp` | The stdio MCP server: `search`, `projects`, `stats` |
@@ -112,6 +113,10 @@ xskills/
     ├── x-skill-lint/         # Validate the repo's own skills — frontmatter, refs, README table
     │   ├── SKILL.md
     │   └── scripts/
+    ├── x-unbloat/            # YAGNI ladder — cut speculative abstractions, wrappers, dead code; measured by a diff script
+    │   ├── SKILL.md
+    │   ├── scripts/
+    │   └── evals/
 ```
 
 ---
@@ -265,8 +270,9 @@ bytes — do not widen the scan until something matches.
 `--host a,b` narrows a run. A CLI that is not installed reports `absent`, so an empty window still says
 which stores were read. A CLI whose sessions live only in SQLite needs either a command that prints JSON
 (OpenCode has one) or the built-in driver Goose uses; `hosts/sqlite.mjs` opens such a store read-only and
-reports the reason when the Node runtime is too old to have `node:sqlite` (22.5+). Never reach for a
-dependency: the package has none, and a store this cannot read should fail loudly rather than silently.
+reports the reason when the Node runtime is too old to have `node:sqlite` in the default build (23.4+ /
+22.13+; below those it is behind `--experimental-sqlite`). Never reach for a dependency: the package has
+none, and a store this cannot read should fail loudly rather than silently.
 
 ### How a day is reviewed
 
@@ -796,7 +802,7 @@ The skills that ask questions (`x-analyze`, `x-plan`, `x-research`, `x-autorefle
 
 ### The run-folder helpers are generated
 
-Every skill that writes a `.x-skills/runs/` artifact carries the same run-folder helpers (`resolveRunDir`, `nextE`, …) because skills cannot import from each other. Edit them **once** in `scripts/sync-run-folders.js` and run `npm run sync:run-folders`, which pastes the canonical block between the `// #region run-folder` markers in all 13 files. `test/run-helpers-drift.test.cjs` fails if a copy diverges, so never edit a region by hand.
+Every skill that writes a `.x-skills/runs/` artifact carries the same run-folder helpers (`resolveRunDir`, `nextE`, …) because skills cannot import from each other. Edit them **once** in `scripts/sync-run-folders.js` and run `npm run sync:run-folders`, which pastes the canonical block between the `// #region run-folder` markers in every file its `TARGETS` lists. `test/run-helpers-drift.test.cjs` fails if a copy diverges, so never edit a region by hand.
 
 #### x-commit Scripts
 

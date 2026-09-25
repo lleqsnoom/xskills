@@ -1,0 +1,23 @@
+{
+  "skill": "x-unbloat",
+  "queries": [
+    { "query": "this code is over-engineered, simplify it", "should_trigger": true },
+    { "query": "remove the unnecessary abstractions in src/services", "should_trigger": true },
+    { "query": "refactor this module to be clean and minimal", "should_trigger": true },
+    { "query": "implement the export endpoint", "should_trigger": false },
+    { "query": "review my changes before I merge", "should_trigger": false },
+    { "query": "delete the dead code and unused options in this file", "should_trigger": true },
+    { "query": "do we really need this factory and interface?", "should_trigger": true },
+    { "query": "unbloat this PR", "should_trigger": true },
+    { "query": "strip the over-engineering out of this service", "should_trigger": true },
+    { "query": "is this abstraction layer pulling its weight? cut it if not", "should_trigger": true },
+    { "query": "simplify this blog post", "should_trigger": false },
+    { "query": "clean up the comments in this file", "should_trigger": false },
+    { "query": "write a commit message for my staged changes", "should_trigger": false },
+    { "query": "why does this test fail on CI?", "should_trigger": false },
+    { "query": "migrate the project from webpack to vite", "should_trigger": false },
+    { "query": "roast this spec", "should_trigger": false },
+    { "query": "plan the new billing feature", "should_trigger": false },
+    { "query": "generate tests for this module", "should_trigger": false }
+  ]
+}

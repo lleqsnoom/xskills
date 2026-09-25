@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { MESSAGES } from "./messages.mjs";
-import { readRegistry, writeRegistry } from "./registry.mjs";
+import { readRegistry, updateRegistry } from "./registry.mjs";
 import { countRows, countVectors, metaAll, openStore, storeExists, vectorTable } from "./store.mjs";
 import { storePathFor } from "./roots.mjs";
 
@@ -63,14 +63,17 @@ export function collectStatus({ roots, env = process.env } = {}) {
 export function pruneStores({ roots, env = process.env, dryRun = false, log = () => {} } = {}) {
   const known = readRegistry(env);
   const doomed = known.filter((storePath) => !fs.existsSync(rootOf(storePath)));
-  const kept = known.filter((storePath) => !doomed.includes(storePath));
-  if (doomed.length && !dryRun) {
-    for (const storePath of doomed) {
-      fs.rmSync(path.dirname(storePath), { recursive: true, force: true });
-      log(`x-search: pruned ${storePath}`);
-    }
-    writeRegistry(kept, env);
+  const doomedSet = new Set(doomed);
+  if (!doomed.length || dryRun) {
+    return { pruned: doomed, kept: known.filter((storePath) => !doomedSet.has(storePath)), dryRun };
   }
+  for (const storePath of doomed) {
+    fs.rmSync(path.dirname(storePath), { recursive: true, force: true });
+    log(`x-search: pruned ${storePath}`);
+  }
+  // remove them from the list as it stands now rather than as it stood when this pass began: a watcher
+  // may have recorded a store in between, and dropping that entry would lose a live index.
+  const kept = updateRegistry((stores) => stores.filter((storePath) => !doomedSet.has(storePath)), env);
   return { pruned: doomed, kept, dryRun };
 }
 

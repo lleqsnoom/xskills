@@ -169,7 +169,7 @@ Run `npx xskills list` to see all available skills.
 | `x-essay` | Write an article end-to-end on a fixed loop — x-analyze thesis, x-roast critique, x-humanize rewrite — repeating until it scores strong and reads clean. Use when asked to write or draft an article, blog post, or essay that must defend a claim. |
 | `x-fix` | Resolve issues from fix plans — read, edit, verify, mark complete |
 | `x-humanize` | Simplify text, an article, a commit or PR to a B2 reading level — measure sentence length and complexity, cut noise, rewrite, then verify no meaning was lost. Use when asked to humanize, simplify, make easy to read, or plain-language a piece of prose. |
-| `x-implement` | Implement or fix with TDD — parallelize independent tasks with x-parallel, apply x-ui for frontend work, red-green-refactor per task, verify with x-review + x-fix, gate on plan completion |
+| `x-implement` | Implement or fix with TDD — parallelize independent tasks with x-parallel, apply x-ui for frontend work and x-unbloat to every change, red-green-refactor per task, verify with x-review + x-fix, gate on plan completion |
 | `x-investigate` | Hypothesis-driven root cause analysis — generate ranked hypotheses from evidence, test systematically with platform tools and git history, eliminate candidates until one root cause remains, output fix plan for x-fix |
 | `x-migrate` | Framework/dependency migration assistant — generates migration plans with breaking changes, upgrade paths, and automated fix candidates from source analysis |
 | `x-parallel` | Run multiple coding tasks in parallel — each task gets an isolated git worktree and its own background agent process with full tools and the parent's project rights, then committed results merge back into your branch |
@@ -178,12 +178,13 @@ Run `npx xskills list` to see all available skills.
 | `x-reproduce` | Generates minimal platform-aware reproducible test cases from triage briefs — exits 1 when bug is present, exits 0 after fix applied |
 | `x-research` | Research a topic or tune a metric — research the project and web first, propose three candidate changes, then iterate one atomic change at a time, evaluating it mechanically (a command, or agent-judged criteria coverage) and keeping only measured improvements until the target, a guard, or a hard cap stops the run; graph-driven with guards, a memory file, and a report. Use for "research X", "compile/summarise sources on Y until N criteria are covered", filling knowledge gaps, literature/topic research with coverage criteria, or optimizing a measurable value. |
 | `x-review` | Review code against engineering principles — small functions, SOLID, KISS, DRY — with automated AST-based complexity analysis across 30+ languages including Python, C, C++, Java, JavaScript, TypeScript, Go, Rust, Ruby, PHP, Swift, Kotlin, and more |
-| `x-roast` | Roast any non-code artifact — articles, analyses, specs, epics, tasks, research, or another skill — where the reviewer fact-checks the claims, attacks the reasoning, proposes better angles, and scores it on a weighted, anchored rubric computed by a script. Use for "roast this", "poke holes in", "review this spec/skill/analysis", or any request for a reproducible number and reason. For source code use x-review instead. |
+| `x-roast` | Roast any non-code artifact — articles, analyses, specs, epics, tasks, research, or another skill — where the reviewer fact-checks the claims, attacks the reasoning, proposes better angles, and scores it on a weighted, anchored rubric computed by a script. Use for "roast this", "poke holes in", "review this spec/skill/analysis", or any request for a checked number and reason; the report names its reviewer (self or independent). For source code use x-review instead. |
 | `x-rollback` | Automated git revert with multi-step confirmation — identifies target commits, analyzes impact, requires approval, creates properly formatted revert commits via x-commit integration |
 | `x-search` | Search every indexed repository by meaning or exact identifier through the `x-search` MCP server — use before grepping for a symbol, when the file that owns a behaviour is unknown, or when the question spans repositories. |
 | `x-skill-lint` | Validate this repo’s own skills — frontmatter parses and `name` matches the folder, every referenced `scripts/*` and `references/*` exists, no stray template tokens, optional `evals/expectations.json` and `evals/triggers.json` are well-formed, and the README skills table lists every skill |
 | `x-test-gen` | Generate test stubs from implementation — analyzes source code and creates scaffolded tests with happy path, error cases, and edge case placeholders |
 | `x-triage` | Structured intake conversation — ask targeted panels (single / multi / open / confirm) to classify a bug’s platform, type, and evidence before touching any tools. Outputs `<run folder>/E<nn>-triage.md`. |
+| `x-unbloat` | Cut code to what the task needs — a YAGNI ladder that removes needless abstractions, wrappers, unused options and dead code, keeps behavior and protective code, and measures the result. Use when asked to unbloat, simplify, or remove over-engineering; x-implement, x-review and x-refactor run it as a pass. |
 | `x-ui` | Design and audit app UIs to be clean, clear, and effective — framework-agnostic method (Vue/React/HTML) with component-selection, row-action, and pre-flight rules. |
 
 ## Workflow
@@ -250,7 +251,7 @@ the phase — otherwise it looks like the work is missing.
 
 ### Deterministic by design
 
-Some skills do not only suggest — they check. `x-roast` scores an artifact against a fixed rubric. `x-humanize` will not finish until its verifier exits 0. `x-essay` loops until the score and the checks both pass. The rules are numbers, not opinions, so two runs agree. That is the difference between a prompt and a workflow.
+Some skills do not only suggest — they check. `x-roast` scores an artifact against a fixed rubric, and its gate checks that every quote the report cites is in the artifact and every `file:line` exists. `x-humanize` will not finish until its verifier exits 0. `x-essay` loops until the score and the checks both pass. The rules are checked, not trusted. That is the difference between a prompt and a workflow.
 
 ## Directory Structure After Install
 
@@ -287,10 +288,11 @@ Step-by-step instructions for the agent...
 
 ## Development
 
-This repo is a Node package with zero runtime dependencies. Tests use the built-in `node:test` runner, so there is nothing to install before running them:
+This repo is a Node package with zero runtime dependencies. Tests use the built-in `node:test` runner, and `npm test` provisions what they need before it starts — the search tool's dependencies and a local Ollama embedder — so a fresh clone needs nothing installed by hand. The x-search tests need Node 22.13+ or 23.4+ (`node:sqlite`); the rest of the suite runs on Node 18+.
 
 ```bash
 npm test                                     # run the full suite
+npm run test:setup                           # just the provisioning, without the tests
 node bin/install.js list                     # list every skill the package ships
 node skills/x-skill-lint/scripts/lint.mjs    # check the skills themselves
 ```

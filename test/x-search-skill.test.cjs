@@ -87,7 +87,9 @@ test("docs: the skill is installable through the repository's own installer", (t
   t.after(() => {
     if (!existed) fs.rmSync(target, { recursive: true, force: true });
   });
-  const result = spawnSync(process.execPath, [path.join(REPO, "bin", "install.js"), "install", "x-search"], { encoding: "utf8" });
+  // `cwd: REPO` because the installer writes into the directory it is run from: `npm --prefix
+  // tools/x-search test` runs this with the tool as the cwd, and the target it asserts on is the repo's.
+  const result = spawnSync(process.execPath, [path.join(REPO, "bin", "install.js"), "install", "x-search"], { encoding: "utf8", cwd: REPO });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(fs.existsSync(path.join(target, "SKILL.md")), true);
 });

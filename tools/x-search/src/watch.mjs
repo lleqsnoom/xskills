@@ -64,7 +64,7 @@ export async function refreshRoot(repo, { env, log = () => {}, force = false, on
 }
 
 function createState(repo) {
-  return { repo, watcher: null, gone: false, pending: new Set(), timer: null };
+  return { repo, watcher: null, gone: false, watchBroken: false, pending: new Set(), timer: null };
 }
 
 function markGone(state, log) {
@@ -84,7 +84,7 @@ function schedulePass(state, ms) {
   }, ms);
 }
 
-function makePass(state, { env, log, retryMs }) {
+function makePass(state, { env, log, retryMs, debounceMs, watchImpl }) {
   return async (batch) => {
     if (state.gone) return;
     if (!fs.existsSync(state.repo.root)) return markGone(state, log);
@@ -92,25 +92,44 @@ function makePass(state, { env, log, retryMs }) {
     try {
       const result = await refreshRoot(state.repo, { env, log, only });
       log(`${state.repo.id}: ${result.changed.length} changed, ${result.deleted.length} removed, ${result.written} chunks`);
+      if (state.watchBroken && !state.gone) {
+        state.watchBroken = false;
+        attachWatcher(state, { debounceMs, log, watchImpl });
+        if (state.watcher) log(`${state.repo.id}: watching again`);
+      }
     } catch (error) {
-      log(`${state.repo.id}: ${error.message} — retrying in ${retryMs}ms`);
-      if (!batch) return;
+      if (!batch) {
+        // a full pass has the scan ticker behind it, so there is no retry of its own to schedule
+        log(`${state.repo.id}: ${error.message}; the next scan will try again`);
+        return;
+      }
+      log(`${state.repo.id}: ${error.message}; retrying in ${retryMs}ms`);
       for (const relPath of batch) state.pending.add(relPath);
       schedulePass(state, retryMs);
     }
   };
 }
 
-function attachWatcher(state, { debounceMs, log }) {
+function attachWatcher(state, { debounceMs, log, watchImpl = fs.watch }) {
   try {
-    state.watcher = fs.watch(state.repo.root, { recursive: true }, (event, filename) => {
+    const watcher = watchImpl(state.repo.root, { recursive: true }, (event, filename) => {
       const rel = filename ? filename.toString() : "";
       if (rel && isIgnoredChange(rel)) return;
       if (rel) state.pending.add(rel);
       schedulePass(state, debounceMs);
     });
+    state.watcher = watcher;
+    watcher.on("error", (error) => {
+      // close the one that failed, and only clear the state if it is still the current one: a re-armed
+      // watcher must not be closed by the late error of the watcher it replaced.
+      watcher.close();
+      if (state.watcher === watcher) state.watcher = null;
+      state.watchBroken = true;
+      log(`${state.repo.id}: watch failed (${error.message}); polling until the next pass`);
+    });
   } catch (error) {
-    log(`${state.repo.id}: cannot watch (${error.message}), polling instead`);
+    state.watcher = null;
+    log(`${state.repo.id}: cannot watch (${error.message}); polling instead`);
   }
 }
 
@@ -130,9 +149,9 @@ function untilSignal(signal) {
   });
 }
 
-export async function runWatch({ roots, env = process.env, log = () => {}, signal = null } = {}) {
+export async function runWatch({ roots, env = process.env, log = () => {}, signal = null, watchImpl = fs.watch } = {}) {
   await assertEmbedder(env).catch((error) => {
-    log(`${error.message} — the watcher waits for it and retries`);
+    log(`${error.message}; the watcher waits for it and retries`);
   });
   const debounceMs = Number(env.X_SEARCH_DEBOUNCE || DEFAULT_DEBOUNCE_MS);
   const intervalMs = Number(env.X_SEARCH_SCAN_INTERVAL || DEFAULT_SCAN_INTERVAL_MS);
@@ -140,9 +159,9 @@ export async function runWatch({ roots, env = process.env, log = () => {}, signa
 
   const states = roots.map(createState);
   for (const state of states) {
-    state.run = makePass(state, { env, log, retryMs });
+    state.run = makePass(state, { env, log, retryMs, debounceMs, watchImpl });
     await state.run(null);
-    if (!state.gone) attachWatcher(state, { debounceMs, log });
+    if (!state.gone) attachWatcher(state, { debounceMs, log, watchImpl });
   }
   log(`watching ${states.filter((state) => !state.gone).length} repository(ies)`);
 

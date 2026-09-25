@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
+const { EventEmitter } = require("node:events");
 const { spawn, spawnSync } = require("node:child_process");
 
 const TOOL = path.resolve(__dirname, "..", "tools", "x-search", "src", "cli.mjs");
@@ -49,6 +50,10 @@ function fixture(label = "watch") {
 
 const openStoreModule = () => import(new URL("../tools/x-search/src/store.mjs", `file://${__filename}`).href);
 
+/** The registry every child writes: without it a pass records its temp fixture in the reader's own `stores.json`. */
+const stateFile = () => path.join(os.tmpdir(), `x-search-state-${process.pid}.json`);
+const childEnv = (extra = {}) => ({ ...process.env, X_SEARCH_STATE: stateFile(), ...extra });
+
 async function counts(root) {
   const { openStore, countRows, countVectors } = await openStoreModule();
   const db = openStore(path.join(root, ".x-skills", ".index", "index.db"), { readOnly: true });
@@ -60,7 +65,7 @@ async function counts(root) {
 function startWatcher(root, env) {
   const child = spawn(process.execPath, [TOOL, "watch", "--root", root], {
     stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, X_SEARCH_STATE: path.join(os.tmpdir(), `x-search-state-${process.pid}.json`), X_SEARCH_DEBOUNCE: "200", X_SEARCH_SCAN_INTERVAL: "60000", ...env },
+    env: childEnv({ X_SEARCH_DEBOUNCE: "200", X_SEARCH_SCAN_INTERVAL: "60000", ...env }),
   });
   const stderr = [];
   child.stderr.on("data", (chunk) => stderr.push(chunk.toString()));
@@ -81,7 +86,7 @@ function waitFor(predicate, { timeout = 15000, interval = 100 } = {}) {
 
 function runAsync(args, env = {}, timeoutMs = 20000) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [TOOL, ...args], { stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, X_SEARCH_STATE: path.join(os.tmpdir(), `x-search-state-${process.pid}.json`), ...env } });
+    const child = spawn(process.execPath, [TOOL, ...args], { stdio: ["ignore", "pipe", "pipe"], env: childEnv(env) });
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => child.kill("SIGKILL"), timeoutMs);
@@ -244,7 +249,7 @@ test("watch: a repository that disappears is reported once and the others keep w
 
   const child = spawn(process.execPath, [TOOL, "watch", "--root", first, "--root", second], {
     stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, X_SEARCH_STATE: path.join(os.tmpdir(), `x-search-state-${process.pid}.json`), OLLAMA_URL: stub.url, X_SEARCH_DEBOUNCE: "200", X_SEARCH_SCAN_INTERVAL: "400" },
+    env: childEnv({ OLLAMA_URL: stub.url, X_SEARCH_DEBOUNCE: "200", X_SEARCH_SCAN_INTERVAL: "400" }),
   });
   const stderr = [];
   child.stderr.on("data", (chunk) => stderr.push(chunk.toString()));
@@ -264,12 +269,52 @@ test("watch: a repository that disappears is reported once and the others keep w
   assert.equal(child.exitCode, null, "the watcher is still running");
 });
 
+test("watch: a watcher that failed is armed again once the next pass succeeds", async (t) => {
+  const stub = await startStubEmbedder();
+  const root = fixture("watch-rearm");
+  const watch = await import(new URL("../tools/x-search/src/watch.mjs", `file://${__filename}`).href);
+  await indexRoots([root], { OLLAMA_URL: stub.url });
+
+  const armed = [];
+  const watchImpl = () => {
+    const watcher = new EventEmitter();
+    watcher.close = () => {};
+    armed.push(watcher);
+    return watcher;
+  };
+  const logs = [];
+  let release;
+  const running = watch.runWatch({
+    roots: [{ id: "rearm", root }],
+    env: childEnv({ OLLAMA_URL: stub.url, X_SEARCH_DEBOUNCE: "50", X_SEARCH_SCAN_INTERVAL: "150" }),
+    log: (line) => logs.push(line),
+    signal: new Promise((resolve) => {
+      release = resolve;
+    }),
+    watchImpl,
+  });
+  t.after(() => {
+    release();
+    stub.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  await waitFor(() => armed.length === 1);
+  armed[0].emit("error", new Error("EPERM: the tree moved"));
+  assert.match(logs.join("\n"), /polling until the next pass/);
+
+  await waitFor(() => armed.length === 2, { timeout: 10000 });
+  assert.match(logs.join("\n"), /watching again/);
+  release();
+  await running;
+});
+
 test("watch: a symlink loop does not hang the walk", () => {
   const root = fixture("watch-loop");
   try {
     fs.symlinkSync(root, path.join(root, "src", "loop"));
     const started = Date.now();
-    const result = spawnSync(process.execPath, [TOOL, "index", "--root", root, "--json"], { encoding: "utf8", timeout: 20000 });
+    const result = spawnSync(process.execPath, [TOOL, "index", "--root", root, "--json"], { encoding: "utf8", timeout: 20000, env: childEnv() });
     assert.equal(result.status, 0, result.stderr);
     assert.ok(Date.now() - started < 15000, "the pass finished");
   } finally {

@@ -7,14 +7,15 @@
     "x-search": "./src/cli.mjs"
   },
   "engines": {
-    "node": ">=22.5"
+    "node": "^22.13.0 || >=23.4.0"
   },
   "files": [
     "src/",
     "README.md"
   ],
   "scripts": {
-    "test": "node --test test/*.test.cjs"
+    "pretest": "node ../../scripts/x-search-test-env.mjs",
+    "test": "node --test ../../test/x-search*.test.cjs"
   },
   "dependencies": {
     "web-tree-sitter": "^0.26.10"

@@ -1,6 +1,6 @@
 ---
 name: x-implement
-description: Implement or fix with TDD — parallelize independent tasks with x-parallel, apply x-ui for frontend work, red-green-refactor per task, verify with x-review + x-fix, gate on plan completion
+description: Implement or fix with TDD — parallelize independent tasks with x-parallel, apply x-ui for frontend work and x-unbloat to every change, red-green-refactor per task, verify with x-review + x-fix, gate on plan completion
 version: 1.1.0
 author: Community
 tags: [tdd, implementation, test-driven, red-green-refactor, production-code, parallel, ui]
@@ -28,6 +28,10 @@ Code must document itself. Comments are a last resort, reserved for what the cod
 - **Only the *why*, never the *what*.** A comment earns its place only when the code cannot express the reason: a non-obvious workaround, a CPU-architecture or third-party provider quirk, the source of a magic value, an invariant, or what breaks if changed.
 - **Prefer a better name or a smaller function over a comment.** If a block needs a paragraph to explain what it does, extract it into a descriptively named function and delete the paragraph.
 - **Strip noise in REFACTOR.** Every refactor pass must remove comments that restate code, not just improve structure.
+
+## No Bloat
+
+Write the least code that works. Follow x-unbloat (`~/.agents/skills/x-unbloat/SKILL.md` for a global install, `.agents/skills/x-unbloat/SKILL.md` for a local one): its ladder before GREEN, and its ladder, table and Never Cut list in REFACTOR. Its rules are not repeated here, so read them there.
 
 ## Functional Style
 
@@ -69,8 +73,8 @@ When a task's scope includes UI (HTML/CSS, templates, components, or styles in a
 For each task file in `<run folder>/E<nn>-tasks/`:
 
 1. **RED** — Write the minimal failing test for the task's acceptance criterion. It must fail for the *right reason*.
-2. **GREEN** — Write the minimum implementation to pass that test. Nothing more.
-3. **REFACTOR** — Evaluate against SOLID/clean code, the comment rules, and the functional style above. Strip comments that restate code; extract explained blocks into named functions; push side effects to the edges and prefer pure, immutable functions. State what you assessed and what (if anything) improved — or why no changes were needed.
+2. **GREEN** — Write the minimum implementation to pass that test. Nothing more. Walk the x-unbloat ladder before writing.
+3. **REFACTOR** — Evaluate against SOLID/clean code, the comment rules, the x-unbloat pass (steps 3, 5 and 7), and the functional style above. Strip comments that restate code; extract explained blocks into named functions; push side effects to the edges and prefer pure, immutable functions. State what you assessed and what (if anything) improved — or why no changes were needed.
    - **One-sentence test:** every function you wrote must be describable in one sentence; if not, split it.
    - **Reporting test:** if deleting a phase's `push`/output call leaves the phase unusable, the phase was never a unit. Delegate each phase to a named helper that returns data and let the orchestrator collect the report in one place.
 4. **VERIFY — x-review + x-fix + test.** Run on every finished task before committing:

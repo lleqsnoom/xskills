@@ -32,4 +32,5 @@ user-invocable: true
 - **Test after every fix** — revert if tests fail
 - **NEVER silence errors** — do NOT add try/catch wrappers that swallow errors, do NOT disable error reporting. Fix the root cause so the error cannot occur.
 - **Minimal changes** — only modify what's needed to resolve the specific issue
+- **`[Bloat]` issues follow x-unbloat** (`~/.agents/skills/x-unbloat/SKILL.md` for a global install, `.agents/skills/x-unbloat/SKILL.md` for a local one): check every call site before inlining or deleting, and keep what its *Keep it if* column or *Never Cut* list protects
 - **If ambiguous**, make smallest reasonable fix and note uncertainty
