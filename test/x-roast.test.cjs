@@ -36,6 +36,35 @@ describe("x-roast score — pure scoring", async () => {
     assert.deepEqual(mod.PROFILES.epic.slice(-2), ["decomposition", "acceptance"]);
     assert.deepEqual(mod.PROFILES.task.slice(-2), ["testability", "estimation"]);
     assert.deepEqual(mod.PROFILES.skill.slice(-3), ["triggers", "procedure", "verification"]);
+    assert.deepEqual(mod.PROFILES.spec.slice(-1), ["testability"]);
+  });
+
+  it("every calibration case is on disk and scores exactly its profile's dimensions", () => {
+    const skill = path.join(__dirname, "..", "skills", "x-roast");
+    const { cases } = JSON.parse(fs.readFileSync(path.join(skill, "evals", "calibration.json"), "utf8"));
+    const { references } = JSON.parse(fs.readFileSync(path.join(skill, "evals", "calibration-answers.json"), "utf8"));
+    for (const profile of Object.keys(mod.PROFILES)) {
+      assert.ok(cases.filter((entry) => entry.profile === profile).length >= 2, `${profile}: two cases`);
+    }
+    assert.deepEqual(Object.keys(references).sort(), cases.map((entry) => entry.name).sort());
+    for (const entry of cases) {
+      assert.ok(!("reference" in entry), `${entry.name}: the answer is kept out of the case list`);
+      assert.ok(fs.existsSync(path.join(skill, entry.artifact)), entry.artifact);
+      assert.deepEqual(Object.keys(references[entry.name]).sort(), [...mod.PROFILES[entry.profile]].sort(), entry.name);
+      assert.equal(mod.computeScore({ profile: entry.profile, scores: references[entry.name] }).completeness, 1, entry.name);
+    }
+  });
+
+  it("records a second reviewer's blind scores for every case, and explains each disagreement over 1", () => {
+    const skill = path.join(__dirname, "..", "skills", "x-roast");
+    const answers = JSON.parse(fs.readFileSync(path.join(skill, "evals", "calibration-answers.json"), "utf8"));
+    const disputed = new Set(answers.disputes.map((d) => `${d.case}.${d.dimension}`));
+    for (const [name, reference] of Object.entries(answers.references)) {
+      assert.deepEqual(Object.keys(answers.second[name]).sort(), Object.keys(reference).sort(), name);
+      for (const [dimension, score] of Object.entries(reference)) {
+        if (Math.abs(score - answers.second[name][dimension]) > 1) assert.ok(disputed.has(`${name}.${dimension}`), `${name}.${dimension} needs a dispute`);
+      }
+    }
   });
 
   it("dimensionsFor throws on an unknown profile", () => {
@@ -46,7 +75,7 @@ describe("x-roast score — pure scoring", async () => {
     assert.equal(mod.normalizeScore("4"), 4);
     assert.equal(mod.normalizeScore(6), 5);
     assert.equal(mod.normalizeScore(0), 1);
-    assert.equal(mod.normalizeScore(3.5), 3.5);
+    assert.equal(mod.normalizeScore(3.5), null, "the anchors are whole levels");
     assert.equal(mod.normalizeScore("abc"), null);
     assert.equal(mod.normalizeScore(null), null);
     assert.equal(mod.normalizeScore(""), null);
@@ -224,6 +253,40 @@ describe("x-roast CLI", async () => {
     }
   });
 
+  it("--na drops a dimension from the profile without making the total provisional", async () => {
+    const args = ["--profile", "generic", "--na", "evidence=no factual claims"];
+    for (const d of ["accuracy", "logic", "originality", "clarity", "completeness", "actionability", "balance"]) args.push("--score", `${d}=5`);
+    const parsed = JSON.parse((await run(SCORE, args)).stdout);
+    assert.equal(parsed.total, 100);
+    assert.equal(parsed.completeness, 1);
+    assert.deepEqual(parsed.missing, []);
+    assert.deepEqual(parsed.na, [{ dimension: "evidence", reason: "no factual claims" }]);
+  });
+
+  it("--na needs a reason, a dimension of the profile, and no score beside it", async () => {
+    assert.match((await run(SCORE, ["--profile", "generic", "--na", "evidence"])).stderr, /needs a reason/);
+    assert.match((await run(SCORE, ["--profile", "generic", "--na", "triggers=x"])).stderr, /not a dimension/);
+    assert.match((await run(SCORE, ["--profile", "generic", "--na", "balance=x", "--score", "balance=3"])).stderr, /both scored/);
+  });
+
+  it("--na refuses the dimensions every text with claims has", async () => {
+    for (const d of ["accuracy", "logic", "clarity", "completeness"]) {
+      assert.match((await run(SCORE, ["--profile", "generic", "--na", `${d}=x`])).stderr, /always applies/, d);
+    }
+  });
+
+  it("--report prints only the block a report carries", async () => {
+    const res = await run(SCORE, ["--profile", "article", "--score", "accuracy=5", "--score", "logic=3", "--na", "balance=opinion piece", "--report"]);
+    assert.deepEqual(JSON.parse(res.stdout), {
+      profile: "article",
+      scores: { accuracy: 5, logic: 3 },
+      na: { balance: "opinion piece" },
+      total: 75,
+      band: "strong",
+      completeness: 0.4,
+    });
+  });
+
   it("exits 1 on an unknown profile", async () => {
     const res = await run(SCORE, ["--profile", "nope", "--score", "accuracy=5"]);
     assert.equal(res.code, 1);
@@ -240,6 +303,52 @@ describe("x-roast CLI", async () => {
     const res = await run(SCORE, ["--bogus"]);
     assert.equal(res.code, 1);
     assert.match(res.stderr, /Unknown argument/);
+  });
+
+  it("--calibrate passes scores within 1 of the reference and takes the case's profile", async () => {
+    const res = await run(SCORE, ["--calibrate", "pr-summary", "--scores",
+      "accuracy=3,logic=3,evidence=1,originality=2,clarity=3,completeness=2,actionability=3,balance=1,triggers=1,procedure=2,verification=2"]);
+    assert.equal(res.code, 0, res.stderr);
+    const out = JSON.parse(res.stdout);
+    assert.deepEqual({ ...out, line: undefined }, { case: "pr-summary", profile: "skill", drift: [], line: undefined });
+    assert.match(out.line, /^\*\*Calibration:\*\* pr-summary — accuracy=3, .*verification=2 — no drift$/);
+  });
+
+  it("the skill's own instructions never print a calibration answer", () => {
+    const skill = path.join(__dirname, "..", "skills", "x-roast");
+    const { references } = JSON.parse(fs.readFileSync(path.join(skill, "evals", "calibration-answers.json"), "utf8"));
+    const docs = [path.join(skill, "SKILL.md"), path.join(skill, "references", "rubric.md")].map((file) => fs.readFileSync(file, "utf8").replace(/\s+/g, ""));
+    for (const [name, reference] of Object.entries(references)) {
+      const answer = Object.entries(reference).slice(0, 4).map(([dimension, score]) => `${dimension}=${score}`).join(",");
+      for (const doc of docs) assert.ok(!doc.includes(answer), `${name}'s answer is printed in the docs`);
+    }
+  });
+
+  it("--agreement counts the second reviewer's scores within 1 of the references, and shows none of them", async () => {
+    const res = await run(SCORE, ["--agreement"]);
+    assert.equal(res.code, 0, res.stderr);
+    assert.deepEqual(JSON.parse(res.stdout), { second: "deepseek-v4-flash", cases: 16, scores: 148, within1: 147, equal: 100, disputes: ["rate-limit-precise.logic"] });
+  });
+
+  it("--cases lists a profile's cases without their answers", async () => {
+    const res = await run(SCORE, ["--cases", "--profile", "skill"]);
+    assert.equal(res.code, 0, res.stderr);
+    assert.deepEqual(JSON.parse(res.stdout).map((entry) => entry.name), ["pr-summary", "changelog-entry"]);
+    assert.ok(!res.stdout.includes("reference"));
+  });
+
+  it("--calibrate exits 1 and names each dimension that drifts or is left out", async () => {
+    const res = await run(SCORE, ["--calibrate", "pr-summary", "--scores",
+      "accuracy=4,logic=3,evidence=1,originality=2,clarity=3,completeness=2,actionability=3,balance=1,triggers=1,procedure=2"]);
+    assert.equal(res.code, 1);
+    const drift = JSON.parse(res.stdout).drift.map((d) => d.detail.split(":")[0]);
+    assert.deepEqual(drift, ["accuracy", "verification"]);
+  });
+
+  it("--calibrate refuses a case of another profile", async () => {
+    const res = await run(SCORE, ["--calibrate", "pr-summary", "--profile", "task", "--score", "accuracy=2"]);
+    assert.equal(res.code, 1);
+    assert.match(res.stderr, /is a skill, not a task/);
   });
 
   it("save-report writes a file and prints its path", async () => {

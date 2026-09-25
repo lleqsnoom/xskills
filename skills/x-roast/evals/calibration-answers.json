@@ -1,0 +1,52 @@
+{
+  "note": "The answer key for evals/calibration.json. Do not read it before scoring a case: score.mjs --calibrate reads it for you.",
+  "reviewers": {
+    "references": "claude (the skill's author), 2026-09-24",
+    "second": "deepseek-v4-flash (crush), scored all 16 cases blind from the rubric alone, 2026-09-24: 147 of 148 scores within 1 of the references, 100 equal"
+  },
+  "references": {
+    "drop-jest": { "accuracy": 1, "logic": 1, "evidence": 1, "originality": 2, "clarity": 4, "completeness": 2, "actionability": 3, "balance": 1 },
+    "retry-budget": { "accuracy": 5, "logic": 4, "evidence": 5, "originality": 3, "clarity": 5, "completeness": 4, "actionability": 5, "balance": 4 },
+    "add-retry": { "accuracy": 4, "logic": 4, "evidence": 3, "originality": 3, "clarity": 5, "completeness": 4, "actionability": 5, "balance": 3, "testability": 5, "estimation": 4 },
+    "fix-login": { "accuracy": 3, "logic": 1, "evidence": 1, "originality": 1, "clarity": 3, "completeness": 1, "actionability": 2, "balance": 1, "testability": 1, "estimation": 1 },
+    "pr-summary": { "accuracy": 2, "logic": 3, "evidence": 1, "originality": 2, "clarity": 3, "completeness": 2, "actionability": 3, "balance": 1, "triggers": 1, "procedure": 2, "verification": 1 },
+    "changelog-entry": { "accuracy": 5, "logic": 4, "evidence": 4, "originality": 3, "clarity": 5, "completeness": 4, "actionability": 5, "balance": 4, "triggers": 5, "procedure": 5, "verification": 4 },
+    "slow-builds": { "accuracy": 3, "logic": 1, "evidence": 1, "originality": 1, "clarity": 4, "completeness": 1, "actionability": 3, "balance": 1 },
+    "flaky-checkout": { "accuracy": 4, "logic": 5, "evidence": 4, "originality": 3, "clarity": 5, "completeness": 4, "actionability": 5, "balance": 4 },
+    "wasm-2026": { "accuracy": 1, "logic": 2, "evidence": 1, "originality": 1, "clarity": 4, "completeness": 2, "actionability": 3, "balance": 1, "method": 1, "recency": 1 },
+    "sqlite-wal": { "accuracy": 5, "logic": 5, "evidence": 5, "originality": 3, "clarity": 5, "completeness": 4, "actionability": 5, "balance": 5, "method": 5, "recency": 5 },
+    "search-epic-components": { "accuracy": 3, "logic": 2, "evidence": 1, "originality": 1, "clarity": 3, "completeness": 2, "actionability": 2, "balance": 1, "decomposition": 1, "acceptance": 1 },
+    "search-epic-layers": { "accuracy": 4, "logic": 5, "evidence": 4, "originality": 3, "clarity": 5, "completeness": 4, "actionability": 5, "balance": 4, "decomposition": 5, "acceptance": 5 },
+    "rate-limit-vague": { "accuracy": 3, "logic": 2, "evidence": 1, "originality": 1, "clarity": 2, "completeness": 1, "actionability": 2, "balance": 1, "testability": 1 },
+    "rate-limit-precise": { "accuracy": 4, "logic": 3, "evidence": 4, "originality": 3, "clarity": 5, "completeness": 4, "actionability": 5, "balance": 3, "testability": 4 },
+    "office-move": { "accuracy": 2, "logic": 1, "evidence": 1, "originality": 1, "clarity": 3, "completeness": 1, "actionability": 2, "balance": 1 },
+    "incident-summary": { "accuracy": 4, "logic": 5, "evidence": 4, "originality": 3, "clarity": 5, "completeness": 5, "actionability": 5, "balance": 4 }
+  },
+  "second": {
+    "drop-jest": { "accuracy": 2, "logic": 2, "evidence": 1, "originality": 2, "clarity": 4, "completeness": 2, "actionability": 3, "balance": 1 },
+    "retry-budget": { "accuracy": 5, "logic": 5, "evidence": 5, "originality": 4, "clarity": 4, "completeness": 4, "actionability": 5, "balance": 5 },
+    "add-retry": { "accuracy": 5, "logic": 5, "evidence": 4, "originality": 3, "clarity": 5, "completeness": 5, "actionability": 5, "balance": 4, "testability": 5, "estimation": 5 },
+    "fix-login": { "accuracy": 2, "logic": 2, "evidence": 1, "originality": 1, "clarity": 2, "completeness": 1, "actionability": 2, "balance": 1, "testability": 1, "estimation": 1 },
+    "pr-summary": { "accuracy": 2, "logic": 3, "evidence": 1, "originality": 2, "clarity": 3, "completeness": 2, "actionability": 3, "balance": 1, "triggers": 2, "procedure": 2, "verification": 1 },
+    "changelog-entry": { "accuracy": 5, "logic": 5, "evidence": 5, "originality": 3, "clarity": 5, "completeness": 5, "actionability": 5, "balance": 4, "triggers": 5, "procedure": 5, "verification": 5 },
+    "slow-builds": { "accuracy": 3, "logic": 2, "evidence": 1, "originality": 2, "clarity": 4, "completeness": 2, "actionability": 3, "balance": 1 },
+    "flaky-checkout": { "accuracy": 5, "logic": 5, "evidence": 5, "originality": 3, "clarity": 5, "completeness": 5, "actionability": 5, "balance": 5 },
+    "wasm-2026": { "accuracy": 1, "logic": 2, "evidence": 1, "originality": 1, "clarity": 3, "completeness": 1, "actionability": 2, "balance": 1, "method": 1, "recency": 1 },
+    "sqlite-wal": { "accuracy": 5, "logic": 5, "evidence": 5, "originality": 3, "clarity": 5, "completeness": 5, "actionability": 5, "balance": 5, "method": 5, "recency": 5 },
+    "search-epic-components": { "accuracy": 3, "logic": 3, "evidence": 1, "originality": 1, "clarity": 3, "completeness": 2, "actionability": 3, "balance": 1, "decomposition": 1, "acceptance": 1 },
+    "search-epic-layers": { "accuracy": 5, "logic": 5, "evidence": 4, "originality": 4, "clarity": 5, "completeness": 5, "actionability": 5, "balance": 5, "decomposition": 5, "acceptance": 5 },
+    "rate-limit-vague": { "accuracy": 3, "logic": 2, "evidence": 1, "originality": 1, "clarity": 2, "completeness": 2, "actionability": 2, "balance": 1, "testability": 1 },
+    "rate-limit-precise": { "accuracy": 5, "logic": 5, "evidence": 5, "originality": 3, "clarity": 5, "completeness": 5, "actionability": 5, "balance": 4, "testability": 5 },
+    "office-move": { "accuracy": 2, "logic": 1, "evidence": 1, "originality": 1, "clarity": 3, "completeness": 1, "actionability": 3, "balance": 1 },
+    "incident-summary": { "accuracy": 5, "logic": 5, "evidence": 5, "originality": 3, "clarity": 5, "completeness": 5, "actionability": 5, "balance": 5 }
+  },
+  "disputes": [
+    {
+      "case": "rate-limit-precise",
+      "dimension": "logic",
+      "references": 3,
+      "second": 5,
+      "why": "The second reviewer called the token-bucket maths self-consistent. It is not: a bucket of 600 refilling 10/s admits about 610 requests in the first second, so Test 1's '601st: 429' fails, and it admits up to about 1,190 in the first 60 s, not '600 per rolling 60 s'. The reference keeps 3."
+    }
+  ]
+}
