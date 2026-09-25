@@ -1,3 +1,10 @@
+## [5.34.0] - 2026-09-25
+
+* Merge pull request #71 from lleqsnoom/feat/unbloat-skill (35e137e)
+* feat(x-roast): gate quotes, claims, calibration and reviewer family, and calibrate every profile against a second model (022783e)
+* feat(x-unbloat): add the x-unbloat skill and run it from x-implement, x-review, x-refactor and x-fix (6e59afc)
+* fix(x-search): provision npm test and stop the leaks and crash (54a42cd)
+
 ## [5.33.0] - 2026-09-20
 
 * Merge pull request #70 from lleqsnoom/feat/merge-autoreflection-skills (350c9db)
