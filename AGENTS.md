@@ -113,6 +113,10 @@ xskills/
     ├── x-skill-lint/         # Validate the repo's own skills — frontmatter, refs, README table
     │   ├── SKILL.md
     │   └── scripts/
+    ├── x-unbloat/            # YAGNI ladder — cut speculative abstractions, wrappers, dead code; measured by a diff script
+    │   ├── SKILL.md
+    │   ├── scripts/
+    │   └── evals/
 ```
 
 ---
@@ -798,7 +802,7 @@ The skills that ask questions (`x-analyze`, `x-plan`, `x-research`, `x-autorefle
 
 ### The run-folder helpers are generated
 
-Every skill that writes a `.x-skills/runs/` artifact carries the same run-folder helpers (`resolveRunDir`, `nextE`, …) because skills cannot import from each other. Edit them **once** in `scripts/sync-run-folders.js` and run `npm run sync:run-folders`, which pastes the canonical block between the `// #region run-folder` markers in all 13 files. `test/run-helpers-drift.test.cjs` fails if a copy diverges, so never edit a region by hand.
+Every skill that writes a `.x-skills/runs/` artifact carries the same run-folder helpers (`resolveRunDir`, `nextE`, …) because skills cannot import from each other. Edit them **once** in `scripts/sync-run-folders.js` and run `npm run sync:run-folders`, which pastes the canonical block between the `// #region run-folder` markers in every file its `TARGETS` lists. `test/run-helpers-drift.test.cjs` fails if a copy diverges, so never edit a region by hand.
 
 #### x-commit Scripts
 

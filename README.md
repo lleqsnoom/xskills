@@ -169,7 +169,7 @@ Run `npx xskills list` to see all available skills.
 | `x-essay` | Write an article end-to-end on a fixed loop — x-analyze thesis, x-roast critique, x-humanize rewrite — repeating until it scores strong and reads clean. Use when asked to write or draft an article, blog post, or essay that must defend a claim. |
 | `x-fix` | Resolve issues from fix plans — read, edit, verify, mark complete |
 | `x-humanize` | Simplify text, an article, a commit or PR to a B2 reading level — measure sentence length and complexity, cut noise, rewrite, then verify no meaning was lost. Use when asked to humanize, simplify, make easy to read, or plain-language a piece of prose. |
-| `x-implement` | Implement or fix with TDD — parallelize independent tasks with x-parallel, apply x-ui for frontend work, red-green-refactor per task, verify with x-review + x-fix, gate on plan completion |
+| `x-implement` | Implement or fix with TDD — parallelize independent tasks with x-parallel, apply x-ui for frontend work and x-unbloat to every change, red-green-refactor per task, verify with x-review + x-fix, gate on plan completion |
 | `x-investigate` | Hypothesis-driven root cause analysis — generate ranked hypotheses from evidence, test systematically with platform tools and git history, eliminate candidates until one root cause remains, output fix plan for x-fix |
 | `x-migrate` | Framework/dependency migration assistant — generates migration plans with breaking changes, upgrade paths, and automated fix candidates from source analysis |
 | `x-parallel` | Run multiple coding tasks in parallel — each task gets an isolated git worktree and its own background agent process with full tools and the parent's project rights, then committed results merge back into your branch |
@@ -184,6 +184,7 @@ Run `npx xskills list` to see all available skills.
 | `x-skill-lint` | Validate this repo’s own skills — frontmatter parses and `name` matches the folder, every referenced `scripts/*` and `references/*` exists, no stray template tokens, optional `evals/expectations.json` and `evals/triggers.json` are well-formed, and the README skills table lists every skill |
 | `x-test-gen` | Generate test stubs from implementation — analyzes source code and creates scaffolded tests with happy path, error cases, and edge case placeholders |
 | `x-triage` | Structured intake conversation — ask targeted panels (single / multi / open / confirm) to classify a bug’s platform, type, and evidence before touching any tools. Outputs `<run folder>/E<nn>-triage.md`. |
+| `x-unbloat` | Cut code to what the task needs — a YAGNI ladder that removes needless abstractions, wrappers, unused options and dead code, keeps behavior and protective code, and measures the result. Use when asked to unbloat, simplify, or remove over-engineering; x-implement, x-review and x-refactor run it as a pass. |
 | `x-ui` | Design and audit app UIs to be clean, clear, and effective — framework-agnostic method (Vue/React/HTML) with component-selection, row-action, and pre-flight rules. |
 
 ## Workflow

@@ -33,6 +33,7 @@ const TARGETS = [
   "skills/x-autoreflection/scripts/save-reflection.mjs",
   "skills/x-autoreflection/scripts/analyze.mjs",
   "skills/x-autoreflection/scripts/heal.mjs",
+  "skills/x-unbloat/scripts/verdicts.mjs",
 ];
 
 const START = "// #region run-folder";

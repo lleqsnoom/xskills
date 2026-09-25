@@ -14,6 +14,7 @@ Analyzes source code and suggests specific refactorings based on SOLID principle
 ## Related Skills
 
 - **x-review** — Comprehensive code review that analyzes complexity, duplication, and engineering principles. Use `x-review` first to generate metrics, then use this skill for specific refactoring suggestions.
+- **x-unbloat** — Run its ladder before suggesting any refactoring. Prefer deleting and inlining over extracting: a suggestion that adds a layer (interface, factory, wrapper, new file) must name the second caller or the idea that pays for it. Suggestions to remove speculative abstractions, pass-through wrappers, unused options, and dead code come first.
 - This skill (`x-refactor`) is analysis-only — it outputs JSON/markdown suggestions but does not apply changes automatically.
 
 ## Scripts
